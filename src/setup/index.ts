@@ -9,5 +9,3 @@
  */
 
 export { newGame, SUPPORTED_PLAYER_COUNTS } from './newGame';
-export { useCriminalRush } from './useCriminalRush';
-export type { GameDispatch } from './useCriminalRush';

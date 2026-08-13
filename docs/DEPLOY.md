@@ -1,8 +1,9 @@
 # Deploying Criminal Rush to Vercel (with online join-by-code)
 
 The app is a Vite single-page app plus a handful of serverless functions in
-`/api`. Online rooms are stored in **Upstash Redis** (Vercel's KV Marketplace
-integration). Local pass-and-play needs no backend; only online play does.
+`/api`. The game is online-only: players create or join a room by code. Rooms
+are stored in **Upstash Redis** (Vercel's KV Marketplace integration), so a
+store is required for the app to work.
 
 > You run these commands — this environment can't authenticate to Vercel.
 
@@ -51,8 +52,8 @@ vercel dev          # serves the SPA + /api together on localhost
   single-machine test; not durable).
 - With them pulled into `.env.local`, rooms persist in Upstash.
 
-Plain `npm run dev` (Vite only) runs local pass-and-play but **not** `/api`, so
-online play needs `vercel dev` or a deploy.
+Plain `npm run dev` (Vite only) serves the UI but **not** `/api`, so the game
+won't function there — use `vercel dev` (or a deploy) so the room endpoints run.
 
 ## 4. Deploy
 

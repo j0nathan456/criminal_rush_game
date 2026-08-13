@@ -5,7 +5,8 @@ import { TEAM_META } from '../constants/theme';
 import { PlayableBoard } from './PlayableBoard';
 
 interface OnlineControllerProps {
-  onExit: () => void;
+  /** Optional: return to a parent shell. Omitted when online is the app root. */
+  onExit?: () => void;
 }
 
 /**
@@ -18,9 +19,10 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
 
+  // Leaving returns to the create/join landing (the app root when online-only).
   const leave = () => {
     game.leave();
-    onExit();
+    onExit?.();
   };
 
   // --- Phase 1: not in a room yet ---
@@ -28,9 +30,12 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
     return (
       <div className="cr-lobby">
         <div className="cr-lobby__card">
-          <button type="button" className="cr-game__exit" onClick={onExit}>← Back</button>
-          <h1 className="cr-lobby__title">Play Online</h1>
-          <p className="cr-lobby__tag">Create a room, then share the code with friends.</p>
+          {onExit && (
+            <button type="button" className="cr-game__exit" onClick={onExit}>← Back</button>
+          )}
+          <h1 className="cr-lobby__title">Criminal Rush</h1>
+          <p className="cr-lobby__tag">Save the City… or Control It</p>
+          <p className="cr-lobby__hint">Create a room, then share the code with friends.</p>
 
           <input
             className="cr-lobby__input"
