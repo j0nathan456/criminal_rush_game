@@ -8,10 +8,13 @@ export type EvidenceCategory = 'TIME' | 'MEANS' | 'LOCATION' | 'MOTIVE';
 
 export type ActionCardType = 'MONEY' | 'EVIDENCE' | 'POWER' | 'EVENT'
 
-export type MarketCardType = 
-  | 'PERK' 
-  | 'WEAPON' 
+export type MarketCardType =
+  | 'PERK'
+  | 'WEAPON'
   | 'SPECIAL';
+
+/** Weapon damage class — drives type-conditional combat bonuses. */
+export type WeaponType = 'MELEE' | 'RANGED' | 'TECH' | 'CHEMICAL';
 
 /**
  * ACTION CARDS
@@ -24,11 +27,17 @@ export interface ActionCard {
   description: string;
   type: ActionCardType;
   
-  /** 
-   * Only applicable if type is 'EVIDENCE'. 
+  /**
+   * Only applicable if type is 'EVIDENCE'.
    * A single card can potentially satisfy multiple categories.
    */
   evidenceCategories?: EvidenceCategory[];
+
+  /** Only for type 'MONEY': how many dollars playing this card grants. */
+  value?: number;
+
+  /** Only for type 'POWER': base power level this card adds during combat. */
+  power?: number;
 }
 
 /**
@@ -55,6 +64,12 @@ export interface MarketCard {
    * Optional flag for cards that provide permanent passive bonuses
    */
   isPassive?: boolean;
+
+  /** Only for type 'WEAPON': its damage class. */
+  weaponType?: WeaponType;
+
+  /** Only for type 'WEAPON': base power level it contributes in combat. */
+  power?: number;
 }
 
 /**

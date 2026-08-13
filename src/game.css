@@ -1,0 +1,530 @@
+/**
+ * src/game.css
+ * Layout + presentation for the Criminal Rush UI components.
+ * Data-driven colors (team, category, card type) come from theme.ts as inline
+ * CSS variables; this file owns structure, spacing, and static styling.
+ */
+
+:root {
+  --cr-bg: #12141c;
+  --cr-panel: #1b1e29;
+  --cr-panel-2: #232734;
+  --cr-border: #2f3444;
+  --cr-text: #e7e9f0;
+  --cr-text-dim: #9aa1b4;
+  --cr-radius: 12px;
+  --cr-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+/* Board fills the viewport rather than the template's fixed 1126px column. */
+#root {
+  width: 100%;
+  max-width: 100%;
+  border-inline: none;
+  text-align: left;
+}
+
+.cr-board {
+  min-height: 100svh;
+  padding: 16px;
+  box-sizing: border-box;
+  background: radial-gradient(1200px 600px at 50% -10%, #1c2030 0%, var(--cr-bg) 60%);
+  color: var(--cr-text);
+  font-family: var(--sans, system-ui, sans-serif);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ---- Top bar ---- */
+.cr-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: linear-gradient(90deg, rgba(43, 108, 255, 0.12), rgba(224, 59, 59, 0.12));
+  border: 1px solid var(--cr-border);
+  border-radius: var(--cr-radius);
+}
+.cr-brand__title {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+.cr-brand__tag {
+  margin-left: 12px;
+  color: var(--cr-text-dim);
+  font-size: 14px;
+}
+.cr-turn-indicator {
+  font-size: 15px;
+  color: var(--cr-text-dim);
+}
+
+/* ---- Board layout ---- */
+.cr-board__grid {
+  display: grid;
+  grid-template-columns: 280px 1fr 300px;
+  gap: 16px;
+  align-items: start;
+}
+.cr-board__left,
+.cr-board__center,
+.cr-board__right {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+@media (max-width: 1100px) {
+  .cr-board__grid { grid-template-columns: 1fr; }
+}
+
+/* ---- Generic panel ---- */
+.cr-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.cr-panel__head h2 {
+  margin: 0;
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--cr-text-dim);
+}
+.cr-score,
+.cr-evidence,
+.cr-market,
+.cr-log,
+.cr-seats,
+.cr-hand,
+.cr-actions {
+  background: var(--cr-panel);
+  border: 1px solid var(--cr-border);
+  border-radius: var(--cr-radius);
+  padding: 16px;
+  box-shadow: var(--cr-shadow);
+}
+.cr-empty { color: var(--cr-text-dim); font-size: 14px; margin: 0; }
+
+/* ---- Score board ---- */
+.cr-score__row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+}
+.cr-score__team { font-weight: 700; }
+.cr-score__track { grid-column: 1 / -1; display: flex; gap: 6px; flex-wrap: wrap; }
+.cr-pip {
+  width: 20px; height: 20px; border-radius: 50%;
+  border: 2px solid var(--cr-border); background: var(--cr-panel-2);
+}
+.cr-pip.is-on { box-shadow: 0 0 8px currentColor; }
+.cr-score__count { color: var(--cr-text-dim); font-variant-numeric: tabular-nums; }
+.cr-score__winner { font-weight: 800; }
+
+/* ---- Evidence grid ---- */
+.cr-evidence.is-complete { outline: 2px solid #f5c518; }
+.cr-evidence__ready { color: #f5c518; font-weight: 700; font-size: 13px; }
+.cr-evidence__slots { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+@media (max-width: 520px) { .cr-evidence__slots { grid-template-columns: 1fr; } }
+.cr-slot {
+  --slot-accent: var(--cr-border);
+  text-align: left;
+  border: 2px dashed var(--slot-accent);
+  border-radius: 10px;
+  background: var(--cr-panel-2);
+  padding: 12px;
+  color: var(--cr-text);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 72px;
+  cursor: default;
+}
+.cr-slot:not(:disabled) { cursor: pointer; }
+.cr-slot:not(:disabled):hover { border-style: solid; }
+.cr-slot.is-filled { border-style: solid; background: color-mix(in srgb, var(--slot-accent) 18%, var(--cr-panel-2)); }
+.cr-slot__label { font-weight: 700; font-size: 13px; color: var(--slot-accent); }
+.cr-slot__value { font-size: 14px; color: var(--cr-text); }
+
+/* ---- Cards ---- */
+.cr-hand__cards,
+.cr-market__cards {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.cr-card {
+  --card-accent: var(--cr-border);
+  width: 150px;
+  min-height: 190px;
+  text-align: left;
+  background: var(--cr-panel-2);
+  border: 1px solid var(--cr-border);
+  border-top: 4px solid var(--card-accent);
+  border-radius: 10px;
+  padding: 10px;
+  color: var(--cr-text);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: default;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.cr-card:not(:disabled) { cursor: pointer; }
+.cr-card:not(:disabled):hover { transform: translateY(-4px); box-shadow: var(--cr-shadow); }
+.cr-card.is-selected { outline: 2px solid var(--card-accent); transform: translateY(-4px); }
+.cr-card.is-disabled { opacity: 0.45; }
+.cr-card__head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
+.cr-card__type { color: var(--card-accent); font-weight: 700; }
+.cr-card__cost { font-weight: 800; background: var(--card-accent); color: #0b0d13; border-radius: 6px; padding: 1px 7px; }
+.cr-card__name { font-weight: 800; font-size: 15px; line-height: 1.2; }
+.cr-card__desc { margin: 0; font-size: 12px; color: var(--cr-text-dim); flex-grow: 1; }
+.cr-card__foot { display: flex; flex-wrap: wrap; gap: 4px; }
+.cr-card--back {
+  background: repeating-linear-gradient(45deg, #24304d, #24304d 8px, #1c2540 8px, #1c2540 16px);
+  border: 1px solid var(--cr-border);
+}
+/* Full-face art cards: the image *is* the card, so drop the frame padding. */
+.cr-card--art {
+  padding: 0;
+  border-top-width: 1px;
+  background: #fff;
+  overflow: hidden;
+}
+.cr-card__art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: inherit;
+}
+.cr-tag {
+  font-size: 10px; font-weight: 700; color: #0b0d13;
+  border-radius: 5px; padding: 2px 6px;
+}
+.cr-tag--vp { background: #f5c518; }
+
+/* ---- Role card ---- */
+.cr-role {
+  --team-color: var(--cr-border);
+  --team-soft: var(--cr-panel-2);
+  background: var(--cr-panel);
+  border: 1px solid var(--cr-border);
+  border-left: 5px solid var(--team-color);
+  border-radius: var(--cr-radius);
+  padding: 16px;
+  box-shadow: var(--cr-shadow);
+  min-width: 260px;
+  flex: 1 1 280px;
+}
+.cr-role.is-active { box-shadow: 0 0 0 2px var(--team-color), var(--cr-shadow); }
+.cr-role__head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.cr-role__name { font-size: 20px; font-weight: 800; color: var(--team-color); }
+.cr-role__team { font-size: 13px; color: var(--cr-text-dim); }
+.cr-role__player { text-align: right; font-weight: 700; }
+.cr-role__turn { display: block; font-size: 11px; color: var(--team-color); font-weight: 700; }
+.cr-role__ability {
+  margin: 12px 0;
+  padding: 10px;
+  background: var(--team-soft);
+  border-radius: 8px;
+}
+.cr-role__ability-name { font-weight: 800; font-size: 13px; }
+.cr-role__ability p { margin: 4px 0 0; font-size: 13px; color: var(--cr-text-dim); }
+/* Role-mat art sits between the header and the live trackers. */
+.cr-role__art {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 12px 0;
+  border-radius: 8px;
+  background: #fff;
+}
+.cr-trackers { display: flex; gap: 10px; flex-wrap: wrap; }
+.cr-tracker {
+  flex: 1 1 70px; background: var(--cr-panel-2); border-radius: 8px; padding: 8px 10px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.cr-tracker__label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--cr-text-dim); }
+.cr-tracker__value { font-size: 18px; font-weight: 800; }
+.cr-tracker__cubes { display: flex; gap: 5px; }
+.cr-cube { width: 16px; height: 16px; border-radius: 4px; border: 2px solid var(--cr-border); background: transparent; }
+.cr-cube.is-on { background: var(--team-color); border-color: var(--team-color); }
+.cr-role__status, .cr-seat__status { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+.cr-status {
+  font-size: 11px; font-weight: 700; color: #fff;
+  border-radius: 6px; padding: 3px 8px;
+}
+
+/* ---- Player seats ---- */
+.cr-seats__list { display: flex; flex-direction: column; gap: 8px; }
+.cr-seat {
+  --team-color: var(--cr-border);
+  --team-soft: var(--cr-panel-2);
+  border: 1px solid var(--cr-border);
+  border-left: 4px solid var(--team-color);
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--cr-panel-2);
+}
+.cr-seat.is-active { box-shadow: 0 0 0 2px var(--team-color); }
+.cr-seat.is-self { background: var(--team-soft); }
+.cr-seat__top { display: flex; align-items: center; gap: 6px; font-weight: 700; }
+.cr-seat__role { font-size: 13px; color: var(--cr-text-dim); margin: 2px 0 6px; }
+.cr-seat__stats { display: flex; gap: 12px; font-size: 13px; font-variant-numeric: tabular-nums; }
+
+/* ---- Action bar ---- */
+.cr-board__player {
+  display: flex;
+  gap: 16px;
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+.cr-hand { flex: 2 1 380px; }
+.cr-hand__count { color: var(--cr-text-dim); font-size: 13px; }
+.cr-actions { flex: 1 1 260px; display: flex; flex-direction: column; gap: 12px; }
+.cr-actions__list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.cr-action {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 8px 10px; border-radius: 8px;
+  border: 1px solid var(--cr-border); background: var(--cr-panel-2);
+  color: var(--cr-text); cursor: pointer; transition: border-color 0.12s ease;
+}
+.cr-action:not(:disabled):hover { border-color: #6b7bb0; }
+.cr-action:disabled { opacity: 0.4; cursor: not-allowed; }
+.cr-action__icon { font-size: 18px; }
+.cr-action__label { font-weight: 700; font-size: 13px; }
+.cr-action__cost { font-size: 11px; color: var(--cr-text-dim); }
+.cr-endturn {
+  padding: 12px; border-radius: 8px; border: none; cursor: pointer;
+  font-weight: 800; font-size: 15px; color: #0b0d13;
+  background: linear-gradient(90deg, #f5c518, #f59e0b);
+}
+.cr-endturn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ---- Market variants ---- */
+.cr-market--black { border-color: #5b2330; background: linear-gradient(180deg, rgba(224,59,59,0.08), var(--cr-panel)); }
+.cr-market__subtitle { color: var(--cr-text-dim); font-size: 13px; }
+
+/* ---- Lobby ---- */
+.cr-lobby {
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+  background: radial-gradient(1200px 600px at 50% -10%, #1c2030 0%, var(--cr-bg) 60%);
+  color: var(--cr-text);
+  font-family: var(--sans, system-ui, sans-serif);
+}
+.cr-lobby__card {
+  width: 100%;
+  max-width: 460px;
+  background: var(--cr-panel);
+  border: 1px solid var(--cr-border);
+  border-radius: var(--cr-radius);
+  padding: 28px;
+  box-shadow: var(--cr-shadow);
+}
+.cr-lobby__title { margin: 0; font-size: 34px; font-weight: 800; text-align: center; }
+.cr-lobby__tag { margin: 4px 0 20px; text-align: center; color: var(--cr-text-dim); }
+.cr-lobby__seats { display: flex; flex-direction: column; gap: 8px; }
+.cr-lobby__seat { display: flex; align-items: center; gap: 8px; }
+.cr-lobby__num {
+  width: 26px; height: 26px; flex: none; border-radius: 50%;
+  display: grid; place-items: center; font-size: 13px; font-weight: 700;
+  background: var(--cr-panel-2); color: var(--cr-text-dim);
+}
+.cr-lobby__input {
+  flex: 1; padding: 10px 12px; border-radius: 8px;
+  border: 1px solid var(--cr-border); background: var(--cr-panel-2); color: var(--cr-text);
+  font-size: 15px;
+}
+.cr-lobby__input:focus { outline: 2px solid #6b7bb0; }
+.cr-lobby__remove {
+  flex: none; width: 30px; height: 30px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--cr-border); background: var(--cr-panel-2); color: var(--cr-text-dim);
+}
+.cr-lobby__remove:disabled { opacity: 0.3; cursor: not-allowed; }
+.cr-lobby__actions { display: flex; gap: 10px; margin-top: 16px; }
+.cr-lobby__add {
+  flex: 1; padding: 12px; border-radius: 8px; cursor: pointer;
+  border: 1px dashed var(--cr-border); background: transparent; color: var(--cr-text);
+}
+.cr-lobby__add:disabled { opacity: 0.3; cursor: not-allowed; }
+.cr-lobby__start {
+  flex: 2; padding: 12px; border-radius: 8px; border: none; cursor: pointer;
+  font-weight: 800; font-size: 16px; color: #0b0d13;
+  background: linear-gradient(90deg, #2b6cff, #7c3aed);
+}
+.cr-lobby__start:disabled { opacity: 0.4; cursor: not-allowed; }
+.cr-lobby__hint { margin: 14px 0 0; text-align: center; color: var(--cr-text-dim); font-size: 13px; }
+
+/* ---- Home / online ---- */
+.cr-home__modes { display: flex; flex-direction: column; gap: 12px; margin: 20px 0 8px; }
+.cr-home__online {
+  padding: 14px; border-radius: 8px; cursor: pointer; font-weight: 800; font-size: 16px;
+  border: 1px solid var(--cr-border); background: var(--cr-panel-2); color: var(--cr-text);
+}
+.cr-online__join { display: flex; gap: 10px; margin-top: 14px; }
+.cr-online__join .cr-lobby__input { flex: 2; }
+.cr-online__join .cr-lobby__add { flex: 1; }
+.cr-online__error { margin: 12px 0 0; color: #f87171; font-size: 14px; text-align: center; }
+.cr-online__code {
+  font-size: 44px; font-weight: 800; letter-spacing: 8px; text-align: center;
+  padding: 16px; margin: 8px 0 16px; border-radius: 10px;
+  background: var(--cr-panel-2); color: #f5c518;
+}
+.cr-online__seats { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+.cr-online__seat { display: flex; align-items: center; gap: 10px; font-size: 15px; }
+.cr-online__bar { display: flex; align-items: center; gap: 16px; }
+.cr-online__roomcode { font-weight: 800; letter-spacing: 2px; color: var(--cr-text-dim); }
+.cr-online__turn { margin-left: auto; font-size: 14px; }
+
+/* ---- Game wrapper ---- */
+.cr-game__bar { padding: 8px 16px 0; }
+.cr-game__exit {
+  padding: 8px 14px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--cr-border); background: var(--cr-panel-2); color: var(--cr-text);
+  font-size: 14px;
+}
+
+/* ---- Winner + notice banners ---- */
+.cr-winner {
+  margin: 0 16px; padding: 14px 20px; border-radius: var(--cr-radius);
+  font-size: 20px; font-weight: 800; text-align: center;
+}
+.cr-notice {
+  margin: 0 16px; padding: 10px 16px; border-radius: 8px;
+  background: rgba(245, 197, 24, 0.12); border: 1px solid rgba(245, 197, 24, 0.4);
+  color: #f5c518; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.cr-notice__cancel {
+  padding: 4px 12px; border-radius: 6px; cursor: pointer; font-weight: 700;
+  border: 1px solid currentColor; background: transparent; color: inherit;
+}
+
+/* ---- Targetable seats ---- */
+.cr-seat.is-targetable { cursor: pointer; box-shadow: 0 0 0 2px #f5c518; }
+.cr-seat.is-targetable:hover { background: rgba(245, 197, 24, 0.12); }
+
+/* ---- Hand column: play-selected + inventory ---- */
+.cr-board__handcol { flex: 2 1 380px; display: flex; flex-direction: column; gap: 12px; }
+.cr-board__handcol .cr-hand { flex: none; }
+.cr-play-selected {
+  align-self: flex-start; padding: 10px 16px; border-radius: 8px; border: none; cursor: pointer;
+  font-weight: 700; color: #0b0d13; background: linear-gradient(90deg, #10b981, #0ea5e9);
+}
+.cr-inventory {
+  background: var(--cr-panel); border: 1px solid var(--cr-border);
+  border-radius: var(--cr-radius); padding: 16px; box-shadow: var(--cr-shadow);
+}
+.cr-inventory__list { display: flex; flex-direction: column; gap: 6px; }
+.cr-inventory__item {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 6px 10px; background: var(--cr-panel-2); border-radius: 6px; font-size: 14px;
+}
+.cr-inventory__sell {
+  padding: 3px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 700;
+  border: 1px solid var(--cr-border); background: transparent; color: var(--cr-text);
+}
+
+/* ---- Game log ---- */
+.cr-log__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto; }
+.cr-log__entry { font-size: 13px; padding: 6px 8px; background: var(--cr-panel-2); border-radius: 6px; color: var(--cr-text-dim); }
+.cr-log__entry:first-child { color: var(--cr-text); border-left: 3px solid #f5c518; }
+
+/* ---- Combat / Power phase panel ---- */
+.cr-combat {
+  background: var(--cr-panel); border: 2px solid #e03b3b; border-radius: var(--cr-radius);
+  padding: 16px 18px; margin: 12px 0; box-shadow: var(--cr-shadow);
+}
+.cr-combat__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.cr-combat__head h2 { margin: 0; font-size: 18px; }
+.cr-combat__turn { font-size: 13px; color: var(--cr-text-dim); }
+.cr-combat__grid { display: flex; align-items: stretch; gap: 12px; }
+.cr-combat__side { flex: 1 1 0; display: flex; flex-direction: column; gap: 8px; background: var(--cr-panel-2); border-radius: 8px; padding: 12px; }
+.cr-combat__side-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.cr-combat__role { font-size: 12px; color: var(--cr-text-dim); }
+.cr-combat__total { display: flex; align-items: baseline; gap: 8px; }
+.cr-combat__total-num { font-size: 30px; font-weight: 800; line-height: 1; }
+.cr-combat__total-detail { font-size: 12px; color: var(--cr-text-dim); }
+.cr-combat__vs { align-self: center; font-weight: 800; color: var(--cr-text-dim); }
+.cr-combat__jammed { font-size: 12px; color: #f59e0b; margin: 0; }
+.cr-combat__cards { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.cr-combat__cards-owner { flex: 1 1 100%; font-size: 11px; color: var(--cr-text-dim); }
+.cr-combat__play {
+  padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 700;
+  border: 1px solid var(--cr-border); background: var(--cr-panel); color: var(--cr-text);
+}
+.cr-combat__play:hover:not(:disabled) { background: rgba(224, 59, 59, 0.14); }
+.cr-combat__play:disabled { opacity: 0.5; cursor: default; }
+.cr-combat__mg { align-self: flex-start; }
+.cr-combat__pass {
+  margin-top: auto; align-self: flex-start; padding: 6px 14px; border-radius: 6px; cursor: pointer;
+  font-weight: 700; font-size: 13px; border: none; color: #0b0d13; background: linear-gradient(90deg, #f59e0b, #f5c518);
+}
+.cr-combat__log { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.cr-combat__log li { font-size: 12px; color: var(--cr-text-dim); }
+.cr-combat__hint { margin: 10px 0 0; font-size: 12px; color: var(--cr-text-dim); }
+
+/* ---- Role ability panel ---- */
+.cr-role {
+  background: var(--cr-panel); border: 2px solid #f5c518; border-radius: var(--cr-radius);
+  padding: 16px 18px; margin: 12px 0; box-shadow: var(--cr-shadow);
+}
+.cr-role__head h2 { margin: 0; font-size: 18px; }
+.cr-role__desc { margin: 4px 0 12px; font-size: 13px; color: var(--cr-text-dim); }
+.cr-role__body p { margin: 8px 0 6px; font-size: 14px; }
+.cr-role__sub { color: var(--cr-text-dim); font-size: 13px; }
+.cr-role__chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.cr-role__empty { font-size: 13px; color: var(--cr-text-dim); }
+.cr-role__chip {
+  padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600;
+  border: 1px solid var(--cr-border); background: var(--cr-panel-2); color: var(--cr-text);
+}
+.cr-role__chip:hover { border-color: #f5c518; }
+.cr-role__chip.is-selected { background: #f5c518; color: #0b0d13; border-color: #f5c518; }
+.cr-role__actions { display: flex; gap: 8px; margin-top: 12px; }
+.cr-role__use {
+  padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; font-weight: 700;
+  color: #0b0d13; background: linear-gradient(90deg, #10b981, #0ea5e9);
+}
+.cr-role__use:disabled { opacity: 0.45; cursor: default; }
+.cr-role__cancel {
+  padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 700;
+  border: 1px solid var(--cr-border); background: transparent; color: var(--cr-text);
+}
+
+/* ---- Inventory Use button + perk toggle ---- */
+.cr-inventory__buttons { display: flex; gap: 6px; }
+.cr-inventory__use {
+  padding: 3px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 700;
+  border: none; color: #0b0d13; background: linear-gradient(90deg, #10b981, #0ea5e9);
+}
+.cr-perk__toggle { display: flex; align-items: center; gap: 6px; font-size: 13px; margin-top: 6px; color: var(--cr-text-dim); }
+
+/* ---- Combat pre/post choice blocks ---- */
+.cr-choice__block { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--cr-border); }
+.cr-choice__block .cr-role__use, .cr-choice__block .cr-role__cancel { margin-top: 8px; }
+
+/* ---- Online end-game overlay ---- */
+.cr-endgame {
+  position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center;
+  background: rgba(4, 6, 12, 0.72); backdrop-filter: blur(3px); padding: 24px;
+}
+.cr-endgame__card {
+  background: var(--cr-panel); border: 2px solid var(--cr-border); border-radius: var(--cr-radius);
+  box-shadow: var(--cr-shadow); padding: 28px 32px; text-align: center; max-width: 420px; width: 100%;
+}
+.cr-endgame__trophy { font-size: 44px; line-height: 1; }
+.cr-endgame__title { margin: 8px 0 4px; font-size: 26px; }
+.cr-endgame__sub { margin: 0 0 18px; color: var(--cr-text-dim); font-size: 14px; }
+.cr-endgame__actions { display: flex; gap: 10px; justify-content: center; }
+.cr-endgame__hint { margin: 14px 0 0; font-size: 12px; color: var(--cr-text-dim); }

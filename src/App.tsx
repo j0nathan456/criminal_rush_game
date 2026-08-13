@@ -1,122 +1,50 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useState } from 'react';
+import { Lobby } from './components/Lobby';
+import { GameController } from './components/GameController';
+import { OnlineController } from './components/OnlineController';
+import './game.css';
 
+type Screen =
+  | { name: 'home' }
+  | { name: 'local-lobby' }
+  | { name: 'local-game'; players: string[] }
+  | { name: 'online' };
+
+/**
+ * App shell. Home offers local pass-and-play or online (join-by-code) play.
+ */
 function App() {
-  const [count, setCount] = useState(0)
+  const [screen, setScreen] = useState<Screen>({ name: 'home' });
 
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
+  if (screen.name === 'home') {
+    return (
+      <div className="cr-lobby">
+        <div className="cr-lobby__card">
+          <h1 className="cr-lobby__title">Criminal Rush</h1>
+          <p className="cr-lobby__tag">Save the City… or Control It</p>
+          <div className="cr-home__modes">
+            <button type="button" className="cr-lobby__start" onClick={() => setScreen({ name: 'local-lobby' })}>
+              Local pass &amp; play
+            </button>
+            <button type="button" className="cr-home__online" onClick={() => setScreen({ name: 'online' })}>
+              Play online (join by code)
+            </button>
+          </div>
+          <p className="cr-lobby__hint">4–8 players · 30–60 min</p>
         </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+      </div>
+    );
+  }
 
-      <div className="ticks"></div>
+  if (screen.name === 'local-lobby') {
+    return <Lobby onStart={(players) => setScreen({ name: 'local-game', players })} />;
+  }
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+  if (screen.name === 'local-game') {
+    return <GameController playerNames={screen.players} onExit={() => setScreen({ name: 'home' })} />;
+  }
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+  return <OnlineController onExit={() => setScreen({ name: 'home' })} />;
 }
 
-export default App
+export default App;

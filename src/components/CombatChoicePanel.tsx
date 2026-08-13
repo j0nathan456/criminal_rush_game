@@ -1,0 +1,157 @@
+import { useState } from 'react';
+import type { GameState, CombatChoiceInput } from '../types/game';
+import { TEAM_META } from '../constants/theme';
+
+export interface CombatChoicePanelProps {
+  state: GameState;
+  onCombatChoice?: (input: CombatChoiceInput) => void;
+}
+
+/**
+ * Renders the active pre/post-combat choice (PRE or AFTER phase): Portal
+ * (draw / swap), Drones (exchange), Mutants (copy), or Leaving Evidence.
+ * Pass-and-play, so the device operates whichever combatant must decide.
+ */
+export function CombatChoicePanel({ state, onCombatChoice }: CombatChoicePanelProps) {
+  const [teammateId, setTeammateId] = useState<string>();
+  const [weaponId, setWeaponId] = useState<string>();
+  const [myCardId, setMyCardId] = useState<string>();
+  const [theirCardId, setTheirCardId] = useState<string>();
+  const [evidenceIds, setEvidenceIds] = useState<string[]>([]);
+
+  const combat = state.combat;
+  const head = combat?.pending[0];
+  if (!combat || !head) return null;
+
+  const byId = (id: string) => state.players.find((p) => p.id === id)!;
+  const holder = byId(head.playerId);
+  const teammates = state.players.filter((p) => p.team === holder.team && p.id !== holder.id);
+  const teammate = teammateId ? byId(teammateId) : undefined;
+
+  const chip = (label: string, selected: boolean, onClick: () => void, key: string) => (
+    <button key={key} type="button" className={`cr-role__chip${selected ? ' is-selected' : ''}`} onClick={onClick}>
+      {label}
+    </button>
+  );
+
+  let body: React.ReactNode;
+
+  if (head.kind === 'PORTAL') {
+    const mates = teammates.filter((p) => p.inventory.some((c) => c.type === 'WEAPON'));
+    body = (
+      <>
+        <button type="button" className="cr-role__use" onClick={() => onCombatChoice?.({ kind: 'PORTAL', mode: 'DRAW' })}>
+          Draw 2 cards
+        </button>
+        {holder.money >= 1 && mates.length > 0 && (
+          <div className="cr-choice__block">
+            <p className="cr-role__sub">…or pay $1 to swap Portal with a teammate’s weapon:</p>
+            <div className="cr-role__chips">{mates.map((p) => chip(p.name, teammateId === p.id, () => { setTeammateId(p.id); setWeaponId(undefined); }, p.id))}</div>
+            {teammate && (
+              <div className="cr-role__chips">
+                {teammate.inventory.filter((c) => c.type === 'WEAPON').map((w) => chip(w.name, weaponId === w.id, () => setWeaponId(w.id), w.id))}
+              </div>
+            )}
+            <button
+              type="button"
+              className="cr-role__use"
+              disabled={!teammateId || !weaponId}
+              onClick={() => onCombatChoice?.({ kind: 'PORTAL', mode: 'SWAP', teammateId: teammateId!, teammateWeaponId: weaponId! })}
+            >
+              Swap ($1)
+            </button>
+          </div>
+        )}
+      </>
+    );
+  } else if (head.kind === 'DRONES') {
+    body = (
+      <>
+        <button type="button" className="cr-role__cancel" onClick={() => onCombatChoice?.({ kind: 'DRONES', mode: 'SKIP' })}>
+          Skip exchange
+        </button>
+        {teammates.length > 0 && (
+          <div className="cr-choice__block">
+            <p className="cr-role__sub">Exchange a card with a teammate:</p>
+            <p className="cr-role__sub">Your card:</p>
+            <div className="cr-role__chips">{holder.hand.map((c) => chip(c.name, myCardId === c.id, () => setMyCardId(c.id), c.id))}</div>
+            <p className="cr-role__sub">Teammate:</p>
+            <div className="cr-role__chips">{teammates.map((p) => chip(p.name, teammateId === p.id, () => { setTeammateId(p.id); setTheirCardId(undefined); }, p.id))}</div>
+            {teammate && (
+              <>
+                <p className="cr-role__sub">Their card:</p>
+                <div className="cr-role__chips">{teammate.hand.map((c) => chip(c.name, theirCardId === c.id, () => setTheirCardId(c.id), c.id))}</div>
+              </>
+            )}
+            <button
+              type="button"
+              className="cr-role__use"
+              disabled={!myCardId || !teammateId || !theirCardId}
+              onClick={() => onCombatChoice?.({ kind: 'DRONES', mode: 'EXCHANGE', cardId: myCardId!, teammateId: teammateId!, teammateCardId: theirCardId! })}
+            >
+              Exchange
+            </button>
+          </div>
+        )}
+      </>
+    );
+  } else if (head.kind === 'MUTANTS') {
+    const oppId = head.side === 'ATTACKER' ? combat.defender.playerId : combat.attacker.playerId;
+    const oppWeapons = byId(oppId).inventory.filter((c) => c.type === 'WEAPON');
+    body = (
+      <>
+        <button type="button" className="cr-role__cancel" onClick={() => onCombatChoice?.({ kind: 'MUTANTS', mode: 'SKIP' })}>
+          Copy nothing
+        </button>
+        {oppWeapons.length > 0 && (
+          <div className="cr-choice__block">
+            <p className="cr-role__sub">Copy one of the opponent’s weapons:</p>
+            <div className="cr-role__chips">{oppWeapons.map((w) => chip(w.name, weaponId === w.id, () => setWeaponId(w.id), w.id))}</div>
+            <button
+              type="button"
+              className="cr-role__use"
+              disabled={!weaponId}
+              onClick={() => onCombatChoice?.({ kind: 'MUTANTS', mode: 'COPY', opponentWeaponId: weaponId! })}
+            >
+              Copy
+            </button>
+          </div>
+        )}
+      </>
+    );
+  } else {
+    // LEAVING_EVIDENCE
+    const discardEvidence = state.discardPile.filter((c) => c.type === 'EVIDENCE');
+    const toggle = (id: string) =>
+      setEvidenceIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : cur.length < 2 ? [...cur, id] : cur));
+    body = (
+      <>
+        <p className="cr-role__sub">Shuffle up to 2 discarded Evidence cards back into the deck:</p>
+        <div className="cr-role__chips">
+          {discardEvidence.length === 0 && <span className="cr-role__empty">No discarded Evidence.</span>}
+          {discardEvidence.map((c) => chip(c.name, evidenceIds.includes(c.id), () => toggle(c.id), c.id))}
+        </div>
+        <div className="cr-role__actions">
+          <button type="button" className="cr-role__use" onClick={() => onCombatChoice?.({ kind: 'LEAVING_EVIDENCE', evidenceIds })}>
+            {evidenceIds.length > 0 ? `Shuffle ${evidenceIds.length} back` : 'Confirm'}
+          </button>
+          <button type="button" className="cr-role__cancel" onClick={() => onCombatChoice?.({ kind: 'LEAVING_EVIDENCE', evidenceIds: [] })}>
+            Leave behind
+          </button>
+        </div>
+      </>
+    );
+  }
+
+  const title = head.kind === 'LEAVING_EVIDENCE' ? 'Leaving Evidence' : `${holder.name}: ${head.kind[0]}${head.kind.slice(1).toLowerCase()}`;
+
+  return (
+    <section className="cr-combat" aria-label="Combat choice">
+      <header className="cr-combat__head">
+        <h2>⚔️ Combat — {title}</h2>
+        <span className="cr-combat__turn" style={{ color: TEAM_META[holder.team].color }}>{holder.name} decides</span>
+      </header>
+      <div className="cr-role__body">{body}</div>
+    </section>
+  );
+}

@@ -1,21 +1,8 @@
 // src/constants/setup.ts
 
-import type { Team } from '../types/cards';
+import type { GameConfig } from '../types/game';
 
-interface RoleSetup {
-  startingCards: number;
-  startingMoney: number;
-}
-
-interface PlayerCountConfig {
-  civilians: number;
-  criminals: number;
-  vpTargets: Record<Team, number>;
-  civSetup: RoleSetup;
-  crimSetup: RoleSetup;
-}
-
-export const GAME_CONFIGS: Record<number, PlayerCountConfig> = {
+export const GAME_CONFIGS: Record<number, GameConfig> = {
   4: {
     civilians: 2,
     criminals: 2,
