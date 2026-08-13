@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"name": "criminal_rush_game",
+			"path": "."
+		},
+		{
+			"name": "criminal-rush",
+			"path": "../../../criminal-rush"
+		}
+	],
+	"settings": {}
+}
