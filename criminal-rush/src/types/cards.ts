@@ -1,0 +1,64 @@
+/**
+ * src/types/cards.ts
+ */
+
+export type Team = 'CRIMINAL' | 'CIVILIAN';
+
+export type EvidenceCategory = 'TIME' | 'MEANS' | 'LOCATION' | 'MOTIVE';
+
+export type ActionCardType = 'MONEY' | 'EVIDENCE' | 'POWER' | 'EVENT'
+
+export type MarketCardType = 
+  | 'PERK' 
+  | 'WEAPON' 
+  | 'SPECIAL';
+
+/**
+ * ACTION CARDS
+ * Found in the main Draw Pile. 
+ * These are free to play from the hand.
+ */
+export interface ActionCard {
+  id: string;
+  name: string;
+  description: string;
+  type: ActionCardType;
+  
+  /** 
+   * Only applicable if type is 'EVIDENCE'. 
+   * A single card can potentially satisfy multiple categories.
+   */
+  evidenceCategories?: EvidenceCategory[];
+}
+
+/**
+ * MARKET CARDS (Perks & Weapons)
+ * Found in the Public Market or Black Market. 
+ * Must be purchased with money.
+ */
+export interface MarketCard {
+  id: string;
+  name: string;
+  description: string;
+  cost: number;
+  source: 'PUBLIC' | 'BLACK_MARKET'; 
+  type: MarketCardType;
+  
+  /**
+   * If present, purchasing this card immediately adds 
+   * points to the team's victory point total.
+   * Example: 'Expand Network'
+   */
+  vpValue?: number;
+
+  /**
+   * Optional flag for cards that provide permanent passive bonuses
+   */
+  isPassive?: boolean;
+}
+
+/**
+ * Union type for any card in the game 
+ * (Useful for lists like a discard pile that might contain both)
+ */
+export type AnyCard = ActionCard | MarketCard;
