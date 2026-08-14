@@ -1,4 +1,4 @@
-import type { Team } from '../types/game';
+import type { Team } from '../types/game.js';
 
 /**
  * Pure game logic for determining the game winner.

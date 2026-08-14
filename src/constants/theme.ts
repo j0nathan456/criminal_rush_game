@@ -7,8 +7,8 @@
  * so components can render without knowing the rules.
  */
 
-import type { Team, EvidenceCategory, ActionCardType, MarketCardType } from '../types/cards';
-import type { PlayerActionType } from '../types/game';
+import type { Team, EvidenceCategory, ActionCardType, MarketCardType } from '../types/cards.js';
+import type { PlayerActionType } from '../types/game.js';
 
 /** Team identity colors. Civilians are the blue detectives, Criminals the red syndicate. */
 export const TEAM_META: Record<Team, { label: string; color: string; soft: string; icon: string }> = {

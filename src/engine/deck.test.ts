@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import type { ActionCard } from '../types/cards';
-import { shuffle, expandDefs, buildDrawPile, deal } from './deck';
-import { ACTION_CARD_DEFS } from '../constants/cards';
+import type { ActionCard } from '../types/cards.js';
+import { shuffle, expandDefs, buildDrawPile, deal } from './deck.js';
+import { ACTION_CARD_DEFS } from '../constants/cards.js';
 
 /** Deterministic PRNG (mulberry32) so shuffle tests are reproducible. */
 function seeded(seed: number): () => number {

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useOnlineGame } from './useOnlineGame';
-import type { RoomView } from './protocol';
+import { useOnlineGame } from './useOnlineGame.js';
+import type { RoomView } from './protocol.js';
 
 const STORAGE_KEY = 'criminal-rush:online';
 

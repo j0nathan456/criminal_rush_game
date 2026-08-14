@@ -1,6 +1,6 @@
 // src/constants/setup.ts
 
-import type { GameConfig } from '../types/game';
+import type { GameConfig } from '../types/game.js';
 
 export const GAME_CONFIGS: Record<number, GameConfig> = {
   4: {

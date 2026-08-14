@@ -8,4 +8,4 @@
  * Setup is the only place that imports both constants and engine.
  */
 
-export { newGame, SUPPORTED_PLAYER_COUNTS } from './newGame';
+export { newGame, SUPPORTED_PLAYER_COUNTS } from './newGame.js';

@@ -4,7 +4,7 @@
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { randomUUID } from 'node:crypto';
-import { RoomError } from '../src/online/room';
+import { RoomError } from '../src/online/room.js';
 
 /** A fresh, opaque per-player secret. */
 export function newToken(): string {

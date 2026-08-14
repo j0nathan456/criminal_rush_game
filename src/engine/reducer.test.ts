@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import type { GameState, Player, RoleIdentity } from '../types/game';
-import type { ActionCard, MarketCard, Team } from '../types/cards';
-import { gameReducer, emptyGameState } from './reducer';
+import type { GameState, Player, RoleIdentity } from '../types/game.js';
+import type { ActionCard, MarketCard, Team } from '../types/cards.js';
+import { gameReducer, emptyGameState } from './reducer.js';
 
 function role(id: string, team: Team, powerlevel = 3): RoleIdentity {
   return { id, name: id, team, powerlevel, abilityName: '', abilityDescription: '' };

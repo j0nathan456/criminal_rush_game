@@ -6,11 +6,11 @@
  * data into the engine's createGame() so the engine stays data-agnostic.
  */
 
-import { createGame } from '../engine';
-import type { Rng } from '../engine';
-import type { GameState } from '../types/game';
-import { ROLES } from '../constants/roles';
-import { GAME_CONFIGS } from '../constants/setup';
+import { createGame } from '../engine/index.js';
+import type { Rng } from '../engine/index.js';
+import type { GameState } from '../types/game.js';
+import { ROLES } from '../constants/roles.js';
+import { GAME_CONFIGS } from '../constants/setup.js';
 import {
   ACTION_CARD_DEFS,
   MARKET_PERKS,
@@ -18,7 +18,7 @@ import {
   BLACK_MARKET_PERKS,
   BLACK_MARKET_WEAPONS,
   EXPAND_NETWORK,
-} from '../constants/cards';
+} from '../constants/cards.js';
 
 /** The player counts the rulebook supports. */
 export const SUPPORTED_PLAYER_COUNTS = [4, 5, 6, 7, 8];

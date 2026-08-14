@@ -10,8 +10,8 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { GameAction } from '../engine';
-import type { RoomView } from './protocol';
+import type { GameAction } from '../engine/index.js';
+import type { RoomView } from './protocol.js';
 
 const POLL_MS = 1500;
 const STORAGE_KEY = 'criminal-rush:online';

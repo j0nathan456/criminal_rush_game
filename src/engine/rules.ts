@@ -5,9 +5,9 @@
  * imports — just functions over GameState.
  */
 
-import type { GameState, Player } from '../types/game';
-import type { EvidenceCategory, Team } from '../types/cards';
-import { determineWinner } from './scoring';
+import type { GameState, Player } from '../types/game.js';
+import type { EvidenceCategory, Team } from '../types/cards.js';
+import { determineWinner } from './scoring.js';
 
 /** Base actions granted each turn before role/perk modifiers. */
 export const ACTIONS_PER_TURN = 3;

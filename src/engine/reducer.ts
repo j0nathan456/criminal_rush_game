@@ -6,9 +6,9 @@
  * so it needs no card data and never imports `constants`.
  */
 
-import type { GameState, Player, CombatSide, CombatState, CombatChoiceInput } from '../types/game';
-import type { ActionCard, EvidenceCategory, MarketCard, WeaponType } from '../types/cards';
-import { determineWinner } from './scoring';
+import type { GameState, Player, CombatSide, CombatState, CombatChoiceInput } from '../types/game.js';
+import type { ActionCard, EvidenceCategory, MarketCard, WeaponType } from '../types/cards.js';
+import { determineWinner } from './scoring.js';
 import {
   actionsForTurn,
   applyScore,
@@ -16,7 +16,7 @@ import {
   log,
   playerIndexById,
   updatePlayer,
-} from './rules';
+} from './rules.js';
 import {
   applyCombatChoice,
   attackActionCost,
@@ -28,7 +28,7 @@ import {
   powerCardValue,
   resolveCombat,
   resolvePreCombat,
-} from './combat';
+} from './combat.js';
 
 export type GameAction =
   | { type: 'DRAW_CARD' }

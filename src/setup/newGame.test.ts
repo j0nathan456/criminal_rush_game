@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { newGame, SUPPORTED_PLAYER_COUNTS } from './newGame';
-import { GAME_CONFIGS } from '../constants/setup';
+import { newGame, SUPPORTED_PLAYER_COUNTS } from './newGame.js';
+import { GAME_CONFIGS } from '../constants/setup.js';
 
 /** Deterministic PRNG so setup is reproducible. */
 function seeded(seed: number): () => number {

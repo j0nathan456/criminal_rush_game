@@ -12,7 +12,7 @@
  * can render the plain CSS card instead.
  */
 
-import type { AnyCard } from '../types/cards';
+import type { AnyCard } from '../types/cards.js';
 
 /** Vite serves `public/` at the app base; BASE_URL always ends in a slash. */
 const BASE = `${import.meta.env.BASE_URL ?? '/'}cards`;

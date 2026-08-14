@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { viewFor } from '../src/online/room';
-import { getRoom } from './_store';
-import { query, fail } from './_lib';
+import { viewFor } from '../src/online/room.js';
+import { getRoom } from './_store.js';
+import { query, fail } from './_lib.js';
 
 /** GET /api/state?code=&token= → RoomView. Polled by clients for updates. */
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {

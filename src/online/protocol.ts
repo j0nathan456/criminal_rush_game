@@ -5,7 +5,7 @@
  * API handlers, and the client — so it must stay free of Node/React/KV imports.
  */
 
-import type { GameState, Team } from '../types/game';
+import type { GameState, Team } from '../types/game.js';
 
 /** A seat in a room. `token` is a secret held only server-side. */
 export interface RoomPlayer {

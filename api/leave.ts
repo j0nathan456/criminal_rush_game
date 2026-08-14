@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { leaveRoom } from '../src/online/room';
-import { getRoom, saveRoom, deleteRoom } from './_store';
-import { body, fail } from './_lib';
+import { leaveRoom } from '../src/online/room.js';
+import { getRoom, saveRoom, deleteRoom } from './_store.js';
+import { body, fail } from './_lib.js';
 
 /**
  * POST /api/leave { code, token } → { ok }. Releases the caller's seat in a

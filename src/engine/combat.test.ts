@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import type { GameState, Player, RoleIdentity } from '../types/game';
-import type { ActionCard, MarketCard, Team, WeaponType } from '../types/cards';
-import { gameReducer, emptyGameState } from './reducer';
-import { computeBasePower, weaponPower, attackActionCost, powerCardValue } from './combat';
+import type { GameState, Player, RoleIdentity } from '../types/game.js';
+import type { ActionCard, MarketCard, Team, WeaponType } from '../types/cards.js';
+import { gameReducer, emptyGameState } from './reducer.js';
+import { computeBasePower, weaponPower, attackActionCost, powerCardValue } from './combat.js';
 
 // --- Fixtures ----------------------------------------------------------------
 

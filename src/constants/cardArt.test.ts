@@ -2,9 +2,9 @@
 import { describe, it, expect } from 'vitest';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { AnyCard } from '../types/cards';
-import { cardArtUrl, roleArtUrl } from './cardArt';
-import { ROLES } from './roles';
+import type { AnyCard } from '../types/cards.js';
+import { cardArtUrl, roleArtUrl } from './cardArt.js';
+import { ROLES } from './roles.js';
 import {
   ACTION_CARD_DEFS,
   MARKET_PERKS,
@@ -12,7 +12,7 @@ import {
   BLACK_MARKET_PERKS,
   BLACK_MARKET_WEAPONS,
   EXPAND_NETWORK,
-} from './cards';
+} from './cards.js';
 
 const PUBLIC = join(process.cwd(), 'public');
 

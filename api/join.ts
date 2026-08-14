@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { joinRoom, viewFor } from '../src/online/room';
-import { getRoom, saveRoom } from './_store';
-import { body, newToken, fail } from './_lib';
+import { joinRoom, viewFor } from '../src/online/room.js';
+import { getRoom, saveRoom } from './_store.js';
+import { body, newToken, fail } from './_lib.js';
 
 /** POST /api/join { code, name } → { token, view }. Joins an existing room. */
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {

@@ -1,4 +1,4 @@
-import type { RoleIdentity } from '../types/game';
+import type { RoleIdentity } from '../types/game.js';
 
 /**
  * The full role roster (rulebook p.17). Base power levels and abilities are

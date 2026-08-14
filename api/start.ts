@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { startRoom, viewFor } from '../src/online/room';
-import { getRoom, saveRoom } from './_store';
-import { newGame } from '../src/setup/newGame';
-import { body, fail } from './_lib';
+import { startRoom, viewFor } from '../src/online/room.js';
+import { getRoom, saveRoom } from './_store.js';
+import { newGame } from '../src/setup/newGame.js';
+import { body, fail } from './_lib.js';
 
 /** POST /api/start { code, token } → { view }. Host starts the game. */
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {

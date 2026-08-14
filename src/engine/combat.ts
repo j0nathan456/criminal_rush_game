@@ -14,9 +14,9 @@
 
 import type {
   GameState, Player, CombatSide, PlayedPowerCard, CombatChoice, CombatChoiceInput,
-} from '../types/game';
-import type { ActionCard, MarketCard, WeaponType } from '../types/cards';
-import { applyScore, log, neighborIds, playerIndexById, updatePlayer } from './rules';
+} from '../types/game.js';
+import type { ActionCard, MarketCard, WeaponType } from '../types/cards.js';
+import { applyScore, log, neighborIds, playerIndexById, updatePlayer } from './rules.js';
 
 // --- Small inventory helpers -------------------------------------------------
 

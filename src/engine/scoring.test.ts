@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { determineWinner } from './scoring';
+import { determineWinner } from './scoring.js';
 
 describe('determineWinner', () => {
   const targets = { CIVILIAN: 4, CRIMINAL: 5 };

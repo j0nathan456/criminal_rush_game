@@ -6,12 +6,12 @@
  * engine modules — never `constants`. The `setup` layer supplies the data.
  */
 
-import type { GameState, Player, RoleIdentity, GameConfig } from '../types/game';
-import type { ActionCard, MarketCard, Team } from '../types/cards';
-import type { Definition, Rng } from './deck';
-import { buildDrawPile, expandDefs, shuffle, deal } from './deck';
-import { actionsForTurn } from './rules';
-import { emptyGameState, PUBLIC_MARKET_SIZE, BLACK_MARKET_ROTATING } from './reducer';
+import type { GameState, Player, RoleIdentity, GameConfig } from '../types/game.js';
+import type { ActionCard, MarketCard, Team } from '../types/cards.js';
+import type { Definition, Rng } from './deck.js';
+import { buildDrawPile, expandDefs, shuffle, deal } from './deck.js';
+import { actionsForTurn } from './rules.js';
+import { emptyGameState, PUBLIC_MARKET_SIZE, BLACK_MARKET_ROTATING } from './reducer.js';
 
 export interface CreateGameOptions {
   playerNames: string[];

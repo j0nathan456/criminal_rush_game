@@ -1,9 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { applyAction, viewFor } from '../src/online/room';
-import { getRoom, saveRoom } from './_store';
-import { gameReducer } from '../src/engine';
-import type { GameAction } from '../src/engine';
-import { body, fail } from './_lib';
+import { applyAction, viewFor } from '../src/online/room.js';
+import { getRoom, saveRoom } from './_store.js';
+import { gameReducer } from '../src/engine/index.js';
+import type { GameAction } from '../src/engine/index.js';
+import { body, fail } from './_lib.js';
 
 /** POST /api/action { code, token, action } → { view }. Dispatches an engine action. */
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {

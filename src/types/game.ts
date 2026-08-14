@@ -1,4 +1,4 @@
-import type { ActionCard, MarketCard, EvidenceCategory } from './cards';
+import type { ActionCard, MarketCard, EvidenceCategory } from './cards.js';
 
 export type Team = 'CRIMINAL' | 'CIVILIAN';
 

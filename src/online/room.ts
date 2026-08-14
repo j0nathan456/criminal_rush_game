@@ -7,10 +7,10 @@
  * functions, and save the result.
  */
 
-import type { GameState, Player } from '../types/game';
-import type { ActionCard } from '../types/cards';
-import type { GameAction } from '../engine';
-import type { Room, RoomView } from './protocol';
+import type { GameState, Player } from '../types/game.js';
+import type { ActionCard } from '../types/cards.js';
+import type { GameAction } from '../engine/index.js';
+import type { Room, RoomView } from './protocol.js';
 
 export const MIN_PLAYERS = 4;
 export const MAX_PLAYERS = 8;

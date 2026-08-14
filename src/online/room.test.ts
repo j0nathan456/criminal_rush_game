@@ -9,11 +9,11 @@ import {
   generateCode,
   RoomError,
   MIN_PLAYERS,
-} from './room';
-import type { Room } from './protocol';
-import { emptyGameState, gameReducer } from '../engine';
-import { newGame } from '../setup/newGame';
-import type { GameState } from '../types/game';
+} from './room.js';
+import type { Room } from './protocol.js';
+import { emptyGameState, gameReducer } from '../engine/index.js';
+import { newGame } from '../setup/newGame.js';
+import type { GameState } from '../types/game.js';
 
 function seeded(seed: number): () => number {
   return () => {
@@ -173,8 +173,8 @@ describe('leaveRoom', () => {
 });
 
 // --- small stubs ---
-import type { ActionCard } from '../types/cards';
-import type { Player, RoleIdentity } from '../types/game';
+import type { ActionCard } from '../types/cards.js';
+import type { Player, RoleIdentity } from '../types/game.js';
 
 function card(id: string): ActionCard {
   return { id, name: id, description: '', type: 'MONEY', value: 1 };

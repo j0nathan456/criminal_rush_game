@@ -9,7 +9,7 @@
  * (engine never imports constants).
  */
 
-import type { ActionCard, MarketCard } from '../types/cards';
+import type { ActionCard, MarketCard } from '../types/cards.js';
 
 /** A card definition: the card minus its per-instance id, plus how many exist. */
 export type CardDef<T> = Omit<T, 'id'> & { copies: number };

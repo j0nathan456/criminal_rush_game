@@ -6,19 +6,19 @@
  * import; card/role/config data is passed in by the `setup` layer.
  */
 
-export { createGame } from './createGame';
-export type { CreateGameOptions } from './createGame';
+export { createGame } from './createGame.js';
+export type { CreateGameOptions } from './createGame.js';
 
-export { gameReducer, emptyGameState } from './reducer';
-export type { GameAction, RoleAbilityPayload, EventOptions, TradeItem, PerkPayload } from './reducer';
+export { gameReducer, emptyGameState } from './reducer.js';
+export type { GameAction, RoleAbilityPayload, EventOptions, TradeItem, PerkPayload } from './reducer.js';
 
-export { determineWinner } from './scoring';
+export { determineWinner } from './scoring.js';
 export {
   ACTIONS_PER_TURN,
   actionsForTurn,
   isGridComplete,
   neighborIds,
-} from './rules';
+} from './rules.js';
 export {
   computeBasePower,
   weaponPower,
@@ -34,7 +34,7 @@ export {
   buildPendingChoices,
   enterPowerPhase,
   applyCombatChoice,
-} from './combat';
+} from './combat.js';
 
-export { shuffle, expandDefs, buildDrawPile, deal } from './deck';
-export type { Rng, Definition } from './deck';
+export { shuffle, expandDefs, buildDrawPile, deal } from './deck.js';
+export type { Rng, Definition } from './deck.js';
