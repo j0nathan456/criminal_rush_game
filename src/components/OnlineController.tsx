@@ -4,6 +4,7 @@ import { useOnlineGame } from '../online/useOnlineGame';
 import { MIN_PLAYERS } from '../online/room';
 import { TEAM_META } from '../constants/theme';
 import { PlayableBoard } from './PlayableBoard';
+import { HowToPlay } from './HowToPlay';
 import { panelIn, backdrop } from '../ui/motion';
 
 interface OnlineControllerProps {
@@ -20,6 +21,8 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
   const game = useOnlineGame();
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
+  const [showRules, setShowRules] = useState(false);
+  const rules = <HowToPlay open={showRules} onClose={() => setShowRules(false)} />;
 
   const leave = () => {
     game.leave();
@@ -81,7 +84,16 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
           </div>
 
           {game.error && <p className="mt-4 text-center text-sm text-crim">{game.error}</p>}
+
+          <button
+            type="button"
+            className="btn btn-ghost mt-5 w-full text-sm text-teal"
+            onClick={() => setShowRules(true)}
+          >
+            📖 New here? How to Play
+          </button>
         </motion.div>
+        {rules}
       </div>
     );
   }
@@ -138,7 +150,16 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
           </div>
 
           {game.error && <p className="mt-4 text-center text-sm text-crim">{game.error}</p>}
+
+          <button
+            type="button"
+            className="btn btn-ghost mt-4 w-full text-sm text-teal"
+            onClick={() => setShowRules(true)}
+          >
+            📖 How to Play
+          </button>
         </motion.div>
+        {rules}
       </div>
     );
   }
@@ -155,6 +176,14 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
           ← Leave
         </button>
         <span className="font-bold tracking-[0.2em] text-fog">Room {view.code}</span>
+        <button
+          type="button"
+          className="btn btn-ghost px-2 py-1.5 text-sm text-teal"
+          onClick={() => setShowRules(true)}
+          aria-label="How to play"
+        >
+          📖 Rules
+        </button>
         <span className="ml-auto text-sm">
           {winner ? (
             <strong style={{ color: TEAM_META[winner].color }}>{TEAM_META[winner].label} win</strong>
@@ -170,6 +199,8 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
 
       <PlayableBoard state={view.state} viewerIndex={view.yourSeat} dispatch={game.dispatch} />
       {game.error && <p className="px-4 text-sm text-crim">{game.error}</p>}
+
+      {rules}
 
       <AnimatePresence>
         {winner && (
