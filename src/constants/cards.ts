@@ -24,18 +24,34 @@ export const MONEY_CARDS: CardDef<ActionCard>[] = [
   { name: 'Collection', description: 'Gain $3.', type: 'MONEY', value: 3, copies: 5 },
 ];
 
+// The 21 Evidence cards match the printed deck (art in public/cards/deck).
+// Each themed card is unique (copies: 1) except the wild Forensic Files (×3).
 export const EVIDENCE_CARDS: CardDef<ActionCard>[] = [
-  { name: 'Time Evidence', description: 'Evidence — Time.', type: 'EVIDENCE', evidenceCategories: ['TIME'], copies: 3 },
-  { name: 'Location Evidence', description: 'Evidence — Location.', type: 'EVIDENCE', evidenceCategories: ['LOCATION'], copies: 3 },
-  { name: 'Means Evidence', description: 'Evidence — Means.', type: 'EVIDENCE', evidenceCategories: ['MEANS'], copies: 3 },
-  { name: 'Motive Evidence', description: 'Evidence — Motive.', type: 'EVIDENCE', evidenceCategories: ['MOTIVE'], copies: 3 },
+  // Time (3)
+  { name: 'Sunrise', description: 'Evidence — Time.', type: 'EVIDENCE', evidenceCategories: ['TIME'], copies: 1 },
+  { name: 'Evening', description: 'Evidence — Time.', type: 'EVIDENCE', evidenceCategories: ['TIME'], copies: 1 },
+  { name: 'Eclipse', description: 'Evidence — Time.', type: 'EVIDENCE', evidenceCategories: ['TIME'], copies: 1 },
+  // Location (3)
+  { name: 'College Campus', description: 'Evidence — Location.', type: 'EVIDENCE', evidenceCategories: ['LOCATION'], copies: 1 },
+  { name: 'Grocery Store', description: 'Evidence — Location.', type: 'EVIDENCE', evidenceCategories: ['LOCATION'], copies: 1 },
+  { name: 'Movie Theater', description: 'Evidence — Location.', type: 'EVIDENCE', evidenceCategories: ['LOCATION'], copies: 1 },
+  // Means (3)
+  { name: 'Bullet Shell', description: 'Evidence — Means.', type: 'EVIDENCE', evidenceCategories: ['MEANS'], copies: 1 },
+  { name: 'Metal Chain', description: 'Evidence — Means.', type: 'EVIDENCE', evidenceCategories: ['MEANS'], copies: 1 },
+  { name: 'Bomb Fragment', description: 'Evidence — Means.', type: 'EVIDENCE', evidenceCategories: ['MEANS'], copies: 1 },
+  // Motive (3)
+  { name: 'Greed', description: 'Evidence — Motive.', type: 'EVIDENCE', evidenceCategories: ['MOTIVE'], copies: 1 },
+  { name: 'Power', description: 'Evidence — Motive.', type: 'EVIDENCE', evidenceCategories: ['MOTIVE'], copies: 1 },
+  { name: 'Envy', description: 'Evidence — Motive.', type: 'EVIDENCE', evidenceCategories: ['MOTIVE'], copies: 1 },
+  // Wild (3)
   { name: 'Forensic Files', description: 'Wild evidence — satisfies any one category.', type: 'EVIDENCE', evidenceCategories: ['TIME', 'MEANS', 'LOCATION', 'MOTIVE'], copies: 3 },
-  { name: 'Timeline & Scene', description: 'Evidence — Time or Location.', type: 'EVIDENCE', evidenceCategories: ['TIME', 'LOCATION'], copies: 1 },
-  { name: 'Timed Weapon', description: 'Evidence — Time or Means.', type: 'EVIDENCE', evidenceCategories: ['TIME', 'MEANS'], copies: 1 },
-  { name: 'Alibi Motive', description: 'Evidence — Time or Motive.', type: 'EVIDENCE', evidenceCategories: ['TIME', 'MOTIVE'], copies: 1 },
-  { name: 'Scene Weapon', description: 'Evidence — Location or Means.', type: 'EVIDENCE', evidenceCategories: ['LOCATION', 'MEANS'], copies: 1 },
-  { name: 'Scene Motive', description: 'Evidence — Location or Motive.', type: 'EVIDENCE', evidenceCategories: ['LOCATION', 'MOTIVE'], copies: 1 },
-  { name: 'Weapon Motive', description: 'Evidence — Means or Motive.', type: 'EVIDENCE', evidenceCategories: ['MEANS', 'MOTIVE'], copies: 1 },
+  // Dual-category (6)
+  { name: 'Lunch Cafeteria', description: 'Evidence — Time or Location.', type: 'EVIDENCE', evidenceCategories: ['TIME', 'LOCATION'], copies: 1 },
+  { name: 'Poisoned Morning Coffee', description: 'Evidence — Time or Means.', type: 'EVIDENCE', evidenceCategories: ['TIME', 'MEANS'], copies: 1 },
+  { name: 'Post Scandal Cover Up', description: 'Evidence — Time or Motive.', type: 'EVIDENCE', evidenceCategories: ['TIME', 'MOTIVE'], copies: 1 },
+  { name: 'Construction Site Bricks', description: 'Evidence — Location or Means.', type: 'EVIDENCE', evidenceCategories: ['LOCATION', 'MEANS'], copies: 1 },
+  { name: 'Casino Heist', description: 'Evidence — Location or Motive.', type: 'EVIDENCE', evidenceCategories: ['LOCATION', 'MOTIVE'], copies: 1 },
+  { name: 'Bare-Knuckle Fury', description: 'Evidence — Means or Motive.', type: 'EVIDENCE', evidenceCategories: ['MEANS', 'MOTIVE'], copies: 1 },
 ];
 
 export const POWER_CARDS: CardDef<ActionCard>[] = [

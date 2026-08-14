@@ -53,6 +53,12 @@ const DECK_ART = new Set([
   'lottery', 'business-opportunity', 'tax-collection', 'generational-wealth',
   'receive-package', 'market-access', 'boost', 'surge', 'shield', 'unexpected-allies',
   'mirror', 'spare-change', 'profit', 'collection', 'forensic-files',
+  // Themed Evidence cards (single-category)
+  'sunrise', 'evening', 'eclipse', 'college-campus', 'grocery-store', 'movie-theater',
+  'bullet-shell', 'metal-chain', 'bomb-fragment', 'greed', 'power', 'envy',
+  // Themed Evidence cards (dual-category)
+  'lunch-cafeteria', 'poisoned-morning-coffee', 'post-scandal-cover-up',
+  'construction-site-bricks', 'casino-heist', 'bare-knuckle-fury',
 ]);
 
 /** Market (perk/weapon/special) card art available under public/cards/market. */

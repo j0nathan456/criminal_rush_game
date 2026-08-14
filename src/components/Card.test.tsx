@@ -3,8 +3,10 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import type { ActionCard, MarketCard } from '../types/cards';
 import { Card } from './Card';
 
+// A themed name with no printed art, so it renders via the CSS card path
+// (with category tags) rather than as a full-face image.
 const evidence: ActionCard = {
-  id: 'c1', name: 'Metal Chain', description: 'Physical evidence.',
+  id: 'c1', name: 'Mystery Clue', description: 'Physical evidence.',
   type: 'EVIDENCE', evidenceCategories: ['MEANS', 'LOCATION'],
 };
 
@@ -23,7 +25,7 @@ const weapon: MarketCard = {
 describe('<Card />', () => {
   it('renders an action card with its evidence category tags', () => {
     render(<Card card={evidence} />);
-    expect(screen.getByText('Metal Chain')).toBeInTheDocument();
+    expect(screen.getByText('Mystery Clue')).toBeInTheDocument();
     expect(screen.getByText(/Means/)).toBeInTheDocument();
     expect(screen.getByText(/Location/)).toBeInTheDocument();
   });

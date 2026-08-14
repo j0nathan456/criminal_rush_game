@@ -8,6 +8,13 @@ function isMarketCard(card: AnyCard): card is MarketCard {
   return 'cost' in card;
 }
 
+/**
+ * Every card renders at one fixed size and 5:7 aspect ratio so hands and rows
+ * stay visually uniform regardless of whether a card shows printed art or the
+ * CSS fallback.
+ */
+const CARD_SIZE = 'w-[140px] aspect-[5/7]';
+
 interface CardProps {
   card: AnyCard;
   /** Compact face-down / mini rendering for opponents' hands or the deck. */
@@ -27,8 +34,8 @@ export function Card({ card, faceDown, selected, disabled, onClick }: CardProps)
     return (
       <div
         aria-hidden="true"
-        className="h-[190px] w-[136px] rounded-xl border border-line shadow-noir
-                   bg-[repeating-linear-gradient(45deg,#161b28,#161b28_9px,#10131c_9px,#10131c_18px)]"
+        className={`${CARD_SIZE} rounded-xl border border-line shadow-noir
+                   bg-[repeating-linear-gradient(45deg,#161b28,#161b28_9px,#10131c_9px,#10131c_18px)]`}
       />
     );
   }
@@ -50,7 +57,7 @@ export function Card({ card, faceDown, selected, disabled, onClick }: CardProps)
         disabled={disabled || !onClick}
         onClick={clickable ? () => onClick!(card) : undefined}
         title={`${card.name} — ${card.description}`}
-        className={`relative w-[136px] overflow-hidden rounded-xl border border-line bg-white shadow-noir ${ring} ${dim}`}
+        className={`relative ${CARD_SIZE} overflow-hidden rounded-xl border border-line bg-white shadow-noir ${ring} ${dim}`}
       >
         <img src={art} alt={card.name} loading="lazy" className="block h-full w-full object-contain" />
       </motion.button>
@@ -65,7 +72,7 @@ export function Card({ card, faceDown, selected, disabled, onClick }: CardProps)
       onClick={clickable ? () => onClick!(card) : undefined}
       title={card.description}
       style={{ borderTopColor: meta.color }}
-      className={`flex min-h-[190px] w-[150px] flex-col gap-1.5 rounded-xl border border-t-[3px]
+      className={`flex ${CARD_SIZE} flex-col gap-1.5 overflow-hidden rounded-xl border border-t-[3px]
                   border-line bg-panel-2/90 p-2.5 text-left shadow-noir ${ring} ${dim}`}
     >
       <header className="flex items-center justify-between text-xs">
