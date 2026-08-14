@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useOnlineGame } from '../online/useOnlineGame';
 import { MIN_PLAYERS } from '../online/room';
 import { TEAM_META } from '../constants/theme';
 import { PlayableBoard } from './PlayableBoard';
+import { panelIn, backdrop } from '../ui/motion';
 
 interface OnlineControllerProps {
   /** Optional: return to a parent shell. Omitted when online is the app root. */
@@ -11,15 +13,14 @@ interface OnlineControllerProps {
 
 /**
  * Online driver. Owns the useOnlineGame hook and walks through three phases:
- * create/join → waiting room → live game. The server holds authoritative state
- * and only sends this client its own redacted view.
+ * create/join → waiting room → live game. Server holds authoritative state and
+ * sends this client only its own redacted view.
  */
 export function OnlineController({ onExit }: OnlineControllerProps) {
   const game = useOnlineGame();
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
 
-  // Leaving returns to the create/join landing (the app root when online-only).
   const leave = () => {
     game.leave();
     onExit?.();
@@ -28,37 +29,42 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
   // --- Phase 1: not in a room yet ---
   if (!game.view) {
     return (
-      <div className="cr-lobby">
-        <div className="cr-lobby__card">
+      <div className="stage">
+        <motion.div variants={panelIn} initial="hidden" animate="show" className="panel w-full max-w-md p-7">
           {onExit && (
-            <button type="button" className="cr-game__exit" onClick={onExit}>← Back</button>
+            <button type="button" className="btn btn-ghost mb-2 px-2 py-1 text-sm text-fog" onClick={onExit}>
+              ← Back
+            </button>
           )}
-          <h1 className="cr-lobby__title">Criminal Rush</h1>
-          <p className="cr-lobby__tag">Save the City… or Control It</p>
-          <p className="cr-lobby__hint">Create a room, then share the code with friends.</p>
+          <h1 className="text-center text-4xl font-extrabold tracking-wide">Criminal Rush</h1>
+          <p className="mt-1 text-center text-teal">Save the City… or Control It</p>
+          <div className="gold-rule my-5" />
+          <p className="mb-4 text-center text-sm text-fog">Create a room, then share the code with friends.</p>
 
           <input
-            className="cr-lobby__input"
+            className="input"
             placeholder="Your name"
             value={name}
             maxLength={20}
             onChange={(e) => setName(e.target.value)}
           />
 
-          <div className="cr-lobby__actions">
-            <button
-              type="button"
-              className="cr-lobby__start"
-              disabled={!name.trim() || game.connecting}
-              onClick={() => game.createRoom(name.trim())}
-            >
-              Create room
-            </button>
+          <button
+            type="button"
+            className="btn btn-primary mt-3 w-full py-3 text-base"
+            disabled={!name.trim() || game.connecting}
+            onClick={() => game.createRoom(name.trim())}
+          >
+            Create room
+          </button>
+
+          <div className="my-5 flex items-center gap-3 text-xs uppercase tracking-widest text-fog/60">
+            <span className="h-px flex-1 bg-line" /> or <span className="h-px flex-1 bg-line" />
           </div>
 
-          <div className="cr-online__join">
+          <div className="flex gap-2">
             <input
-              className="cr-lobby__input"
+              className="input flex-[2]"
               placeholder="Room code"
               value={code}
               maxLength={6}
@@ -66,7 +72,7 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
             />
             <button
               type="button"
-              className="cr-lobby__add"
+              className="btn flex-1"
               disabled={!name.trim() || code.trim().length < 4 || game.connecting}
               onClick={() => game.joinRoom(code.trim(), name.trim())}
             >
@@ -74,56 +80,65 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
             </button>
           </div>
 
-          {game.error && <p className="cr-online__error">{game.error}</p>}
-        </div>
+          {game.error && <p className="mt-4 text-center text-sm text-crim">{game.error}</p>}
+        </motion.div>
       </div>
     );
   }
 
   const { view } = game;
 
-  // --- Phase 2: in the waiting room ---
+  // --- Phase 2: waiting room ---
   if (!view.started || !view.state) {
     return (
-      <div className="cr-lobby">
-        <div className="cr-lobby__card">
-          <h1 className="cr-lobby__title">Waiting room</h1>
-          <p className="cr-lobby__tag">Share this code so others can join:</p>
-          <div className="cr-online__code">{view.code}</div>
+      <div className="stage">
+        <motion.div variants={panelIn} initial="hidden" animate="show" className="panel w-full max-w-md p-7">
+          <h1 className="text-center text-3xl font-extrabold">Waiting room</h1>
+          <p className="mt-1 text-center text-sm text-fog">Share this code so others can join:</p>
+          <div className="my-4 rounded-xl bg-panel-2 py-4 text-center text-5xl font-extrabold tracking-[0.35em] text-amber">
+            {view.code}
+          </div>
 
-          <div className="cr-online__seats">
+          <div className="mb-4 flex flex-col gap-2">
             {view.seats.map((s) => (
-              <div key={s.seat} className="cr-online__seat">
-                <span className="cr-lobby__num">{s.seat + 1}</span>
-                <span>
+              <motion.div
+                key={s.seat}
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="flex items-center gap-3 rounded-lg bg-panel-2/60 px-3 py-2"
+              >
+                <span className="grid h-6 w-6 place-items-center rounded-full bg-line text-xs font-bold">
+                  {s.seat + 1}
+                </span>
+                <span className="text-sm">
                   {s.name}
                   {s.seat === view.yourSeat ? ' (you)' : ''}
                   {s.seat === 0 ? ' · host' : ''}
                 </span>
-              </div>
+              </motion.div>
             ))}
           </div>
 
-          <div className="cr-lobby__actions">
+          <div className="flex flex-col gap-2">
             {view.isHost ? (
               <button
                 type="button"
-                className="cr-lobby__start"
+                className="btn btn-primary w-full py-3 text-base"
                 disabled={view.seats.length < MIN_PLAYERS || game.connecting}
                 onClick={() => game.start()}
               >
-                {view.seats.length < MIN_PLAYERS
-                  ? `Need ${MIN_PLAYERS - view.seats.length} more`
-                  : 'Start Game'}
+                {view.seats.length < MIN_PLAYERS ? `Need ${MIN_PLAYERS - view.seats.length} more` : 'Start Game'}
               </button>
             ) : (
-              <p className="cr-lobby__hint">Waiting for the host to start…</p>
+              <p className="text-center text-sm text-fog">Waiting for the host to start…</p>
             )}
-            <button type="button" className="cr-lobby__add" onClick={leave}>Leave</button>
+            <button type="button" className="btn w-full" onClick={leave}>
+              Leave
+            </button>
           </div>
 
-          {game.error && <p className="cr-online__error">{game.error}</p>}
-        </div>
+          {game.error && <p className="mt-4 text-center text-sm text-crim">{game.error}</p>}
+        </motion.div>
       </div>
     );
   }
@@ -134,48 +149,73 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
   const winner = view.state.winner ?? view.winner;
 
   return (
-    <div className="cr-game">
-      <div className="cr-game__bar cr-online__bar">
-        <button type="button" className="cr-game__exit" onClick={leave}>← Leave</button>
-        <span className="cr-online__roomcode">Room {view.code}</span>
-        <span className="cr-online__turn">
+    <div className="min-h-screen">
+      <div className="flex items-center gap-4 px-4 pt-3">
+        <button type="button" className="btn px-3 py-1.5 text-sm" onClick={leave}>
+          ← Leave
+        </button>
+        <span className="font-bold tracking-[0.2em] text-fog">Room {view.code}</span>
+        <span className="ml-auto text-sm">
           {winner ? (
             <strong style={{ color: TEAM_META[winner].color }}>{TEAM_META[winner].label} win</strong>
           ) : yourTurn ? (
-            <strong style={{ color: '#f5c518' }}>Your turn</strong>
+            <strong className="text-amber">Your turn</strong>
           ) : (
-            <>Waiting for <strong style={{ color: TEAM_META[current.team].color }}>{current.name}</strong></>
+            <>
+              Waiting for <strong style={{ color: TEAM_META[current.team].color }}>{current.name}</strong>
+            </>
           )}
         </span>
       </div>
-      <PlayableBoard state={view.state} viewerIndex={view.yourSeat} dispatch={game.dispatch} />
-      {game.error && <p className="cr-online__error">{game.error}</p>}
 
-      {winner && (
-        <div className="cr-endgame" role="dialog" aria-label="Game over">
-          <div className="cr-endgame__card" style={{ borderColor: TEAM_META[winner].color }}>
-            <div className="cr-endgame__trophy">🏆</div>
-            <h2 className="cr-endgame__title" style={{ color: TEAM_META[winner].color }}>
-              {TEAM_META[winner].label} win!
-            </h2>
-            <p className="cr-endgame__sub">
-              {view.yourSeat >= 0 && view.state.players[view.yourSeat]?.team === winner
-                ? 'Victory — your team took it.'
-                : 'Better luck next time.'}
-            </p>
-            <div className="cr-endgame__actions">
-              {/* Play again: drop back to the lobby (name kept) to spin up a fresh room. */}
-              <button type="button" className="cr-lobby__start" onClick={() => game.leave()}>
-                Play again
-              </button>
-              <button type="button" className="cr-lobby__add" onClick={leave}>
-                Exit to menu
-              </button>
-            </div>
-            <p className="cr-endgame__hint">“Play again” returns you to the lobby to create or join a new room.</p>
-          </div>
-        </div>
-      )}
+      <PlayableBoard state={view.state} viewerIndex={view.yourSeat} dispatch={game.dispatch} />
+      {game.error && <p className="px-4 text-sm text-crim">{game.error}</p>}
+
+      <AnimatePresence>
+        {winner && (
+          <motion.div
+            variants={backdrop}
+            initial="hidden"
+            animate="show"
+            exit="exit"
+            className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-5 backdrop-blur-sm"
+            role="dialog"
+            aria-label="Game over"
+          >
+            <motion.div
+              variants={panelIn}
+              className="panel w-full max-w-md border-2 p-8 text-center"
+              style={{ borderColor: TEAM_META[winner].color }}
+            >
+              <motion.div
+                initial={{ scale: 0, rotate: -20 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ type: 'spring', stiffness: 260, damping: 14, delay: 0.1 }}
+                className="text-6xl"
+              >
+                🏆
+              </motion.div>
+              <h2 className="mt-2 text-3xl font-extrabold" style={{ color: TEAM_META[winner].color }}>
+                {TEAM_META[winner].label} win!
+              </h2>
+              <p className="mt-2 text-fog">
+                {view.yourSeat >= 0 && view.state.players[view.yourSeat]?.team === winner
+                  ? 'Victory — your team took it.'
+                  : 'Better luck next time.'}
+              </p>
+              <div className="mt-6 flex gap-2">
+                <button type="button" className="btn btn-primary flex-1 py-3" onClick={() => game.leave()}>
+                  Play again
+                </button>
+                <button type="button" className="btn flex-1 py-3" onClick={leave}>
+                  Exit to menu
+                </button>
+              </div>
+              <p className="mt-4 text-xs text-fog">“Play again” returns you to the lobby to create or join a new room.</p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

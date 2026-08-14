@@ -1,5 +1,7 @@
+import { motion } from 'framer-motion';
 import type { ActionCard, AnyCard } from '../types/cards';
 import { Card } from './Card';
+import { stagger, riseItem } from '../ui/motion';
 
 interface PlayerHandProps {
   cards: ActionCard[];
@@ -7,30 +9,25 @@ interface PlayerHandProps {
   onSelect?: (card: AnyCard) => void;
 }
 
-/**
- * The active player's hand of action cards, laid out as a fanned row.
- */
+/** The active player's hand, dealt in with a stagger. */
 export function PlayerHand({ cards, selectedId, onSelect }: PlayerHandProps) {
   return (
-    <section className="cr-hand" aria-label="Your hand">
-      <header className="cr-panel__head">
-        <h2>Your Hand</h2>
-        <span className="cr-hand__count">{cards.length} cards</span>
+    <section className="panel" aria-label="Your hand">
+      <header className="panel-head">
+        <h2 className="panel-title">Your Hand</h2>
+        <span className="text-xs text-fog">{cards.length} cards</span>
       </header>
 
       {cards.length === 0 ? (
-        <p className="cr-empty">No cards in hand.</p>
+        <p className="text-sm text-fog">No cards in hand.</p>
       ) : (
-        <div className="cr-hand__cards">
+        <motion.div variants={stagger} initial="hidden" animate="show" className="flex flex-wrap gap-3">
           {cards.map((card) => (
-            <Card
-              key={card.id}
-              card={card}
-              selected={card.id === selectedId}
-              onClick={onSelect}
-            />
+            <motion.div key={card.id} variants={riseItem}>
+              <Card card={card} selected={card.id === selectedId} onClick={onSelect} />
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       )}
     </section>
   );

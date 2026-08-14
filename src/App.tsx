@@ -1,5 +1,4 @@
 import { OnlineController } from './components/OnlineController';
-import './game.css';
 
 /**
  * App shell. Criminal Rush is online-only: players create or join a room by

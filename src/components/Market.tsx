@@ -12,18 +12,21 @@ interface MarketProps {
 }
 
 /**
- * A market row — the public Market (5 cards) or the Black Market (Criminals
- * only, 3 cards + Expand Network). Cards over the player's budget are dimmed.
+ * A market row — the public Market or the Criminals-only Black Market. Cards
+ * over the player's budget are dimmed.
  */
 export function Market({ title, subtitle, cards, affordableUpTo, onBuy, variant = 'public' }: MarketProps) {
   return (
-    <section className={`cr-market cr-market--${variant}`} aria-label={title}>
-      <header className="cr-panel__head">
-        <h2>{title}</h2>
-        {subtitle && <span className="cr-market__subtitle">{subtitle}</span>}
+    <section
+      className={`panel ${variant === 'black' ? 'border-crim/30 bg-gradient-to-b from-crim/10 to-transparent' : ''}`}
+      aria-label={title}
+    >
+      <header className="panel-head">
+        <h2 className="panel-title">{title}</h2>
+        {subtitle && <span className="text-xs text-fog">{subtitle}</span>}
       </header>
 
-      <div className="cr-market__cards">
+      <div className="flex flex-wrap gap-3">
         {cards.map((card) => (
           <Card
             key={card.id}

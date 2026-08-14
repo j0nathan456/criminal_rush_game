@@ -1,3 +1,4 @@
+import { motion, AnimatePresence } from 'framer-motion';
 import type { GameState, Player, CombatSide } from '../types/game';
 import type { EvidenceCategory, AnyCard, MarketCard } from '../types/cards';
 import type { ActionMeta } from '../constants/theme';
@@ -63,9 +64,9 @@ interface GameBoardProps extends GameBoardHandlers {
 }
 
 /**
- * Top-level board layout. A pure view of GameState + callbacks; it holds no
- * game logic. The `setup` layer (via GameController) connects it to the
- * engine's reducer.
+ * Top-level board layout — a pure view of GameState + callbacks. Noir dossier
+ * styling; the `setup` layer (via GameController/PlayableBoard) wires the
+ * engine reducer to these handlers.
  */
 export function GameBoard({
   state,
@@ -105,7 +106,6 @@ export function GameBoard({
   const isTargetable = (p: Player): boolean => {
     if (!targeting || !viewer || p.id === viewer.id) return false;
     if (targeting === 'expose') return p.team === 'CRIMINAL' && !p.isCaptured && !p.isExposed;
-    // attack: opposing team, engine validates neighbor / exposed rules on dispatch
     return p.team !== viewer.team;
   };
 
@@ -113,14 +113,15 @@ export function GameBoard({
   const canPlaySelected = Boolean(selectedCard) && selectedCard?.type !== 'EVIDENCE' && selectedCard?.type !== 'POWER';
 
   return (
-    <div className="cr-board">
-      <header className="cr-topbar">
-        <div className="cr-brand">
-          <span className="cr-brand__title">Criminal Rush</span>
-          <span className="cr-brand__tag">Save the City… or Control It</span>
+    <div className="flex min-h-screen flex-col gap-4 p-4">
+      {/* Top bar */}
+      <header className="flex items-center justify-between gap-3 rounded-2xl border border-line/80 bg-gradient-to-r from-civ/10 via-transparent to-crim/10 px-5 py-3 backdrop-blur-sm">
+        <div className="flex items-baseline gap-3">
+          <span className="text-2xl font-extrabold tracking-wide">Criminal Rush</span>
+          <span className="hidden text-sm text-fog sm:inline">Save the City… or Control It</span>
         </div>
         {current && (
-          <div className="cr-turn-indicator">
+          <div className="text-sm text-fog">
             Current turn:{' '}
             <strong style={{ color: TEAM_META[current.team].color }}>{current.name}</strong>
           </div>
@@ -128,21 +129,33 @@ export function GameBoard({
       </header>
 
       {state.winner && (
-        <div className="cr-winner" style={{ background: TEAM_META[state.winner].soft, color: TEAM_META[state.winner].color }}>
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl px-5 py-4 text-center text-xl font-extrabold"
+          style={{ background: TEAM_META[state.winner].soft, color: TEAM_META[state.winner].color }}
+        >
           🏆 {TEAM_META[state.winner].label} win the game!
-        </div>
+        </motion.div>
       )}
 
-      {(notice || targeting) && !state.winner && !state.combat && (
-        <div className="cr-notice">
-          <span>{targeting ? `Select a target to ${targeting}.` : notice}</span>
-          {targeting && (
-            <button type="button" className="cr-notice__cancel" onClick={onCancelTargeting}>
-              Cancel
-            </button>
-          )}
-        </div>
-      )}
+      <AnimatePresence>
+        {(notice || targeting) && !state.winner && !state.combat && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="flex items-center justify-between gap-3 rounded-lg border border-amber/40 bg-amber/10 px-4 py-2.5 text-amber"
+          >
+            <span>{targeting ? `Select a target to ${targeting}.` : notice}</span>
+            {targeting && (
+              <button type="button" className="btn btn-ghost border-amber/60 px-3 py-1 text-amber" onClick={onCancelTargeting}>
+                Cancel
+              </button>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {state.combat && !state.winner && (
         <CombatPanel
@@ -155,39 +168,22 @@ export function GameBoard({
       )}
 
       {roleAbilityOpen && !state.combat && !state.winner && (
-        <RoleAbilityPanel
-          state={state}
-          viewerIndex={viewerIndex}
-          onSubmit={onSubmitRoleAbility}
-          onCancel={onCancelRoleAbility}
-        />
+        <RoleAbilityPanel state={state} viewerIndex={viewerIndex} onSubmit={onSubmitRoleAbility} onCancel={onCancelRoleAbility} />
       )}
-
       {activePerkId && !state.combat && !state.winner && (
-        <PerkActionPanel
-          state={state}
-          viewerIndex={viewerIndex}
-          perkId={activePerkId}
-          onSubmit={onSubmitPerk}
-          onCancel={onCancelPerk}
-        />
+        <PerkActionPanel state={state} viewerIndex={viewerIndex} perkId={activePerkId} onSubmit={onSubmitPerk} onCancel={onCancelPerk} />
       )}
-
       {allySupportCardId && !state.combat && !state.winner && (
-        <AllySupportPanel
-          state={state}
-          viewerIndex={viewerIndex}
-          onSubmit={onSubmitAllySupport}
-          onCancel={onCancelAllySupport}
-        />
+        <AllySupportPanel state={state} viewerIndex={viewerIndex} onSubmit={onSubmitAllySupport} onCancel={onCancelAllySupport} />
       )}
 
-      <div className="cr-board__grid">
-        <aside className="cr-board__left">
+      {/* Main three-column layout */}
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[280px_minmax(0,1fr)_320px]">
+        <aside className="flex flex-col gap-4">
           <ScoreBoard scores={state.teamScores} targets={state.vpTargets} winner={state.winner} />
-          <section className="cr-seats" aria-label="Players">
-            <header className="cr-panel__head"><h2>Players</h2></header>
-            <div className="cr-seats__list">
+          <section className="panel" aria-label="Players">
+            <header className="panel-head"><h2 className="panel-title">Players</h2></header>
+            <div className="flex flex-col gap-2">
               {state.players.map((p, i) => (
                 <PlayerSeat
                   key={p.id}
@@ -202,7 +198,7 @@ export function GameBoard({
           </section>
         </aside>
 
-        <main className="cr-board__center">
+        <main className="flex flex-col gap-4">
           <EvidenceGrid
             grid={state.evidenceGrid}
             onSlotClick={isViewersTurn && viewer?.team === 'CIVILIAN' ? onPlayEvidence : undefined}
@@ -227,37 +223,45 @@ export function GameBoard({
           )}
         </main>
 
-        <aside className="cr-board__right">
+        <aside className="flex flex-col gap-4">
           <GameLog entries={state.gameLog} />
         </aside>
       </div>
 
       {viewer && (
-        <footer className="cr-board__player">
+        <footer className="flex flex-wrap items-stretch gap-4">
           <RoleCard player={viewer} active={isViewersTurn} />
 
-          <div className="cr-board__handcol">
+          <div className="flex flex-[2] basis-[380px] flex-col gap-3">
             <PlayerHand cards={viewer.hand} selectedId={selectedCardId} onSelect={onSelectCard} />
             {canPlaySelected && (
-              <button type="button" className="cr-play-selected" onClick={onPlaySelected}>
+              <button
+                type="button"
+                className="btn self-start border-transparent text-ink"
+                style={{ background: 'linear-gradient(90deg,#10b981,#3fd0c9)' }}
+                onClick={onPlaySelected}
+              >
                 Play {selectedCard!.name}
               </button>
             )}
             {viewer.inventory.length > 0 && (
-              <section className="cr-inventory" aria-label="Your items">
-                <header className="cr-panel__head"><h2>Items</h2></header>
-                <div className="cr-inventory__list">
+              <section className="panel" aria-label="Your items">
+                <header className="panel-head"><h2 className="panel-title">Items</h2></header>
+                <div className="flex flex-col gap-1.5">
                   {viewer.inventory.map((item) => (
-                    <div key={item.id} className="cr-inventory__item">
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between gap-2 rounded-lg bg-panel-2/70 px-3 py-1.5 text-sm"
+                    >
                       <span>{item.name}</span>
-                      <span className="cr-inventory__buttons">
+                      <span className="flex gap-1.5">
                         {isViewersTurn && onUsePerk && ACTIONABLE_PERKS.has(item.name) && (
-                          <button type="button" className="cr-inventory__use" onClick={() => onUsePerk(item.id)}>
+                          <button type="button" className="btn px-2.5 py-1 text-xs" onClick={() => onUsePerk(item.id)}>
                             Use
                           </button>
                         )}
                         {onSell && item.type !== 'SPECIAL' && item.name !== 'Investment' && (
-                          <button type="button" className="cr-inventory__sell" onClick={() => onSell(item)}>
+                          <button type="button" className="btn px-2.5 py-1 text-xs" onClick={() => onSell(item)}>
                             Sell $1
                           </button>
                         )}
@@ -268,7 +272,7 @@ export function GameBoard({
               </section>
             )}
             {isViewersTurn && viewer.trafficToken && onClearTraffic && (
-              <button type="button" className="cr-play-selected" onClick={onClearTraffic}>
+              <button type="button" className="btn self-start" onClick={onClearTraffic}>
                 Clear Traffic token ($1)
               </button>
             )}

@@ -11,16 +11,15 @@ interface ActionBarProps {
 }
 
 /**
- * The turn action bar (rulebook §3). Renders the 8 choices from the
- * TURN_ACTIONS constant, filtered to the player's team, and disables any the
- * player cannot currently afford or has already used this turn.
+ * The turn action bar (rulebook §3). Renders the team-appropriate choices from
+ * TURN_ACTIONS and disables any the player can't afford or has already used.
  */
 export function ActionBar({ player, onAction, onEndTurn, usedThisTurn = [] }: ActionBarProps) {
   const actions = TURN_ACTIONS.filter((a) => !a.team || a.team === player.team);
 
   return (
-    <section className="cr-actions" aria-label="Turn actions">
-      <div className="cr-actions__list">
+    <section className="panel flex flex-col gap-3" aria-label="Turn actions">
+      <div className="grid grid-cols-2 gap-2">
         {actions.map((action) => {
           const tooExpensive = action.cost > player.actionsRemaining;
           const alreadyUsed = Boolean(action.oncePerTurn) && usedThisTurn.includes(action.type);
@@ -29,20 +28,22 @@ export function ActionBar({ player, onAction, onEndTurn, usedThisTurn = [] }: Ac
             <button
               key={`${action.type}-${action.label}`}
               type="button"
-              className="cr-action"
               disabled={disabled}
               title={alreadyUsed ? `${action.hint} (already used)` : action.hint}
               onClick={onAction ? () => onAction(action) : undefined}
+              className="flex flex-col items-start gap-0.5 rounded-lg border border-line bg-panel-2 px-3 py-2 text-left
+                         transition-all duration-150 enabled:hover:-translate-y-px enabled:hover:border-amber/60
+                         disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <span className="cr-action__icon" aria-hidden="true">{action.icon}</span>
-              <span className="cr-action__label">{action.label}</span>
-              <span className="cr-action__cost">{action.cost} AP</span>
+              <span className="text-lg leading-none" aria-hidden="true">{action.icon}</span>
+              <span className="text-[13px] font-bold text-chalk">{action.label}</span>
+              <span className="text-[11px] text-fog">{action.cost} AP</span>
             </button>
           );
         })}
       </div>
 
-      <button type="button" className="cr-endturn" onClick={onEndTurn} disabled={!onEndTurn}>
+      <button type="button" className="btn btn-primary w-full py-3 text-base" onClick={onEndTurn} disabled={!onEndTurn}>
         End Turn ⏭
       </button>
     </section>

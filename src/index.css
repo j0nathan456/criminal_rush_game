@@ -1,111 +1,171 @@
-:root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+@import "tailwindcss";
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+/* ------------------------------------------------------------------ *
+ * Criminal Rush — Neo-noir design system (Tailwind v4, CSS-first).
+ * Functional colors (civ/crim/evidence categories) come from theme.ts
+ * as inline styles; this file owns the palette, surfaces, and motion.
+ * ------------------------------------------------------------------ */
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@theme {
+  /* Surfaces */
+  --color-ink: #0b0d12;
+  --color-ink-2: #14171f;
+  --color-panel: #12151d;
+  --color-panel-2: #1a1e28;
+  --color-line: #2b3040;
+  --color-chalk: #e8eaf0;
+  --color-fog: #8b93a7;
 
-  @media (max-width: 1024px) {
-    font-size: 16px;
+  /* Accents */
+  --color-amber: #f5b833;
+  --color-teal: #3fd0c9;
+
+  /* Teams */
+  --color-civ: #3b82f6;
+  --color-crim: #ef4444;
+
+  --font-display: "Georgia", "Times New Roman", ui-serif, serif;
+  --font-sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+
+  --shadow-noir: 0 12px 44px rgba(0, 0, 0, 0.55);
+
+  /* Exposed as animate-* utilities */
+  --animate-fade-in: fade-in 0.45s ease both;
+  --animate-rise: rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-turn-pulse: turn-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes fade-in { from { opacity: 0 } to { opacity: 1 } }
+@keyframes rise { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: none } }
+@keyframes turn-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 184, 51, 0) }
+  50% { box-shadow: 0 0 0 3px rgba(245, 184, 51, 0.28) }
+}
+
+@layer base {
+  html, body, #root { height: 100%; }
+  body {
+    margin: 0;
+    color: var(--color-chalk);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    background:
+      radial-gradient(1200px 720px at 50% -12%, #1c2333 0%, transparent 58%),
+      radial-gradient(900px 600px at 85% 110%, rgba(63, 208, 201, 0.06) 0%, transparent 55%),
+      linear-gradient(180deg, #0b0d12 0%, #08090d 100%);
+    background-attachment: fixed;
   }
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+  /* Film-grain overlay */
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    pointer-events: none;
+    opacity: 0.04;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   }
+  h1, h2, h3, h4 { font-family: var(--font-display); letter-spacing: 0.01em; }
+  ::selection { background: rgba(245, 184, 51, 0.3); }
+}
 
-  #social .button-icon {
-    filter: invert(1) brightness(2);
+@layer components {
+  .panel {
+    @apply rounded-2xl border border-line/80 bg-panel/70 p-4 backdrop-blur-sm;
+    box-shadow: var(--shadow-noir);
   }
-}
+  .panel-head { @apply mb-3 flex items-center justify-between gap-3; }
+  .panel-title { @apply text-[11px] font-semibold uppercase tracking-[0.2em] text-fog; }
 
-#root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-}
-
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
-}
-
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
+  .btn {
+    @apply inline-flex cursor-pointer select-none items-center justify-center gap-2 rounded-lg
+           border border-line bg-panel-2 px-3.5 py-2 text-sm font-semibold text-chalk
+           transition-all duration-150;
   }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
+  .btn:hover:not(:disabled) { @apply -translate-y-px border-amber/60; }
+  .btn:disabled { @apply cursor-not-allowed opacity-40; }
+  .btn-primary { @apply border-transparent text-ink; background: linear-gradient(90deg, #f5b833, #f59e0b); }
+  .btn-primary:hover:not(:disabled) { @apply border-transparent brightness-110; }
+  .btn-ghost { @apply bg-transparent; }
+
+  .input {
+    @apply w-full rounded-lg border border-line bg-panel-2/80 px-3.5 py-2.5 text-chalk
+           outline-none transition placeholder:text-fog/70;
   }
-}
-p {
-  margin: 0;
+  .input:focus { @apply border-teal; box-shadow: 0 0 0 3px rgba(63, 208, 201, 0.22); }
+
+  .chip { @apply inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold leading-tight; }
+
+  .gold-rule { @apply h-px w-full; background: linear-gradient(90deg, transparent, rgba(245, 184, 51, 0.45), transparent); }
+
+  .stage { @apply flex min-h-screen items-center justify-center p-5; }
 }
 
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
+/* ------------------------------------------------------------------ *
+ * Interactive sub-panels (role ability / perk / ally support / combat
+ * / combat choice) render inline above the board. They keep their
+ * cr-* class vocabulary; this layer gives them the noir dossier skin.
+ * ------------------------------------------------------------------ */
+@layer components {
+  .cr-role,
+  .cr-combat {
+    @apply rounded-2xl border border-amber/30 bg-panel/80 p-4 text-chalk backdrop-blur-sm;
+    box-shadow: var(--shadow-noir);
+  }
+  .cr-role__head,
+  .cr-combat__head { @apply mb-3 flex items-center justify-between gap-3; }
+  .cr-role__head h2, .cr-role__head h3,
+  .cr-combat__head h2, .cr-combat__head h3 { @apply m-0 text-base font-extrabold; }
+  .cr-role__sub,
+  .cr-role__desc,
+  .cr-combat__hint,
+  .cr-combat__turn { @apply text-sm text-fog; }
+  .cr-role__body { @apply flex flex-col gap-3; }
+  .cr-role__empty { @apply text-sm text-fog; }
+
+  .cr-role__chips,
+  .cr-perk__toggle { @apply flex flex-wrap gap-2; }
+  .cr-role__chip {
+    @apply cursor-pointer rounded-lg border border-line bg-panel-2 px-3 py-1.5 text-sm text-chalk transition;
+  }
+  .cr-role__chip:hover { @apply -translate-y-px border-amber/60; }
+  .cr-role__chip.is-selected { @apply border-amber bg-amber/15 text-amber; }
+
+  .cr-role__actions { @apply mt-1 flex flex-wrap gap-2; }
+  .cr-role__use,
+  .cr-combat__play {
+    @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg border-transparent
+           px-3.5 py-2 text-sm font-semibold text-ink transition;
+    background: linear-gradient(90deg, #f5b833, #f59e0b);
+  }
+  .cr-role__use:hover:not(:disabled),
+  .cr-combat__play:hover:not(:disabled) { @apply brightness-110; }
+  .cr-role__use:disabled,
+  .cr-combat__play:disabled { @apply cursor-not-allowed opacity-40; }
+  .cr-role__cancel,
+  .cr-combat__pass {
+    @apply inline-flex cursor-pointer items-center justify-center rounded-lg border border-line
+           bg-panel-2 px-3.5 py-2 text-sm font-semibold text-chalk transition;
+  }
+  .cr-role__cancel:hover,
+  .cr-combat__pass:hover { @apply border-amber/60; }
+
+  /* Machine Gun money-discard variant of the play button. */
+  .cr-combat__mg { @apply ring-1 ring-teal/60; }
+
+  .cr-combat__grid { @apply grid grid-cols-1 items-start gap-4 sm:grid-cols-[1fr_auto_1fr]; }
+  .cr-combat__side { @apply rounded-xl border border-line bg-panel-2/60 p-3; }
+  .cr-combat__side-head { @apply mb-2 flex items-center justify-between font-bold; }
+  .cr-combat__role { @apply text-sm text-fog; }
+  .cr-combat__total { @apply my-2 text-center; }
+  .cr-combat__total-num { @apply block text-4xl font-extrabold text-amber; }
+  .cr-combat__total-detail { @apply text-xs text-fog; }
+  .cr-combat__vs { @apply self-center text-center text-lg font-extrabold text-fog; }
+  .cr-combat__cards { @apply flex flex-wrap gap-2; }
+  .cr-combat__cards-owner { @apply w-full text-xs text-fog; }
+  .cr-combat__jammed { @apply text-sm font-semibold text-crim; }
+  .cr-combat__log { @apply mt-2 flex flex-col gap-1 text-xs text-fog; }
+
+  .cr-choice__block { @apply rounded-lg border border-line bg-panel-2/60 p-3; }
 }
 
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
-}

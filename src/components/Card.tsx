@@ -1,6 +1,8 @@
+import { motion } from 'framer-motion';
 import type { ActionCard, MarketCard, AnyCard } from '../types/cards';
 import { CARD_TYPE_META, MARKET_TYPE_META, CATEGORY_META } from '../constants/theme';
 import { cardArtUrl } from '../constants/cardArt';
+import { cardHover } from '../ui/motion';
 
 function isMarketCard(card: AnyCard): card is MarketCard {
   return 'cost' in card;
@@ -16,13 +18,19 @@ interface CardProps {
 }
 
 /**
- * A single game card. Handles both draw-pile action cards (money/evidence/
- * power/event) and market cards (perks/weapons). Purely presentational — the
- * accent color and icon come from the theme constants.
+ * A single game card. Handles both draw-pile action cards and market cards.
+ * Cards with printed art render full-face; everything else uses the noir CSS
+ * card. Accent color/icon come from the theme constants.
  */
 export function Card({ card, faceDown, selected, disabled, onClick }: CardProps) {
   if (faceDown) {
-    return <div className="cr-card cr-card--back" aria-hidden="true" />;
+    return (
+      <div
+        aria-hidden="true"
+        className="h-[190px] w-[136px] rounded-xl border border-line shadow-noir
+                   bg-[repeating-linear-gradient(45deg,#161b28,#161b28_9px,#10131c_9px,#10131c_18px)]"
+      />
+    );
   }
 
   const market = isMarketCard(card);
@@ -30,52 +38,61 @@ export function Card({ card, faceDown, selected, disabled, onClick }: CardProps)
   const clickable = Boolean(onClick) && !disabled;
   const art = cardArtUrl(card);
 
-  // Cards with printed art render full-face (name/type/effect are baked into
-  // the image); everything else falls back to the CSS card below.
+  const motionProps = clickable ? cardHover : {};
+  const ring = selected ? 'ring-2 ring-amber ring-offset-2 ring-offset-ink' : '';
+  const dim = disabled ? 'opacity-40' : '';
+
   if (art) {
     return (
-      <button
+      <motion.button
         type="button"
-        className={`cr-card cr-card--art${selected ? ' is-selected' : ''}${disabled ? ' is-disabled' : ''}`}
-        style={{ '--card-accent': meta.color } as React.CSSProperties}
+        {...motionProps}
         disabled={disabled || !onClick}
         onClick={clickable ? () => onClick!(card) : undefined}
         title={`${card.name} — ${card.description}`}
+        className={`relative w-[136px] overflow-hidden rounded-xl border border-line bg-white shadow-noir ${ring} ${dim}`}
       >
-        <img className="cr-card__art" src={art} alt={card.name} loading="lazy" />
-      </button>
+        <img src={art} alt={card.name} loading="lazy" className="block h-full w-full object-contain" />
+      </motion.button>
     );
   }
 
   return (
-    <button
+    <motion.button
       type="button"
-      className={`cr-card${selected ? ' is-selected' : ''}${disabled ? ' is-disabled' : ''}`}
-      style={{ '--card-accent': meta.color } as React.CSSProperties}
+      {...motionProps}
       disabled={disabled || !onClick}
       onClick={clickable ? () => onClick!(card) : undefined}
       title={card.description}
+      style={{ borderTopColor: meta.color }}
+      className={`flex min-h-[190px] w-[150px] flex-col gap-1.5 rounded-xl border border-t-[3px]
+                  border-line bg-panel-2/90 p-2.5 text-left shadow-noir ${ring} ${dim}`}
     >
-      <header className="cr-card__head">
-        <span className="cr-card__type">
+      <header className="flex items-center justify-between text-xs">
+        <span className="font-bold" style={{ color: meta.color }}>
           <span aria-hidden="true">{meta.icon}</span> {meta.label}
         </span>
-        {market && <span className="cr-card__cost">${(card as MarketCard).cost}</span>}
+        {market && (
+          <span className="rounded-md px-1.5 font-extrabold text-ink" style={{ background: meta.color }}>
+            ${(card as MarketCard).cost}
+          </span>
+        )}
       </header>
 
-      <div className="cr-card__name">{card.name}</div>
-      <p className="cr-card__desc">{card.description}</p>
+      <div className="text-[15px] font-extrabold leading-tight text-chalk">{card.name}</div>
+      <p className="grow text-xs leading-snug text-fog">{card.description}</p>
 
-      <footer className="cr-card__foot">
-        {!market && (card as ActionCard).evidenceCategories?.map((cat) => (
-          <span key={cat} className="cr-tag" style={{ background: CATEGORY_META[cat].color }}>
-            {CATEGORY_META[cat].icon} {CATEGORY_META[cat].label}
-          </span>
-        ))}
+      <footer className="flex flex-wrap gap-1">
+        {!market &&
+          (card as ActionCard).evidenceCategories?.map((cat) => (
+            <span key={cat} className="chip text-ink" style={{ background: CATEGORY_META[cat].color }}>
+              {CATEGORY_META[cat].icon} {CATEGORY_META[cat].label}
+            </span>
+          ))}
         {market && (card as MarketCard).vpValue ? (
-          <span className="cr-tag cr-tag--vp">★ +{(card as MarketCard).vpValue} VP</span>
+          <span className="chip bg-amber text-ink">★ +{(card as MarketCard).vpValue} VP</span>
         ) : null}
       </footer>
-    </button>
+    </motion.button>
   );
 }
