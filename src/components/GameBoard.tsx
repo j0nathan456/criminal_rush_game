@@ -199,87 +199,88 @@ export function GameBoard({
         <AllySupportPanel state={state} viewerIndex={viewerIndex} onSubmit={onSubmitAllySupport} onCancel={onCancelAllySupport} />
       )}
 
-      {/* Top band — three aligned columns: info rail · Evidence Grid · piles. */}
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[260px_minmax(0,1fr)_260px]">
-        <aside className="flex flex-col gap-4">
-          <ScoreBoard scores={state.teamScores} targets={state.vpTargets} winner={state.winner} />
-          <Roster
-            players={state.players}
-            currentPlayerIndex={state.currentPlayerIndex}
-            viewerIndex={viewerIndex}
-            targeting={Boolean(targeting)}
-            isTargetable={isTargetable}
-            onSelectTarget={onSelectTarget}
-          />
-        </aside>
-
+      {/* Board grid — columns 1:3:1, three rows:
+          row 1  Score Board · Evidence Grid · Case Log
+          row 2  Players     · Markets       · Deck/Discard
+          row 3  Profile     · Hand          · Actions        */}
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,3fr)_minmax(0,1fr)]">
+        {/* Row 1 */}
+        <ScoreBoard scores={state.teamScores} targets={state.vpTargets} winner={state.winner} />
         <main className="min-w-0">
           <EvidenceGrid
             grid={state.evidenceGrid}
             onSlotClick={isViewersTurn && viewer?.team === 'CIVILIAN' ? onPlayEvidence : undefined}
           />
         </main>
+        <GameLog entries={state.gameLog} />
 
-        <aside className="flex flex-col gap-4">
-          <Piles drawPile={state.drawPile} discardPile={state.discardPile} />
-          <GameLog entries={state.gameLog} />
-        </aside>
-      </div>
+        {/* Row 2 */}
+        <Roster
+          players={state.players}
+          currentPlayerIndex={state.currentPlayerIndex}
+          viewerIndex={viewerIndex}
+          targeting={Boolean(targeting)}
+          isTargetable={isTargetable}
+          onSelectTarget={onSelectTarget}
+        />
+        <div className="min-w-0">
+          <Markets state={state} viewer={viewer} isViewersTurn={isViewersTurn} onBuy={onBuy} />
+        </div>
+        <Piles drawPile={state.drawPile} discardPile={state.discardPile} />
 
-      {/* Markets — their own full-width level below the board. */}
-      <Markets state={state} viewer={viewer} isViewersTurn={isViewersTurn} onBuy={onBuy} />
-
-      {viewer && (
-        <footer className="flex flex-wrap items-stretch gap-4">
-          <RoleCard
-            player={viewer}
-            active={isViewersTurn}
-            maxActions={maxActions}
-            canManageItems={isViewersTurn}
-            onUsePerk={onUsePerk}
-            onSell={onSell}
-          />
-
-          <div className="flex flex-[2] basis-[380px] flex-col gap-3">
-            <PlayerHand
-              cards={viewer.hand}
-              selectedId={selectedCardId}
-              availabilityOf={(card) => handCardPlayable(state, viewerIndex, card)}
-              onSelect={onSelectCard}
-            />
-            {canPlaySelected && (
-              <button
-                type="button"
-                className="btn self-start border-transparent text-ink"
-                style={{ background: 'linear-gradient(90deg,#10b981,#3fd0c9)' }}
-                onClick={onPlaySelected}
-              >
-                Play {selectedCard!.name}
-              </button>
-            )}
-            {isViewersTurn && viewer.trafficToken && onClearTraffic && (
-              <button type="button" className="btn self-start" onClick={onClearTraffic}>
-                Clear Traffic token ($1)
-              </button>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <TurnPhases
-              actionsRemaining={viewer.actionsRemaining}
-              maxActions={maxActions}
-              accent={TEAM_META[viewer.team].color}
-            />
-            <ActionBar
+        {/* Row 3 */}
+        {viewer && (
+          <>
+            <RoleCard
               player={viewer}
+              active={isViewersTurn}
               maxActions={maxActions}
-              availability={availability}
-              onAction={isViewersTurn ? onAction : undefined}
-              onEndTurn={isViewersTurn ? onEndTurn : undefined}
+              canManageItems={isViewersTurn}
+              onUsePerk={onUsePerk}
+              onSell={onSell}
             />
-          </div>
-        </footer>
-      )}
+
+            <div className="flex min-w-0 flex-col gap-3">
+              <PlayerHand
+                cards={viewer.hand}
+                selectedId={selectedCardId}
+                availabilityOf={(card) => handCardPlayable(state, viewerIndex, card)}
+                onSelect={onSelectCard}
+              />
+              {canPlaySelected && (
+                <button
+                  type="button"
+                  className="btn self-start border-transparent text-ink"
+                  style={{ background: 'linear-gradient(90deg,#10b981,#3fd0c9)' }}
+                  onClick={onPlaySelected}
+                >
+                  Play {selectedCard!.name}
+                </button>
+              )}
+              {isViewersTurn && viewer.trafficToken && onClearTraffic && (
+                <button type="button" className="btn self-start" onClick={onClearTraffic}>
+                  Clear Traffic token ($1)
+                </button>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <TurnPhases
+                actionsRemaining={viewer.actionsRemaining}
+                maxActions={maxActions}
+                accent={TEAM_META[viewer.team].color}
+              />
+              <ActionBar
+                player={viewer}
+                maxActions={maxActions}
+                availability={availability}
+                onAction={isViewersTurn ? onAction : undefined}
+                onEndTurn={isViewersTurn ? onEndTurn : undefined}
+              />
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
