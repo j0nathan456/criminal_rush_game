@@ -9,6 +9,7 @@ import {
   MAX_WEAPONS,
 } from '../constants/theme';
 import { playerTokens } from './playerTokens';
+import { TeamIcon } from './TeamIcon';
 import { ACTIONABLE_PERKS } from './panelConstants';
 
 interface RoleCardProps {
@@ -111,8 +112,8 @@ export function RoleCard({
           <div className="text-xl font-extrabold leading-tight" style={{ color: meta.color }}>
             {player.role.name}
           </div>
-          <div className="text-[13px] text-fog">
-            {meta.icon} {meta.label} · Base PL {player.role.powerlevel}
+          <div className="flex items-center gap-1.5 text-[13px] text-fog">
+            <TeamIcon team={player.team} className="h-4 w-4 shrink-0 rounded-full object-cover" /> {meta.label} · Base PL {player.role.powerlevel}
           </div>
         </div>
         <div className="text-right text-sm font-bold">

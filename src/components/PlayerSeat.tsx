@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Player } from '../types/game';
 import { TEAM_META, STATUS_META } from '../constants/theme';
+import { TeamIcon } from './TeamIcon';
 import { playerTokens } from './playerTokens';
 
 interface PlayerSeatProps {
@@ -61,7 +62,7 @@ export function PlayerSeat({ player, active, isSelf, isNeighbor, targetable, onC
           ${active && !targetable ? 'animate-turn-pulse' : ''}
           ${showNeighbor ? 'ring-1 ring-dashed ring-fog/50' : ''}`}
       >
-        <span className="text-lg" aria-hidden="true">{meta.icon}</span>
+        <TeamIcon team={player.team} className="h-8 w-8 shrink-0 rounded-md object-cover" />
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1 font-bold">
             <span className="truncate">
@@ -98,7 +99,9 @@ export function PlayerSeat({ player, active, isSelf, isNeighbor, targetable, onC
             >
               <div className="flex items-baseline justify-between">
                 <span className="font-extrabold" style={{ color: meta.color }}>{player.name}</span>
-                <span className="text-[12px] text-fog">{meta.icon} {meta.label}</span>
+                <span className="flex items-center gap-1 text-[12px] text-fog">
+                  <TeamIcon team={player.team} className="h-4 w-4 shrink-0 rounded-full object-cover" /> {meta.label}
+                </span>
               </div>
               <div className="text-[12px] text-fog">{player.role.name} · Base PL {player.role.powerlevel}</div>
 

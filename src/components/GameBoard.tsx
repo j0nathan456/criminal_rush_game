@@ -16,6 +16,7 @@ import { Roster } from './Roster';
 import { EvidenceGrid } from './EvidenceGrid';
 import { Piles } from './Piles';
 import { Markets } from './Markets';
+import { TeamIcon } from './TeamIcon';
 import { TurnPhases } from './TurnPhases';
 import { CombatPanel } from './CombatPanel';
 import { RoleAbilityPanel } from './RoleAbilityPanel';
@@ -143,8 +144,9 @@ export function GameBoard({
             <span className="text-xl font-extrabold" style={{ color: TEAM_META[current.team].color }}>
               {isViewersTurn ? 'Your turn' : `${current.name}'s turn`}
             </span>
-            <span className="text-sm text-fog">
-              {TEAM_META[current.team].icon} {current.name} · {current.role.name} · {TEAM_META[current.team].label}
+            <span className="flex items-center gap-1.5 text-sm text-fog">
+              <TeamIcon team={current.team} className="h-5 w-5 shrink-0 rounded-full object-cover" />
+              {current.name} · {current.role.name} · {TEAM_META[current.team].label}
             </span>
           </div>
         </div>

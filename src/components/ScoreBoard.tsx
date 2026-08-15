@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import type { Team } from '../types/cards';
 import { TEAM_META } from '../constants/theme';
+import { TeamIcon } from './TeamIcon';
 import { spring } from '../ui/motion';
 
 interface ScoreBoardProps {
@@ -35,8 +36,8 @@ export function ScoreBoard({ scores, targets, winner }: ScoreBoardProps) {
           return (
             <div key={team} className="flex flex-col gap-2">
               <div className="flex items-baseline justify-between">
-                <span className="text-sm font-bold" style={{ color: meta.color }}>
-                  <span aria-hidden="true">{meta.icon}</span> {meta.label}
+                <span className="flex items-center gap-1.5 text-sm font-bold" style={{ color: meta.color }}>
+                  <TeamIcon team={team} className="h-5 w-5 shrink-0 rounded-full object-cover" /> {meta.label}
                 </span>
                 <span className="tabular-nums">
                   <span className="text-base font-extrabold" style={{ color: meta.color }}>{score} VP</span>
