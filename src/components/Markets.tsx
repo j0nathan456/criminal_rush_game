@@ -19,7 +19,7 @@ export function Markets({ state, viewer, isViewersTurn, onBuy }: MarketsProps) {
   const canBuyBlackMarket = isViewersTurn && isCriminal;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
       <Market
         title="Market"
         subtitle="5 cards · open to all"

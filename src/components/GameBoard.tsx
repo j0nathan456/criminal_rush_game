@@ -13,7 +13,8 @@ import { PlayerHand } from './PlayerHand';
 import { ActionBar } from './ActionBar';
 import { GameLog } from './GameLog';
 import { Roster } from './Roster';
-import { TableCenter } from './TableCenter';
+import { EvidenceGrid } from './EvidenceGrid';
+import { Piles } from './Piles';
 import { Markets } from './Markets';
 import { TurnPhases } from './TurnPhases';
 import { CombatPanel } from './CombatPanel';
@@ -198,8 +199,8 @@ export function GameBoard({
         <AllySupportPanel state={state} viewerIndex={viewerIndex} onSubmit={onSubmitAllySupport} onCancel={onCancelAllySupport} />
       )}
 
-      {/* Three columns: info rail · board (grid + piles) · markets. */}
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[260px_minmax(0,1fr)_minmax(0,1fr)]">
+      {/* Top band — three aligned columns: info rail · Evidence Grid · piles. */}
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[260px_minmax(0,1fr)_260px]">
         <aside className="flex flex-col gap-4">
           <ScoreBoard scores={state.teamScores} targets={state.vpTargets} winner={state.winner} />
           <Roster
@@ -210,17 +211,23 @@ export function GameBoard({
             isTargetable={isTargetable}
             onSelectTarget={onSelectTarget}
           />
-          <GameLog entries={state.gameLog} />
         </aside>
 
         <main className="min-w-0">
-          <TableCenter state={state} viewer={viewer} isViewersTurn={isViewersTurn} onPlayEvidence={onPlayEvidence} />
+          <EvidenceGrid
+            grid={state.evidenceGrid}
+            onSlotClick={isViewersTurn && viewer?.team === 'CIVILIAN' ? onPlayEvidence : undefined}
+          />
         </main>
 
-        <section className="min-w-0" aria-label="Markets">
-          <Markets state={state} viewer={viewer} isViewersTurn={isViewersTurn} onBuy={onBuy} />
-        </section>
+        <aside className="flex flex-col gap-4">
+          <Piles drawPile={state.drawPile} discardPile={state.discardPile} />
+          <GameLog entries={state.gameLog} />
+        </aside>
       </div>
+
+      {/* Markets — their own full-width level below the board. */}
+      <Markets state={state} viewer={viewer} isViewersTurn={isViewersTurn} onBuy={onBuy} />
 
       {viewer && (
         <footer className="flex flex-wrap items-stretch gap-4">
