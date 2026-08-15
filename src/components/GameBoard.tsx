@@ -15,6 +15,7 @@ import { GameLog } from './GameLog';
 import { PlayerSeat } from './PlayerSeat';
 import { TableLayout } from './TableLayout';
 import { SharedZones } from './SharedZones';
+import { MarketShelf } from './MarketShelf';
 import { TurnPhases } from './TurnPhases';
 import { CombatPanel } from './CombatPanel';
 import { RoleAbilityPanel } from './RoleAbilityPanel';
@@ -117,12 +118,12 @@ export function GameBoard({
   const availability = viewer ? actionAvailability(state, viewerIndex) : {};
 
   return (
-    <div className="flex min-h-screen flex-col gap-4 p-4">
-      {/* Top bar */}
-      <header className="flex items-center justify-between gap-3 rounded-2xl border border-line/80 bg-gradient-to-r from-civ/10 via-transparent to-crim/10 px-5 py-3 backdrop-blur-sm">
+    <div className="flex min-h-screen flex-col gap-2 p-3">
+      {/* Top bar (compact) */}
+      <header className="flex items-center justify-between gap-3 rounded-xl border border-line/80 bg-gradient-to-r from-civ/10 via-transparent to-crim/10 px-4 py-1.5 backdrop-blur-sm">
         <div className="flex items-baseline gap-3">
-          <span className="text-2xl font-extrabold tracking-wide">Criminal Rush</span>
-          <span className="hidden text-sm text-fog sm:inline">Save the City… or Control It</span>
+          <span className="text-lg font-extrabold tracking-wide">Criminal Rush</span>
+          <span className="hidden text-xs text-fog sm:inline">Save the City… or Control It</span>
         </div>
       </header>
 
@@ -198,8 +199,8 @@ export function GameBoard({
         <AllySupportPanel state={state} viewerIndex={viewerIndex} onSubmit={onSubmitAllySupport} onCancel={onCancelAllySupport} />
       )}
 
-      {/* Spatial table layout (wide screens) */}
-      <div className="hidden lg:block">
+      {/* Spatial table layout (wide screens) — fills the screen. */}
+      <div className="hidden min-h-[70vh] flex-1 lg:block">
         <TableLayout
           state={state}
           viewerIndex={viewerIndex}
@@ -209,8 +210,12 @@ export function GameBoard({
           isTargetable={isTargetable}
           onSelectTarget={onSelectTarget}
           onPlayEvidence={onPlayEvidence}
-          onBuy={onBuy}
         />
+      </div>
+
+      {/* Collapsible market drawer (wide screens) — opens on demand for buying. */}
+      <div className="hidden lg:block">
+        <MarketShelf state={state} viewer={viewer} isViewersTurn={isViewersTurn} onBuy={onBuy} />
       </div>
 
       {/* Stacked fallback (narrow screens) */}

@@ -36,11 +36,12 @@ describe('<Card />', () => {
     expect(screen.getByText('$5')).toBeInTheDocument();
   });
 
-  it('renders a card with printed art full-face as an image', () => {
+  it('renders every card as a text card (no printed art image)', () => {
     render(<Card card={weapon} />);
-    const img = screen.getByAltText('Hammer') as HTMLImageElement;
-    expect(img).toBeInTheDocument();
-    expect(img.getAttribute('src')).toContain('cards/market/hammer.png');
+    // Cards are text-only now: name + cost show, and there is no <img>.
+    expect(screen.getByText('Hammer')).toBeInTheDocument();
+    expect(screen.getByText('$4')).toBeInTheDocument();
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
   });
 
   it('calls onClick with the card when clicked', () => {

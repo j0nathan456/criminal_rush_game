@@ -1,8 +1,8 @@
 import type { GameState, Player } from '../types/game';
-import type { EvidenceCategory, AnyCard } from '../types/cards';
+import type { EvidenceCategory } from '../types/cards';
 import { getSeatPositions } from '../constants/tableLayout';
 import { PlayerSeat } from './PlayerSeat';
-import { SharedZones } from './SharedZones';
+import { TableCenter } from './TableCenter';
 import { ScoreBoard } from './ScoreBoard';
 import { GameLog } from './GameLog';
 
@@ -16,15 +16,14 @@ interface TableLayoutProps {
   isTargetable: (player: Player) => boolean;
   onSelectTarget?: (playerId: string) => void;
   onPlayEvidence?: (category: EvidenceCategory) => void;
-  onBuy?: (card: AnyCard) => void;
 }
 
 /**
- * The spatial "around a table" view (wide screens only). Players ring an oval
- * with the viewer pinned to the bottom; the shared zones (piles, evidence, and
- * markets) sit in the centre; the score board and case log float in the top
- * corners. Seats layer above the corner overlays so an overlap never blocks a
- * click.
+ * The spatial "around a table" view (wide screens). Fills its container: players
+ * ring an oval with the viewer pinned to the bottom, the shared centre (piles +
+ * Evidence Grid) owns the middle with no scroll, and the score board / case log
+ * are compact HUD overlays in the top corners. Seats layer above the overlays so
+ * an overlap never blocks a click. Markets live in a separate collapsible shelf.
  */
 export function TableLayout({
   state,
@@ -35,31 +34,24 @@ export function TableLayout({
   isTargetable,
   onSelectTarget,
   onPlayEvidence,
-  onBuy,
 }: TableLayoutProps) {
   const positions = getSeatPositions(state.players.length, viewerIndex);
 
   return (
-    <div className="relative min-h-[680px] w-full">
+    <div className="relative h-full min-h-[70vh] w-full">
       {/* Oval table surface */}
       <div className="table-surface absolute inset-x-[4%] inset-y-[2%]" aria-hidden="true" />
 
-      {/* Shared zones in the centre of the table (scrolls if it overflows). */}
-      <div className="absolute inset-x-[19%] inset-y-[16%] overflow-y-auto rounded-2xl bg-ink/30 p-3 ring-1 ring-line/50">
-        <SharedZones
-          state={state}
-          viewer={viewer}
-          isViewersTurn={isViewersTurn}
-          onPlayEvidence={onPlayEvidence}
-          onBuy={onBuy}
-        />
+      {/* Shared centre — the dominant element, no internal scroll. */}
+      <div className="absolute inset-x-[21%] inset-y-[12%]">
+        <TableCenter state={state} viewer={viewer} isViewersTurn={isViewersTurn} onPlayEvidence={onPlayEvidence} />
       </div>
 
-      {/* Corner overlays (behind the seats). */}
-      <div className="absolute left-0 top-0 z-10 w-56">
+      {/* Compact HUD overlays (behind the seats). */}
+      <div className="absolute left-0 top-0 z-10 w-52 opacity-95">
         <ScoreBoard scores={state.teamScores} targets={state.vpTargets} winner={state.winner} />
       </div>
-      <div className="absolute right-0 top-0 z-10 w-64">
+      <div className="absolute right-0 top-0 z-10 w-60 opacity-95">
         <GameLog entries={state.gameLog} />
       </div>
 
@@ -69,7 +61,7 @@ export function TableLayout({
         return (
           <div
             key={p.id}
-            className="absolute z-20 w-40 -translate-x-1/2 -translate-y-1/2"
+            className="absolute z-20 w-44 -translate-x-1/2 -translate-y-1/2"
             style={{ left: `${pos.xPct}%`, top: `${pos.yPct}%` }}
           >
             <PlayerSeat
