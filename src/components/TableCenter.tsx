@@ -39,36 +39,35 @@ function DiscardTop({ top }: { top?: ActionCard }) {
 }
 
 /**
- * The shared centre of the table: the draw/discard piles and the Evidence Grid.
- * Sized to fill its container with no internal scroll — it is the dominant
- * element of the board. Markets live in a separate collapsible shelf.
+ * The shared centre of the table: the Evidence Grid with the draw/discard piles
+ * laid out parallel to it (a pile column beside the grid, stacking below only on
+ * the narrowest screens).
  */
 export function TableCenter({ state, viewer, isViewersTurn, onPlayEvidence }: TableCenterProps) {
   const drawCount = state.drawPile.length;
   const discardTop = state.discardPile.at(-1);
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col items-center gap-4">
-      <div className="flex items-start justify-center gap-10">
+    <div className="flex flex-col gap-4 md:flex-row md:items-start">
+      <div className="min-w-0 md:flex-1">
+        <EvidenceGrid
+          grid={state.evidenceGrid}
+          onSlotClick={isViewersTurn && viewer?.team === 'CIVILIAN' ? onPlayEvidence : undefined}
+        />
+      </div>
+
+      <div className="flex shrink-0 flex-row items-start justify-center gap-4 md:flex-col md:justify-start">
         <Pile label={`Deck · ${drawCount}`} count={drawCount}>
           <Card faceDown />
         </Pile>
         <Pile label={`Discard · ${state.discardPile.length}`} count={state.discardPile.length}>
           <DiscardTop top={discardTop} />
         </Pile>
-      </div>
-
-      {drawCount <= LOW_DECK && (
-        <p className="rounded-lg bg-amber/10 px-3 py-1.5 text-center text-xs text-amber ring-1 ring-amber/30">
-          Deck low — when it runs out, both teams score 1 VP and the discard reshuffles.
-        </p>
-      )}
-
-      <div className="w-full max-w-3xl flex-1">
-        <EvidenceGrid
-          grid={state.evidenceGrid}
-          onSlotClick={isViewersTurn && viewer?.team === 'CIVILIAN' ? onPlayEvidence : undefined}
-        />
+        {drawCount <= LOW_DECK && (
+          <p className="max-w-[150px] rounded-lg bg-amber/10 px-2 py-1.5 text-center text-[11px] text-amber ring-1 ring-amber/30">
+            Deck low — on run-out both teams score 1 VP and the discard reshuffles.
+          </p>
+        )}
       </div>
     </div>
   );

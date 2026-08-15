@@ -198,8 +198,8 @@ export function GameBoard({
         <AllySupportPanel state={state} viewerIndex={viewerIndex} onSubmit={onSubmitAllySupport} onCancel={onCancelAllySupport} />
       )}
 
-      {/* Main layout: HUD rail · shared centre + markets · case log */}
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[240px_minmax(0,1fr)_260px]">
+      {/* Three columns: info rail · board (grid + piles) · markets. */}
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[260px_minmax(0,1fr)_minmax(0,1fr)]">
         <aside className="flex flex-col gap-4">
           <ScoreBoard scores={state.teamScores} targets={state.vpTargets} winner={state.winner} />
           <Roster
@@ -210,16 +210,16 @@ export function GameBoard({
             isTargetable={isTargetable}
             onSelectTarget={onSelectTarget}
           />
-        </aside>
-
-        <main className="flex flex-col gap-4">
-          <TableCenter state={state} viewer={viewer} isViewersTurn={isViewersTurn} onPlayEvidence={onPlayEvidence} />
-          <Markets state={state} viewer={viewer} isViewersTurn={isViewersTurn} onBuy={onBuy} />
-        </main>
-
-        <aside className="flex flex-col gap-4">
           <GameLog entries={state.gameLog} />
         </aside>
+
+        <main className="min-w-0">
+          <TableCenter state={state} viewer={viewer} isViewersTurn={isViewersTurn} onPlayEvidence={onPlayEvidence} />
+        </main>
+
+        <section className="min-w-0" aria-label="Markets">
+          <Markets state={state} viewer={viewer} isViewersTurn={isViewersTurn} onBuy={onBuy} />
+        </section>
       </div>
 
       {viewer && (
