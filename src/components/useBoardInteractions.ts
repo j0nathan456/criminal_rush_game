@@ -73,7 +73,9 @@ export function useBoardInteractions(
         setSelectedCardId(null);
         break;
       case 'PLAY_CARD':
-        if (selectedCard && selectedCard.type !== 'EVIDENCE' && selectedCard.type !== 'POWER') {
+        if (selectedCard && selectedCard.type === 'EVIDENCE' && viewer?.team === 'CRIMINAL') {
+          playFromHand(selectedCard);
+        } else if (selectedCard && selectedCard.type !== 'EVIDENCE' && selectedCard.type !== 'POWER') {
           playFromHand(selectedCard);
         } else {
           setNotice('Select a Money or Event card to play, or click a grid slot to place evidence.');

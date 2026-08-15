@@ -251,6 +251,20 @@ describe('gameReducer — PLAY_CARD', () => {
     const next = gameReducer(s, { type: 'PLAY_CARD', cardId: 'pw' });
     expect(next.players[0].hand).toHaveLength(1); // still in hand
   });
+
+  it('lets a Criminal burn an Evidence card for 1 action to draw 2 new cards', () => {
+    const pile: ActionCard[] = [1, 2].map((n) => ({ id: `c${n}`, name: `c${n}`, description: '', type: 'MONEY', value: 1 }));
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL'), hand: [evidence('e1', ['MEANS'])] })], {
+      drawPile: pile,
+    });
+
+    const next = gameReducer(s, { type: 'PLAY_CARD', cardId: 'e1' });
+    expect(next.players[0].hand).toHaveLength(2); // evidence discarded, 2 drawn
+    expect(next.players[0].actionsRemaining).toBe(2); // costs 1 action
+    expect(next.discardPile.map((c) => c.id)).toContain('e1');
+    expect(next.drawPile).toHaveLength(0);
+    expect(next.evidenceGrid.MEANS.isFilled).toBe(false); // never touches the grid
+  });
 });
 
 describe('gameReducer — SELL', () => {

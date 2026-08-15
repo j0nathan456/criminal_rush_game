@@ -113,7 +113,10 @@ export function GameBoard({
   };
 
   const selectedCard = viewer?.hand.find((c) => c.id === selectedCardId);
-  const canPlaySelected = Boolean(selectedCard) && selectedCard?.type !== 'EVIDENCE' && selectedCard?.type !== 'POWER';
+  const canPlaySelected =
+    Boolean(selectedCard) &&
+    selectedCard?.type !== 'POWER' &&
+    (selectedCard?.type !== 'EVIDENCE' || viewer?.team === 'CRIMINAL');
 
   const maxActions = viewer ? actionsForTurn(viewer) : 0;
   const availability = viewer ? actionAvailability(state, viewerIndex) : {};

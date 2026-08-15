@@ -283,6 +283,7 @@ function playCard(
 
   switch (card.type) {
     case 'EVIDENCE': {
+      if (player.team === 'CRIMINAL') return burnEvidence(state, idx, player, cardId);
       if (!category) return log(state, 'Choose a category to play this evidence into.');
       return playEvidence(state, idx, player, cardId, category);
     }
@@ -585,6 +586,26 @@ function placeEvidence(
     return acc;
   }, s);
   return s;
+}
+
+/**
+ * Burn Evidence (rulebook p.5): a Criminal may discard an Evidence card from
+ * hand to draw 2 new cards, in place of playing it into the grid.
+ */
+function burnEvidence(state: GameState, idx: number, player: Player, cardId: string): GameState {
+  if (player.actionsRemaining < 1) return log(state, `${player.name} has no actions left.`);
+  const card = player.hand.find((c) => c.id === cardId);
+  if (!card || card.type !== 'EVIDENCE') return log(state, 'That card is not evidence.');
+
+  let s = updatePlayer(state, idx, (p) => ({
+    ...p,
+    hand: p.hand.filter((c) => c.id !== cardId),
+    actionsRemaining: p.actionsRemaining - 1,
+  }));
+  s = { ...s, discardPile: [...s.discardPile, card] };
+  s = gameReducerDraw(s);
+  s = gameReducerDraw(s);
+  return log(s, `${player.name} burned ${card.name} and drew 2 cards.`);
 }
 
 function purchase(state: GameState, idx: number, player: Player, cardId: string): GameState {
