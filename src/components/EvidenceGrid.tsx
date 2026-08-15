@@ -18,11 +18,18 @@ interface EvidenceGridProps {
 export function EvidenceGrid({ grid, onSlotClick }: EvidenceGridProps) {
   const filledCount = EVIDENCE_ORDER.filter((cat) => grid[cat].isFilled).length;
   const complete = filledCount === EVIDENCE_ORDER.length;
+  // The grid is the Civilian win engine, so it carries the Civilian (blue)
+  // accent — intensifying as they get close — and flips to amber once it's a
+  // complete, ready-to-Expose case.
+  const ring = complete
+    ? 'ring-amber/70 shadow-[0_0_24px_rgba(245,158,11,0.25)]'
+    : filledCount >= EVIDENCE_ORDER.length - 1
+      ? 'ring-civ/60 shadow-[0_0_18px_rgba(43,108,255,0.22)]'
+      : 'ring-civ/25';
 
   return (
     <section
-      className={`panel bg-gradient-to-b from-amber/5 to-transparent ring-1 transition-shadow
-        ${complete ? 'ring-amber/70 shadow-[0_0_24px_rgba(245,158,11,0.25)]' : 'ring-amber/20'}`}
+      className={`panel bg-gradient-to-b from-civ/5 to-transparent ring-1 transition-shadow ${ring}`}
       aria-label="Evidence grid"
     >
       <header className="panel-head">
@@ -37,7 +44,7 @@ export function EvidenceGrid({ grid, onSlotClick }: EvidenceGridProps) {
             <span>Ready to Expose</span>
           </motion.span>
         ) : (
-          <span className="chip bg-panel-2 text-fog ring-1 ring-line">
+          <span className="chip bg-civ/10 text-civ ring-1 ring-civ/30">
             {filledCount}/{EVIDENCE_ORDER.length} evidence collected
           </span>
         )}

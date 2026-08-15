@@ -4,7 +4,7 @@ import type { EvidenceCategory, AnyCard, MarketCard } from '../types/cards';
 import type { ActionMeta } from '../constants/theme';
 import type { RoleAbilityPayload, PerkPayload, EventOptions } from '../engine';
 import type { CombatChoiceInput } from '../types/game';
-import { actionsForTurn, actionAvailability } from '../engine';
+import { actionsForTurn, actionAvailability, handCardPlayable } from '../engine';
 import { TEAM_META } from '../constants/theme';
 
 import { ScoreBoard } from './ScoreBoard';
@@ -15,11 +15,11 @@ import { GameLog } from './GameLog';
 import { PlayerSeat } from './PlayerSeat';
 import { TableLayout } from './TableLayout';
 import { SharedZones } from './SharedZones';
+import { TurnPhases } from './TurnPhases';
 import { CombatPanel } from './CombatPanel';
 import { RoleAbilityPanel } from './RoleAbilityPanel';
 import { PerkActionPanel } from './PerkActionPanel';
 import { AllySupportPanel } from './AllySupportPanel';
-import { ACTIONABLE_PERKS } from './panelConstants';
 
 /** Which target the board is currently asking the player to pick. */
 export type TargetMode = 'attack' | 'expose' | null;
@@ -124,13 +124,30 @@ export function GameBoard({
           <span className="text-2xl font-extrabold tracking-wide">Criminal Rush</span>
           <span className="hidden text-sm text-fog sm:inline">Save the City… or Control It</span>
         </div>
-        {current && (
-          <div className="text-sm text-fog">
-            Current turn:{' '}
-            <strong style={{ color: TEAM_META[current.team].color }}>{current.name}</strong>
-          </div>
-        )}
       </header>
+
+      {/* Prominent active-player indicator — the most conspicuous global state. */}
+      {current && !state.winner && (
+        <div
+          aria-label="Active player"
+          className="flex items-center gap-3 rounded-2xl border-2 px-5 py-3 animate-turn-pulse"
+          style={{ borderColor: TEAM_META[current.team].color, background: TEAM_META[current.team].soft }}
+        >
+          <span
+            className="h-3 w-3 shrink-0 rounded-full"
+            style={{ background: TEAM_META[current.team].color, boxShadow: `0 0 10px ${TEAM_META[current.team].color}` }}
+            aria-hidden="true"
+          />
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <span className="text-xl font-extrabold" style={{ color: TEAM_META[current.team].color }}>
+              {isViewersTurn ? 'Your turn' : `${current.name}'s turn`}
+            </span>
+            <span className="text-sm text-fog">
+              {TEAM_META[current.team].icon} {current.name} · {current.role.name} · {TEAM_META[current.team].label}
+            </span>
+          </div>
+        </div>
+      )}
 
       {state.winner && (
         <motion.div
@@ -226,10 +243,22 @@ export function GameBoard({
 
       {viewer && (
         <footer className="flex flex-wrap items-stretch gap-4">
-          <RoleCard player={viewer} active={isViewersTurn} maxActions={maxActions} />
+          <RoleCard
+            player={viewer}
+            active={isViewersTurn}
+            maxActions={maxActions}
+            canManageItems={isViewersTurn}
+            onUsePerk={onUsePerk}
+            onSell={onSell}
+          />
 
           <div className="flex flex-[2] basis-[380px] flex-col gap-3">
-            <PlayerHand cards={viewer.hand} selectedId={selectedCardId} onSelect={onSelectCard} />
+            <PlayerHand
+              cards={viewer.hand}
+              selectedId={selectedCardId}
+              availabilityOf={(card) => handCardPlayable(state, viewerIndex, card)}
+              onSelect={onSelectCard}
+            />
             {canPlaySelected && (
               <button
                 type="button"
@@ -240,33 +269,6 @@ export function GameBoard({
                 Play {selectedCard!.name}
               </button>
             )}
-            {viewer.inventory.length > 0 && (
-              <section className="panel" aria-label="Your items">
-                <header className="panel-head"><h2 className="panel-title">Items</h2></header>
-                <div className="flex flex-col gap-1.5">
-                  {viewer.inventory.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between gap-2 rounded-lg bg-panel-2/70 px-3 py-1.5 text-sm"
-                    >
-                      <span>{item.name}</span>
-                      <span className="flex gap-1.5">
-                        {isViewersTurn && onUsePerk && ACTIONABLE_PERKS.has(item.name) && (
-                          <button type="button" className="btn px-2.5 py-1 text-xs" onClick={() => onUsePerk(item.id)}>
-                            Use
-                          </button>
-                        )}
-                        {onSell && item.type !== 'SPECIAL' && item.name !== 'Investment' && (
-                          <button type="button" className="btn px-2.5 py-1 text-xs" onClick={() => onSell(item)}>
-                            Sell $1
-                          </button>
-                        )}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
             {isViewersTurn && viewer.trafficToken && onClearTraffic && (
               <button type="button" className="btn self-start" onClick={onClearTraffic}>
                 Clear Traffic token ($1)
@@ -274,13 +276,20 @@ export function GameBoard({
             )}
           </div>
 
-          <ActionBar
-            player={viewer}
-            maxActions={maxActions}
-            availability={availability}
-            onAction={isViewersTurn ? onAction : undefined}
-            onEndTurn={isViewersTurn ? onEndTurn : undefined}
-          />
+          <div className="flex flex-col gap-2">
+            <TurnPhases
+              actionsRemaining={viewer.actionsRemaining}
+              maxActions={maxActions}
+              accent={TEAM_META[viewer.team].color}
+            />
+            <ActionBar
+              player={viewer}
+              maxActions={maxActions}
+              availability={availability}
+              onAction={isViewersTurn ? onAction : undefined}
+              onEndTurn={isViewersTurn ? onEndTurn : undefined}
+            />
+          </div>
         </footer>
       )}
     </div>

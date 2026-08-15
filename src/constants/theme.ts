@@ -89,3 +89,7 @@ export const TURN_ACTIONS: ActionMeta[] = [
 
 /** Actions granted per turn (before perks/roles modify it). */
 export const BASE_ACTIONS_PER_TURN = 3;
+
+/** Inventory slot caps (rulebook §4): a player may hold 4 perks and 2 weapons. */
+export const MAX_PERKS = 4;
+export const MAX_WEAPONS = 2;

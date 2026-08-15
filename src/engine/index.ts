@@ -19,7 +19,7 @@ export {
   isGridComplete,
   neighborIds,
 } from './rules.js';
-export { actionAvailability } from './actions.js';
+export { actionAvailability, handCardPlayable } from './actions.js';
 export type { ActionAvailability } from './actions.js';
 export {
   computeBasePower,

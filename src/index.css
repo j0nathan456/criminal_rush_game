@@ -20,9 +20,10 @@
   --color-amber: #f5b833;
   --color-teal: #3fd0c9;
 
-  /* Teams */
-  --color-civ: #3b82f6;
-  --color-crim: #ef4444;
+  /* Teams — kept in lock-step with TEAM_META in src/constants/theme.ts so the
+     Tailwind utility classes (from-civ/…, border-crim/…) match inline styles. */
+  --color-civ: #2b6cff;
+  --color-crim: #e03b3b;
 
   --font-display: "Georgia", "Times New Roman", ui-serif, serif;
   --font-sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;

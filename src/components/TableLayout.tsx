@@ -21,8 +21,10 @@ interface TableLayoutProps {
 
 /**
  * The spatial "around a table" view (wide screens only). Players ring an oval
- * with the viewer pinned to the bottom; the shared zones sit in the centre;
- * the score board and case log float in the top corners.
+ * with the viewer pinned to the bottom; the shared zones (piles, evidence, and
+ * markets) sit in the centre; the score board and case log float in the top
+ * corners. Seats layer above the corner overlays so an overlap never blocks a
+ * click.
  */
 export function TableLayout({
   state,
@@ -38,12 +40,12 @@ export function TableLayout({
   const positions = getSeatPositions(state.players.length, viewerIndex);
 
   return (
-    <div className="relative min-h-[600px] w-full">
+    <div className="relative min-h-[680px] w-full">
       {/* Oval table surface */}
-      <div className="table-surface absolute inset-x-[6%] inset-y-[4%]" aria-hidden="true" />
+      <div className="table-surface absolute inset-x-[4%] inset-y-[2%]" aria-hidden="true" />
 
-      {/* Shared zones in the literal centre of the table */}
-      <div className="absolute inset-x-[26%] inset-y-[22%] overflow-y-auto">
+      {/* Shared zones in the centre of the table (scrolls if it overflows). */}
+      <div className="absolute inset-x-[19%] inset-y-[16%] overflow-y-auto rounded-2xl bg-ink/30 p-3 ring-1 ring-line/50">
         <SharedZones
           state={state}
           viewer={viewer}
@@ -53,13 +55,21 @@ export function TableLayout({
         />
       </div>
 
-      {/* Seats around the edge */}
+      {/* Corner overlays (behind the seats). */}
+      <div className="absolute left-0 top-0 z-10 w-56">
+        <ScoreBoard scores={state.teamScores} targets={state.vpTargets} winner={state.winner} />
+      </div>
+      <div className="absolute right-0 top-0 z-10 w-64">
+        <GameLog entries={state.gameLog} />
+      </div>
+
+      {/* Seats around the edge (above overlays so they stay clickable). */}
       {state.players.map((p, i) => {
         const pos = positions[i];
         return (
           <div
             key={p.id}
-            className="absolute w-40 -translate-x-1/2 -translate-y-1/2"
+            className="absolute z-20 w-40 -translate-x-1/2 -translate-y-1/2"
             style={{ left: `${pos.xPct}%`, top: `${pos.yPct}%` }}
           >
             <PlayerSeat
@@ -73,14 +83,6 @@ export function TableLayout({
           </div>
         );
       })}
-
-      {/* Corner overlays */}
-      <div className="absolute left-0 top-0 w-64">
-        <ScoreBoard scores={state.teamScores} targets={state.vpTargets} winner={state.winner} />
-      </div>
-      <div className="absolute right-0 top-0 w-72">
-        <GameLog entries={state.gameLog} />
-      </div>
     </div>
   );
 }

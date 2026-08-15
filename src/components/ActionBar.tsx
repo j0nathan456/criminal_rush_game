@@ -44,7 +44,14 @@ export function ActionBar({ player, maxActions = BASE_ACTIONS_PER_TURN, availabi
   const teamColor = TEAM_META[player.team].color;
 
   return (
-    <section className="panel flex flex-col gap-3" aria-label="Turn actions">
+    <section
+      className="panel flex flex-col gap-3 border-l-4"
+      style={{
+        borderLeftColor: teamColor,
+        background: `linear-gradient(180deg, ${TEAM_META[player.team].soft}, transparent 140px)`,
+      }}
+      aria-label="Turn actions"
+    >
       <div className="flex items-center justify-between">
         <h2 className="panel-title">Actions</h2>
         <div className="flex items-center gap-2" title="Action points remaining this turn">
@@ -81,7 +88,7 @@ export function ActionBar({ player, maxActions = BASE_ACTIONS_PER_TURN, availabi
               disabled={disabled}
               title={title}
               onClick={onAction ? () => onAction(action) : undefined}
-              style={expensive ? { borderColor: TEAM_META.CRIMINAL.color } : undefined}
+              style={expensive ? { borderColor: 'var(--color-amber)' } : undefined}
               className={`flex flex-col items-start gap-0.5 rounded-lg border bg-panel-2 px-3 py-2 text-left
                          transition-all duration-150 enabled:hover:-translate-y-px enabled:hover:border-amber/60
                          disabled:cursor-not-allowed disabled:opacity-40
@@ -93,7 +100,7 @@ export function ActionBar({ player, maxActions = BASE_ACTIONS_PER_TURN, availabi
                 <span className="line-clamp-2 text-[11px] leading-snug text-fog">{description}</span>
               ) : null}
               <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-fog">
-                <Pips total={action.cost} filled={action.cost} color={expensive ? TEAM_META.CRIMINAL.color : teamColor} />
+                <Pips total={action.cost} filled={action.cost} color={expensive ? 'var(--color-amber)' : teamColor} />
                 {action.cost} AP
               </span>
             </button>

@@ -8,8 +8,11 @@ describe('<GameBoard />', () => {
     render(<GameBoard state={MOCK_GAME} />);
 
     expect(screen.getByText('Criminal Rush')).toBeInTheDocument();
-    // Ava is the current player (index 0) — she appears in the turn indicator.
-    expect(screen.getByText(/Current turn:/)).toBeInTheDocument();
+    // Ava is the current player (index 0) — the prominent active-player banner
+    // names her (default viewer == current player, so it reads "Your turn").
+    const banner = screen.getByLabelText('Active player');
+    expect(banner).toBeInTheDocument();
+    expect(banner).toHaveTextContent(/Ava/);
 
     // All four players have a seat.
     for (const p of MOCK_GAME.players) {

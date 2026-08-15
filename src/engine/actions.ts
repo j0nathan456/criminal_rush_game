@@ -8,6 +8,7 @@
  */
 
 import type { GameState, PlayerActionType } from '../types/game.js';
+import type { ActionCard } from '../types/cards.js';
 import { isGridComplete } from './rules.js';
 import { attackError } from './combat.js';
 
@@ -96,4 +97,31 @@ export function actionAvailability(
   }
 
   return availability;
+}
+
+/**
+ * Whether a single hand card can be played *right now*, mirroring the reducer's
+ * `playCard` gate so the hand can grey out illegal cards. Power cards resolve
+ * only inside a combat (via the combat panel, not `PLAY_CARD`); every other card
+ * is a normal turn action and cannot be played mid-combat. Off-turn, nothing in
+ * hand is playable. Ignores AP — the caller still knows `actionsRemaining`.
+ */
+export function handCardPlayable(
+  state: GameState,
+  playerIndex: number,
+  card: ActionCard,
+): ActionAvailability {
+  const player = state.players[playerIndex];
+  if (!player) return { enabled: false };
+  if (state.currentPlayerIndex !== playerIndex) {
+    return { enabled: false, reason: 'Wait for your turn.' };
+  }
+  if (card.type === 'POWER') {
+    return state.combat
+      ? { enabled: true }
+      : { enabled: false, reason: 'Power cards can only be played during combat.' };
+  }
+  // MONEY / EVENT / EVIDENCE — normal turn actions, blocked while a fight is open.
+  if (state.combat) return { enabled: false, reason: 'Resolve the current combat first.' };
+  return { enabled: true };
 }

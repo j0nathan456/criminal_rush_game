@@ -42,6 +42,7 @@ export function PlayerSeat({ player, active, isSelf, isNeighbor, targetable, onC
       style={style}
       className={`rounded-xl border border-l-4 border-line bg-panel-2/70 p-2.5 transition
         ${targetable ? 'cursor-pointer ring-2 ring-amber hover:bg-amber/10' : ''}
+        ${active && !targetable ? 'animate-turn-pulse' : ''}
         ${showNeighbor ? 'ring-1 ring-dashed ring-fog/50' : ''}`}
     >
       <div className="flex items-center gap-1.5 font-bold">
@@ -50,6 +51,14 @@ export function PlayerSeat({ player, active, isSelf, isNeighbor, targetable, onC
           {player.name}
           {isSelf ? ' (you)' : ''}
         </span>
+        {isNeighbor && (
+          <span
+            className="ml-auto shrink-0 rounded-md bg-panel px-1 text-[11px] ring-1 ring-line"
+            title="Your neighbour — in combat & trade range"
+          >
+            ⚔️🤝
+          </span>
+        )}
       </div>
       <div className="text-[13px] text-fog">{player.role.name}</div>
       <div className="mt-1.5 flex gap-3 text-[13px] tabular-nums">

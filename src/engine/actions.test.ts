@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import type { GameState, Player, RoleIdentity } from '../types/game.js';
-import type { MarketCard, Team } from '../types/cards.js';
+import type { ActionCard, MarketCard, Team } from '../types/cards.js';
 import { emptyGameState } from './reducer.js';
-import { actionAvailability } from './actions.js';
+import { actionAvailability, handCardPlayable } from './actions.js';
 
 function role(id: string, team: Team, powerlevel = 3): RoleIdentity {
   return { id, name: id, team, powerlevel, abilityName: '', abilityDescription: '' };
@@ -140,5 +140,46 @@ describe('actionAvailability — once-per-turn and resource gates', () => {
       mkPlayer({ id: 'p0', role: role('boss', 'CRIMINAL'), inventory: [perk('Bodyguard')] }),
     ]);
     expect(actionAvailability(s, 0).SELL_ITEM).toEqual({ enabled: true });
+  });
+});
+
+describe('handCardPlayable', () => {
+  const card = (type: ActionCard['type']): ActionCard => ({ id: type, name: type, description: '', type });
+
+  it('allows Money and Event cards on your turn', () => {
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('boss', 'CRIMINAL') })]);
+    expect(handCardPlayable(s, 0, card('MONEY')).enabled).toBe(true);
+    expect(handCardPlayable(s, 0, card('EVENT')).enabled).toBe(true);
+    expect(handCardPlayable(s, 0, card('EVIDENCE')).enabled).toBe(true);
+  });
+
+  it('blocks Power cards outside combat but allows them during a fight', () => {
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('boss', 'CRIMINAL') })]);
+    const blocked = handCardPlayable(s, 0, card('POWER'));
+    expect(blocked.enabled).toBe(false);
+    expect(blocked.reason).toMatch(/only be played during combat/i);
+
+    const inCombat = handCardPlayable({ ...s, combat: {} as GameState['combat'] }, 0, card('POWER'));
+    expect(inCombat.enabled).toBe(true);
+  });
+
+  it('blocks non-Power cards while a combat is unresolved', () => {
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('boss', 'CRIMINAL') })], {
+      combat: {} as GameState['combat'],
+    });
+    expect(handCardPlayable(s, 0, card('MONEY')).enabled).toBe(false);
+  });
+
+  it('blocks every card when it is not your turn', () => {
+    const s = stateWith(
+      [
+        mkPlayer({ id: 'p0', role: role('boss', 'CRIMINAL') }),
+        mkPlayer({ id: 'p1', role: role('citizen', 'CIVILIAN') }),
+      ],
+      { currentPlayerIndex: 0 },
+    );
+    const off = handCardPlayable(s, 1, card('MONEY'));
+    expect(off.enabled).toBe(false);
+    expect(off.reason).toMatch(/your turn/i);
   });
 });
