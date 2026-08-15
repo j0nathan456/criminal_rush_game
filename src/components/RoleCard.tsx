@@ -8,7 +8,7 @@ import {
   MAX_PERKS,
   MAX_WEAPONS,
 } from '../constants/theme';
-import { roleArtUrl } from '../constants/cardArt';
+import { rolePortraitUrl } from '../constants/cardArt';
 import { playerTokens } from './playerTokens';
 import { TeamIcon } from './TeamIcon';
 import { ACTIONABLE_PERKS } from './panelConstants';
@@ -49,7 +49,7 @@ export function RoleCard({
   const meta = TEAM_META[player.team];
   const statuses = (Object.keys(STATUS_META) as StatusKey[]).filter((k) => player[k]);
   const tokens = playerTokens(player);
-  const art = roleArtUrl(player.role.id);
+  const portrait = rolePortraitUrl(player.role.id);
 
   const weapons = player.inventory.filter((c) => c.type === 'WEAPON');
   const perks = player.inventory.filter((c) => c.type !== 'WEAPON');
@@ -128,20 +128,21 @@ export function RoleCard({
         </div>
       </header>
 
-      {/* The specific role's printed card image (ability text falls back for art-less roles). */}
-      {art ? (
+      {/* The specific role's snipped character portrait. */}
+      {portrait && (
         <img
-          src={art}
-          alt={`${player.role.name} role card`}
+          src={portrait}
+          alt={`${player.role.name}`}
           loading="lazy"
-          className="w-full rounded-lg border border-line bg-white"
+          className="mx-auto aspect-square w-40 rounded-lg border border-line bg-white object-cover"
         />
-      ) : (
-        <div className="rounded-lg p-2.5" style={{ background: meta.soft }}>
-          <span className="text-[13px] font-extrabold text-chalk">✨ {player.role.abilityName}</span>
-          <p className="mt-1 text-[13px] leading-snug text-fog">{player.role.abilityDescription}</p>
-        </div>
       )}
+
+      {/* Ability text — the role's actual power. */}
+      <div className="rounded-lg p-2.5" style={{ background: meta.soft }}>
+        <span className="text-[13px] font-extrabold text-chalk">✨ {player.role.abilityName}</span>
+        <p className="mt-1 text-[13px] leading-snug text-fog">{player.role.abilityDescription}</p>
+      </div>
 
       <div className="flex flex-wrap gap-2.5">
         <div className="flex flex-1 basis-[70px] flex-col gap-1 rounded-lg bg-panel-2 px-2.5 py-2">

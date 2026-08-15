@@ -86,6 +86,14 @@ export function roleArtUrl(roleId: string): string | undefined {
   return ROLE_ART.has(roleId) ? `${BASE}/roles/${roleId}.png` : undefined;
 }
 
+/**
+ * Square character portrait snipped from a role's play mat (see
+ * public/cards/roles-portrait), or undefined if the role has no art.
+ */
+export function rolePortraitUrl(roleId: string): string | undefined {
+  return ROLE_ART.has(roleId) ? `${BASE}/roles-portrait/${roleId}.png` : undefined;
+}
+
 /** Full-face art URL for a draw-pile or market card, or undefined if none. */
 export function cardArtUrl(card: AnyCard): string | undefined {
   const s = resolve(card.name);
