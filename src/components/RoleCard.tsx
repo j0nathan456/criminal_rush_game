@@ -1,11 +1,14 @@
 import type { Player } from '../types/game';
 import { TEAM_META, STATUS_META, BASE_ACTIONS_PER_TURN } from '../constants/theme';
 import { roleArtUrl } from '../constants/cardArt';
+import { playerTokens } from './playerTokens';
 
 interface RoleCardProps {
   player: Player;
   /** True when it is this player's turn (drives the action-cube tracker). */
   active?: boolean;
+  /** Actions granted this turn (role-adjusted); how many cubes to draw. */
+  maxActions?: number;
 }
 
 type StatusKey = keyof typeof STATUS_META;
@@ -14,9 +17,10 @@ type StatusKey = keyof typeof STATUS_META;
  * A player's role card (rulebook §4): identity, team, base PL, the ability (or
  * printed role mat), and live Power / Money / Actions trackers.
  */
-export function RoleCard({ player, active }: RoleCardProps) {
+export function RoleCard({ player, active, maxActions = BASE_ACTIONS_PER_TURN }: RoleCardProps) {
   const meta = TEAM_META[player.team];
   const statuses = (Object.keys(STATUS_META) as StatusKey[]).filter((k) => player[k]);
+  const tokens = playerTokens(player);
   const art = roleArtUrl(player.role.id);
 
   return (
@@ -70,7 +74,7 @@ export function RoleCard({ player, active }: RoleCardProps) {
         <div className="flex flex-1 basis-[70px] flex-col gap-1 rounded-lg bg-panel-2 px-2.5 py-2">
           <span className="text-[11px] uppercase tracking-wide text-fog">Actions</span>
           <span className="flex gap-1.5">
-            {Array.from({ length: BASE_ACTIONS_PER_TURN }, (_, i) => (
+            {Array.from({ length: Math.max(maxActions, player.actionsRemaining) }, (_, i) => (
               <span
                 key={i}
                 className="h-4 w-4 rounded border-2"
@@ -85,11 +89,17 @@ export function RoleCard({ player, active }: RoleCardProps) {
         </div>
       </div>
 
-      {statuses.length > 0 && (
+      {(statuses.length > 0 || tokens.length > 0) && (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {statuses.map((key) => (
             <span key={key} className="chip text-white" style={{ background: STATUS_META[key].color }}>
               {STATUS_META[key].icon} {STATUS_META[key].label}
+            </span>
+          ))}
+          {tokens.map((t) => (
+            <span key={t.key} title={t.hint} className="chip text-white" style={{ background: t.color }}>
+              {t.icon} {t.label}
+              {t.count && t.count > 1 ? ` ×${t.count}` : ''}
             </span>
           ))}
         </div>

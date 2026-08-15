@@ -49,6 +49,17 @@ export const STATUS_META = {
 } as const;
 
 /**
+ * Temporary token badges tracked on the Player type. Unlike STATUS_META these
+ * are counters/one-shots (virus stacks, a pending coffee, a traffic jam) rather
+ * than long-lived status, so they render as a separate set.
+ */
+export const TOKEN_META = {
+  virus: { label: 'Virus', color: '#7c3aed', icon: '🦠', hint: 'Costs an action at the start of your next turn.' },
+  traffic: { label: 'Traffic', color: '#f97316', icon: '🚧', hint: 'Trading with this player costs 2 actions until cleared.' },
+  coffee: { label: 'Coffee', color: '#b45309', icon: '☕', hint: '+1 action and a draw at the start of your next turn.' },
+} as const;
+
+/**
  * The turn's 8 action choices (rulebook §3), each mapped to the engine action
  * it dispatches, its AP cost, and whether it is limited to once per turn.
  * The ActionBar renders straight from this list.

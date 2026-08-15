@@ -13,8 +13,10 @@ describe('<ScoreBoard />', () => {
     );
 
     expect(screen.getByText('Civilians')).toBeInTheDocument();
-    expect(screen.getByText('2/4')).toBeInTheDocument();
-    expect(screen.getByText('3/5')).toBeInTheDocument();
+    expect(screen.getByText('2 VP')).toBeInTheDocument();
+    expect(screen.getByText('goal: 4')).toBeInTheDocument();
+    expect(screen.getByText('3 VP')).toBeInTheDocument();
+    expect(screen.getByText('goal: 5')).toBeInTheDocument();
     expect(screen.queryByText(/win!/)).not.toBeInTheDocument();
   });
 

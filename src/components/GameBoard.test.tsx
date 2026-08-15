@@ -17,13 +17,17 @@ describe('<GameBoard />', () => {
     }
   });
 
-  it('shows the Black Market only when the viewer is a Criminal', () => {
-    // Viewer 0 (Ava) is a Civilian → no Black Market.
-    const { rerender } = render(<GameBoard state={MOCK_GAME} viewerIndex={0} />);
-    expect(screen.queryByText('Black Market')).not.toBeInTheDocument();
+  it('always shows the Black Market regardless of the viewer team', () => {
+    // The board renders both the table layout and the stacked fallback (CSS
+    // toggles visibility), so the Black Market appears in more than one place.
 
-    // Viewer 1 (Ben) is a Criminal → Black Market visible.
+    // Viewer 0 (Ava) is a Civilian → Black Market still visible (observe-only).
+    const { rerender } = render(<GameBoard state={MOCK_GAME} viewerIndex={0} />);
+    expect(screen.getAllByText('Black Market').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/you can observe/i).length).toBeGreaterThan(0);
+
+    // Viewer 1 (Ben) is a Criminal → Black Market visible for them too.
     rerender(<GameBoard state={MOCK_GAME} viewerIndex={1} />);
-    expect(screen.getByText('Black Market')).toBeInTheDocument();
+    expect(screen.getAllByText('Black Market').length).toBeGreaterThan(0);
   });
 });

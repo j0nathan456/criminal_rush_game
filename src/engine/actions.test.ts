@@ -1,0 +1,144 @@
+import { describe, it, expect } from 'vitest';
+import type { GameState, Player, RoleIdentity } from '../types/game.js';
+import type { MarketCard, Team } from '../types/cards.js';
+import { emptyGameState } from './reducer.js';
+import { actionAvailability } from './actions.js';
+
+function role(id: string, team: Team, powerlevel = 3): RoleIdentity {
+  return { id, name: id, team, powerlevel, abilityName: '', abilityDescription: '' };
+}
+
+function mkPlayer(over: Partial<Player> & { id: string; role: RoleIdentity }): Player {
+  return {
+    name: over.id,
+    team: over.role.team,
+    hand: [],
+    inventory: [],
+    money: 5,
+    powerLevel: over.role.powerlevel,
+    actionsRemaining: 3,
+    hasPurchasedFromMarket: false,
+    hasUsedRoleAbility: false,
+    hasAttacked: false,
+    isInjured: false,
+    isExposed: false,
+    isCaptured: false,
+    ...over,
+  };
+}
+
+function stateWith(players: Player[], over: Partial<GameState> = {}): GameState {
+  return { ...emptyGameState(), players, currentPlayerIndex: 0, vpTargets: { CIVILIAN: 9, CRIMINAL: 9 }, ...over };
+}
+
+const fullGrid = () => ({
+  TIME: { isFilled: true, cardName: 'x' },
+  MEANS: { isFilled: true, cardName: 'x' },
+  LOCATION: { isFilled: true, cardName: 'x' },
+  MOTIVE: { isFilled: true, cardName: 'x' },
+});
+
+const perk = (name: string): MarketCard => ({ id: name, name, description: '', type: 'PERK', cost: 2, source: 'PUBLIC' });
+
+describe('actionAvailability — Combat', () => {
+  it('is enabled when a legal target exists (Criminal vs unhurt Civilian neighbor)', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('boss', 'CRIMINAL') }),
+      mkPlayer({ id: 'p1', role: role('citizen', 'CIVILIAN') }),
+    ]);
+    expect(actionAvailability(s, 0).COMBAT).toEqual({ enabled: true });
+  });
+
+  it('is disabled with a reason when no valid target exists (Civilian, no exposed Criminal)', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('detective', 'CIVILIAN') }),
+      mkPlayer({ id: 'p1', role: role('boss', 'CRIMINAL') }), // not exposed → cannot be attacked
+    ]);
+    const combat = actionAvailability(s, 0).COMBAT;
+    expect(combat?.enabled).toBe(false);
+    expect(combat?.reason).toMatch(/no valid target/i);
+  });
+
+  it('is disabled once the player has attacked this turn', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('boss', 'CRIMINAL'), hasAttacked: true }),
+      mkPlayer({ id: 'p1', role: role('citizen', 'CIVILIAN') }),
+    ]);
+    const combat = actionAvailability(s, 0).COMBAT;
+    expect(combat?.enabled).toBe(false);
+    expect(combat?.reason).toMatch(/already attacked/i);
+  });
+});
+
+describe('actionAvailability — Expose (SPECIAL_GOAL)', () => {
+  it('is disabled while the evidence grid is incomplete', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('detective', 'CIVILIAN') }),
+      mkPlayer({ id: 'p1', role: role('boss', 'CRIMINAL') }),
+    ]);
+    const goal = actionAvailability(s, 0).SPECIAL_GOAL;
+    expect(goal?.enabled).toBe(false);
+    expect(goal?.reason).toMatch(/grid is not full/i);
+  });
+
+  it('is enabled with a full grid and an exposable Criminal', () => {
+    const s = stateWith(
+      [
+        mkPlayer({ id: 'p0', role: role('detective', 'CIVILIAN') }),
+        mkPlayer({ id: 'p1', role: role('boss', 'CRIMINAL') }),
+      ],
+      { evidenceGrid: fullGrid() },
+    );
+    expect(actionAvailability(s, 0).SPECIAL_GOAL).toEqual({ enabled: true });
+  });
+
+  it('is disabled when the grid is full but every Criminal is already exposed', () => {
+    const s = stateWith(
+      [
+        mkPlayer({ id: 'p0', role: role('detective', 'CIVILIAN') }),
+        mkPlayer({ id: 'p1', role: role('boss', 'CRIMINAL'), isExposed: true }),
+      ],
+      { evidenceGrid: fullGrid() },
+    );
+    const goal = actionAvailability(s, 0).SPECIAL_GOAL;
+    expect(goal?.enabled).toBe(false);
+    expect(goal?.reason).toMatch(/no criminal left/i);
+  });
+
+  it('is always available for Criminals (Expand Network guidance)', () => {
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('boss', 'CRIMINAL') })]);
+    expect(actionAvailability(s, 0).SPECIAL_GOAL).toEqual({ enabled: true });
+  });
+});
+
+describe('actionAvailability — once-per-turn and resource gates', () => {
+  it('disables Buy after purchasing and Role Action after using it', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('boss', 'CRIMINAL'), hasPurchasedFromMarket: true, hasUsedRoleAbility: true }),
+    ]);
+    const a = actionAvailability(s, 0);
+    expect(a.PURCHASE_MARKET?.enabled).toBe(false);
+    expect(a.ROLE_ABILITY?.enabled).toBe(false);
+  });
+
+  it('disables Role Action for a captured player', () => {
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('boss', 'CRIMINAL'), isCaptured: true })]);
+    expect(actionAvailability(s, 0).ROLE_ABILITY?.enabled).toBe(false);
+  });
+
+  it('disables Play Card with an empty hand and Sell with no sellable items', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('boss', 'CRIMINAL'), hand: [], inventory: [] }),
+    ]);
+    const a = actionAvailability(s, 0);
+    expect(a.PLAY_CARD?.enabled).toBe(false);
+    expect(a.SELL_ITEM?.enabled).toBe(false);
+  });
+
+  it('enables Sell when a sellable item is present', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('boss', 'CRIMINAL'), inventory: [perk('Bodyguard')] }),
+    ]);
+    expect(actionAvailability(s, 0).SELL_ITEM).toEqual({ enabled: true });
+  });
+});

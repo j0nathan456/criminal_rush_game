@@ -1,43 +1,101 @@
 import type { Player, PlayerActionType } from '../types/game';
-import { TURN_ACTIONS } from '../constants/theme';
+import type { ActionAvailability } from '../engine';
+import { TURN_ACTIONS, TEAM_META, BASE_ACTIONS_PER_TURN } from '../constants/theme';
 import type { ActionMeta } from '../constants/theme';
 
 interface ActionBarProps {
   player: Player;
+  /** Actions granted this turn (role/perk-adjusted); drives the AP tracker. */
+  maxActions?: number;
+  /** Per-action legality from the engine; missing entries are treated as enabled. */
+  availability?: Partial<Record<PlayerActionType, ActionAvailability>>;
   onAction?: (action: ActionMeta) => void;
   onEndTurn?: () => void;
-  /** Action types already used this turn (for once-per-turn limits). */
-  usedThisTurn?: PlayerActionType[];
+}
+
+/** A row of small pips, `filled` of `total` lit in the given color. */
+function Pips({ total, filled, color }: { total: number; filled: number; color: string }) {
+  return (
+    <span className="flex gap-1">
+      {Array.from({ length: total }, (_, i) => (
+        <span
+          key={i}
+          className="h-2.5 w-2.5 rounded-full border"
+          style={
+            i < filled
+              ? { background: color, borderColor: color }
+              : { borderColor: 'var(--color-line)' }
+          }
+        />
+      ))}
+    </span>
+  );
 }
 
 /**
  * The turn action bar (rulebook §3). Renders the team-appropriate choices from
- * TURN_ACTIONS and disables any the player can't afford or has already used.
+ * TURN_ACTIONS, shows the player's remaining AP, marks each action's AP cost as
+ * pips (so the 2-AP Combat reads as distinct), names the actual role ability,
+ * and disables any action the player can't afford or that the engine reports as
+ * currently illegal (with the reason surfaced as a tooltip).
  */
-export function ActionBar({ player, onAction, onEndTurn, usedThisTurn = [] }: ActionBarProps) {
+export function ActionBar({ player, maxActions = BASE_ACTIONS_PER_TURN, availability = {}, onAction, onEndTurn }: ActionBarProps) {
   const actions = TURN_ACTIONS.filter((a) => !a.team || a.team === player.team);
+  const teamColor = TEAM_META[player.team].color;
 
   return (
     <section className="panel flex flex-col gap-3" aria-label="Turn actions">
+      <div className="flex items-center justify-between">
+        <h2 className="panel-title">Actions</h2>
+        <div className="flex items-center gap-2" title="Action points remaining this turn">
+          <Pips total={Math.max(maxActions, player.actionsRemaining)} filled={player.actionsRemaining} color={teamColor} />
+          <span className="text-sm font-bold tabular-nums text-chalk">
+            {player.actionsRemaining}
+            <span className="text-fog"> / {maxActions} AP</span>
+          </span>
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-2">
         {actions.map((action) => {
+          const legal = availability[action.type] ?? { enabled: true };
           const tooExpensive = action.cost > player.actionsRemaining;
-          const alreadyUsed = Boolean(action.oncePerTurn) && usedThisTurn.includes(action.type);
-          const disabled = tooExpensive || alreadyUsed || !onAction;
+          const disabled = tooExpensive || !legal.enabled || !onAction;
+          const expensive = action.cost > 1;
+
+          // ROLE_ABILITY names the player's actual ability instead of a generic label.
+          const isRole = action.type === 'ROLE_ABILITY';
+          const label = isRole ? player.role.abilityName || action.label : action.label;
+          const description = isRole ? player.role.abilityDescription : undefined;
+
+          const title = !legal.enabled && legal.reason
+            ? `${label} — ${legal.reason}`
+            : description
+              ? `${label} — ${description}`
+              : action.hint;
+
           return (
             <button
               key={`${action.type}-${action.label}`}
               type="button"
               disabled={disabled}
-              title={alreadyUsed ? `${action.hint} (already used)` : action.hint}
+              title={title}
               onClick={onAction ? () => onAction(action) : undefined}
-              className="flex flex-col items-start gap-0.5 rounded-lg border border-line bg-panel-2 px-3 py-2 text-left
+              style={expensive ? { borderColor: TEAM_META.CRIMINAL.color } : undefined}
+              className={`flex flex-col items-start gap-0.5 rounded-lg border bg-panel-2 px-3 py-2 text-left
                          transition-all duration-150 enabled:hover:-translate-y-px enabled:hover:border-amber/60
-                         disabled:cursor-not-allowed disabled:opacity-40"
+                         disabled:cursor-not-allowed disabled:opacity-40
+                         ${expensive ? 'border-l-[3px]' : 'border-line'}`}
             >
               <span className="text-lg leading-none" aria-hidden="true">{action.icon}</span>
-              <span className="text-[13px] font-bold text-chalk">{action.label}</span>
-              <span className="text-[11px] text-fog">{action.cost} AP</span>
+              <span className="text-[13px] font-bold text-chalk">{label}</span>
+              {description ? (
+                <span className="line-clamp-2 text-[11px] leading-snug text-fog">{description}</span>
+              ) : null}
+              <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-fog">
+                <Pips total={action.cost} filled={action.cost} color={expensive ? TEAM_META.CRIMINAL.color : teamColor} />
+                {action.cost} AP
+              </span>
             </button>
           );
         })}

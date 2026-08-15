@@ -34,12 +34,13 @@ export function ScoreBoard({ scores, targets, winner }: ScoreBoardProps) {
           const score = scores[team];
           return (
             <div key={team} className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
+              <div className="flex items-baseline justify-between">
                 <span className="text-sm font-bold" style={{ color: meta.color }}>
                   <span aria-hidden="true">{meta.icon}</span> {meta.label}
                 </span>
-                <span className="text-xs tabular-nums text-fog">
-                  {score}/{target}
+                <span className="tabular-nums">
+                  <span className="text-base font-extrabold" style={{ color: meta.color }}>{score} VP</span>
+                  <span className="ml-1.5 text-xs text-fog">goal: {target}</span>
                 </span>
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -65,6 +66,12 @@ export function ScoreBoard({ scores, targets, winner }: ScoreBoardProps) {
           );
         })}
       </div>
+
+      <p className="mt-3 flex items-center gap-1.5 border-t border-line/60 pt-2 text-[11px] text-fog">
+        <span className="h-3 w-3 rounded-full border-2" style={{ borderColor: 'var(--color-line)', background: 'var(--color-panel-2)' }} />
+        <span className="h-3 w-3 rounded-full border-2 border-amber bg-amber" />
+        each dot = 1 VP toward that team's goal
+      </p>
     </section>
   );
 }
