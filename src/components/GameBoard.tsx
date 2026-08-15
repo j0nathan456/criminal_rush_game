@@ -203,7 +203,7 @@ export function GameBoard({
           row 1  Score Board · Evidence Grid · Case Log
           row 2  Players     · Markets       · Deck/Discard
           row 3  Profile     · Hand          · Actions        */}
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,3fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,3fr)_minmax(0,1fr)]">
         {/* Row 1 */}
         <ScoreBoard scores={state.teamScores} targets={state.vpTargets} winner={state.winner} />
         <main className="min-w-0">
@@ -222,6 +222,7 @@ export function GameBoard({
           targeting={Boolean(targeting)}
           isTargetable={isTargetable}
           onSelectTarget={onSelectTarget}
+          defaultOpen
         />
         <div className="min-w-0">
           <Markets state={state} viewer={viewer} isViewersTurn={isViewersTurn} onBuy={onBuy} />

@@ -14,11 +14,11 @@ export function GameLog({ entries, newestFirst = true }: GameLogProps) {
   const ordered = newestFirst ? [...entries].reverse() : entries;
 
   return (
-    <section className="panel" aria-label="Game log">
+    <section className="panel flex min-h-0 flex-col overflow-hidden" aria-label="Game log">
       <header className="panel-head">
         <h2 className="panel-title">Case Log</h2>
       </header>
-      <ol className="flex max-h-[340px] flex-col gap-1.5 overflow-y-auto pr-1">
+      <ol className="flex min-h-0 max-h-[340px] flex-1 flex-col gap-1.5 overflow-y-auto pr-1">
         {ordered.map((entry, i) => (
           <motion.li
             key={`${ordered.length - i}-${entry}`}

@@ -11,6 +11,8 @@ interface RosterProps {
   targeting: boolean;
   isTargetable: (player: Player) => boolean;
   onSelectTarget?: (playerId: string) => void;
+  /** Whether the roster starts expanded. */
+  defaultOpen?: boolean;
 }
 
 /**
@@ -18,8 +20,8 @@ interface RosterProps {
  * Each entry is a PlayerSeat (click for full detail). While the board is asking
  * for a target the roster force-opens and its entries become the target picker.
  */
-export function Roster({ players, currentPlayerIndex, viewerIndex, targeting, isTargetable, onSelectTarget }: RosterProps) {
-  const [open, setOpen] = useState(false);
+export function Roster({ players, currentPlayerIndex, viewerIndex, targeting, isTargetable, onSelectTarget, defaultOpen = false }: RosterProps) {
+  const [open, setOpen] = useState(defaultOpen);
   const show = open || targeting;
 
   return (
