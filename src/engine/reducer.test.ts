@@ -359,13 +359,26 @@ describe('gameReducer — USE_ROLE_ABILITY (Civilians)', () => {
     expect(next.players[1].hasBodyguardToken).toBe(true);
   });
 
-  it('Witness recovers a discarded Evidence card', () => {
+  it('Witness takes a chosen Evidence card from the discard and gives it to a teammate', () => {
+    const s = stateWith(
+      [
+        mkPlayer({ id: 'p0', role: role('witness', 'CIVILIAN') }),
+        mkPlayer({ id: 'p1', role: role('mayor', 'CIVILIAN') }),
+      ],
+      { discardPile: [evidence('e1', ['TIME']), evidence('e2', ['MEANS'])] },
+    );
+    const next = gameReducer(s, { type: 'USE_ROLE_ABILITY', payload: { cardId: 'e2', targetId: 'p1' } });
+    expect(next.players[0].hand).toHaveLength(0); // Witness doesn't keep it themselves
+    expect(next.players[1].hand.map((c) => c.id)).toEqual(['e2']); // teammate chose card, not just top-of-pile
+    expect(next.discardPile.map((c) => c.id)).toEqual(['e1']);
+  });
+
+  it('Witness refuses to give the card to themselves', () => {
     const s = stateWith([mkPlayer({ id: 'p0', role: role('witness', 'CIVILIAN') })], {
       discardPile: [evidence('e1', ['TIME'])],
     });
-    const next = gameReducer(s, { type: 'USE_ROLE_ABILITY', payload: { mode: 'TAKE' } });
-    expect(next.players[0].hand).toHaveLength(1);
-    expect(next.discardPile).toHaveLength(0);
+    const next = gameReducer(s, { type: 'USE_ROLE_ABILITY', payload: { cardId: 'e1', targetId: 'p0' } });
+    expect(next.discardPile).toHaveLength(1);
   });
 });
 

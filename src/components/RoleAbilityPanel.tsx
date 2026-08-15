@@ -145,16 +145,19 @@ export function RoleAbilityPanel({
       body = (<><p>Give the Bodyguard token to a teammate:</p>{playerRow(teammates)}</>);
       canSubmit = !!targetId;
       break;
-    case 'witness':
+    case 'witness': {
+      const discardedEvidence = state.discardPile.filter((c) => c.type === 'EVIDENCE');
       body = (
         <>
-          <p>Testimony:</p>
-          {modeRow([{ value: 'TAKE', label: 'Recover Evidence from discard' }, { value: 'PLAY', label: 'Play Evidence from hand' }])}
-          {mode === 'PLAY' && (<><p className="cr-role__sub">Which Evidence card?</p>{cardRow(ownEvidence)}<p className="cr-role__sub">Into which category?</p>{categoryRow()}</>)}
+          <p>Take an Evidence card from the discard pile:</p>
+          {cardRow(discardedEvidence, 'No Evidence in the discard pile.')}
+          <p className="cr-role__sub">Give it to which teammate?</p>
+          {playerRow(teammates)}
         </>
       );
-      canSubmit = mode === 'TAKE' || (mode === 'PLAY' && !!cardId && !!category);
+      canSubmit = !!cardId && !!targetId;
       break;
+    }
     case 'robber':
       body = (
         <>

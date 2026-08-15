@@ -76,19 +76,18 @@ export interface TradeItem {
 /**
  * Parameters for the current player's role Action. Which fields matter depends
  * on the player's role (see applyRoleAbility):
- *  - cardId    — a Market card (Collector/Crime Lord/Evil Scientist/Smuggler) or
- *                a hand card (Sheriff evidence, Forger evidence, Nurse discard,
- *                Witness evidence).
- *  - targetId  — the affected player (Sheriff/Robber/Arsonist/Bodyguard/Nurse).
- *  - category  — the Evidence grid slot to fill/clear (Sheriff/Forger/Witness).
- *  - mode      — a sub-choice: Robber 'MONEY'|'CARD', Arsonist 'MONEY'|'DISCARD',
- *                Witness 'TAKE'|'PLAY'.
+ *  - cardId    — a Market card (Collector/Crime Lord/Evil Scientist/Smuggler), a
+ *                hand card (Sheriff evidence, Forger evidence, Nurse discard), or
+ *                a discard-pile card (Witness evidence).
+ *  - targetId  — the affected player (Sheriff/Robber/Arsonist/Bodyguard/Nurse/Witness).
+ *  - category  — the Evidence grid slot to fill/clear (Sheriff/Forger).
+ *  - mode      — a sub-choice: Robber 'MONEY'|'CARD', Arsonist 'MONEY'|'DISCARD'.
  */
 export interface RoleAbilityPayload {
   cardId?: string;
   targetId?: string;
   category?: EvidenceCategory;
-  mode?: 'MONEY' | 'CARD' | 'DISCARD' | 'TAKE' | 'PLAY';
+  mode?: 'MONEY' | 'CARD' | 'DISCARD';
 }
 
 /**
@@ -926,9 +925,9 @@ function passCombat(state: GameState, side: CombatSide): GameState {
  * Action and are handled elsewhere (turn/combat hooks); calling this on one is
  * a no-op with an explanatory log.
  *
- * Reactive abilities (Nurse's Triage, Witness's Testimony) are modeled as
- * on-turn Actions here rather than out-of-turn reactions, since this reducer
- * has no interrupt/priority system.
+ * Nurse's Triage (heal an injured teammate) is modeled as an on-turn Action
+ * here rather than an out-of-turn reaction, since this reducer has no
+ * interrupt/priority system.
  */
 function applyRoleAbility(
   state: GameState,
@@ -1012,23 +1011,15 @@ function applyRoleAbility(
     }
 
     case 'witness': {
-      // Testimony: play an Evidence card, or recover one from the discard.
-      if (mode === 'PLAY') {
-        const card = player.hand.find((c) => c.id === cardId);
-        if (!card || card.type !== 'EVIDENCE') return log(state, 'Witness must play an Evidence card from hand.');
-        if (!category || !card.evidenceCategories?.includes(category)) return log(state, `${card.name} cannot satisfy ${category}.`);
-        if (state.evidenceGrid[category].isFilled) return log(state, `${category} is already filled.`);
-        let s = updatePlayer(state, idx, (p) => ({ ...p, hand: p.hand.filter((c) => c.id !== cardId) }));
-        s = placeEvidence(s, card, category, player);
-        return log(spend(s), `${player.name} (Witness) plays ${card.name} into ${category}.`);
+      // Testimony: pick any Evidence card out of the discard pile and give it to a teammate.
+      if (!target || target.team !== 'CIVILIAN' || target.id === player.id) {
+        return log(state, 'Witness must give the card to a Civilian teammate.');
       }
-      const fromTop = [...state.discardPile].reverse().findIndex((c) => c.type === 'EVIDENCE');
-      if (fromTop < 0) return log(state, 'There is no discarded Evidence to take.');
-      const realIndex = state.discardPile.length - 1 - fromTop;
-      const card = state.discardPile[realIndex];
-      let s: GameState = { ...state, discardPile: state.discardPile.filter((_, i) => i !== realIndex) };
-      s = updatePlayer(s, idx, (p) => ({ ...p, hand: [...p.hand, card] }));
-      return log(spend(s), `${player.name} (Witness) recovers ${card.name} from the discard.`);
+      const card = state.discardPile.find((c) => c.id === cardId && c.type === 'EVIDENCE');
+      if (!card) return log(state, 'That Evidence card is not in the discard pile.');
+      let s: GameState = { ...state, discardPile: state.discardPile.filter((c) => c.id !== cardId) };
+      s = updatePlayer(s, targetIndex, (p) => ({ ...p, hand: [...p.hand, card] }));
+      return log(spend(s), `${player.name} (Witness) pulls ${card.name} from the discard and gives it to ${target.name}.`);
     }
 
     // --- Criminals -----------------------------------------------------------

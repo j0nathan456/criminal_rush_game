@@ -48,7 +48,7 @@ export const ROLES: RoleIdentity[] = [
   {
     id: 'witness', name: 'Witness', team: 'CIVILIAN', powerlevel: 3,
     abilityName: 'Testimony',
-    abilityDescription: 'When a teammate is injured, take 1 discarded Evidence card into your hand OR play 1 Evidence card from your hand.',
+    abilityDescription: 'Action: Take 1 Evidence card from the discard pile and give it to a teammate.',
   },
 
   // --- Criminals ---
