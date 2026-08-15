@@ -8,7 +8,6 @@ import {
   MAX_PERKS,
   MAX_WEAPONS,
 } from '../constants/theme';
-import { roleArtUrl } from '../constants/cardArt';
 import { playerTokens } from './playerTokens';
 import { ACTIONABLE_PERKS } from './panelConstants';
 
@@ -48,7 +47,6 @@ export function RoleCard({
   const meta = TEAM_META[player.team];
   const statuses = (Object.keys(STATUS_META) as StatusKey[]).filter((k) => player[k]);
   const tokens = playerTokens(player);
-  const avatar = roleArtUrl(player.role.id);
 
   const weapons = player.inventory.filter((c) => c.type === 'WEAPON');
   const perks = player.inventory.filter((c) => c.type !== 'WEAPON');
@@ -109,23 +107,12 @@ export function RoleCard({
       className={`panel flex min-w-[260px] flex-1 flex-col gap-3 border-l-4 ${active ? 'animate-turn-pulse' : ''}`}
     >
       <header className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          {avatar && (
-            <img
-              src={avatar}
-              alt=""
-              loading="lazy"
-              className="h-11 w-11 shrink-0 rounded-lg border-2 bg-white object-cover"
-              style={{ borderColor: meta.color }}
-            />
-          )}
-          <div>
-            <div className="text-xl font-extrabold leading-tight" style={{ color: meta.color }}>
-              {player.role.name}
-            </div>
-            <div className="text-[13px] text-fog">
-              {meta.icon} {meta.label} · Base PL {player.role.powerlevel}
-            </div>
+        <div>
+          <div className="text-xl font-extrabold leading-tight" style={{ color: meta.color }}>
+            {player.role.name}
+          </div>
+          <div className="text-[13px] text-fog">
+            {meta.icon} {meta.label} · Base PL {player.role.powerlevel}
           </div>
         </div>
         <div className="text-right text-sm font-bold">

@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Player } from '../types/game';
 import { TEAM_META, STATUS_META } from '../constants/theme';
-import { roleArtUrl } from '../constants/cardArt';
 import { playerTokens } from './playerTokens';
 
 interface PlayerSeatProps {
@@ -29,7 +28,6 @@ export function PlayerSeat({ player, active, isSelf, isNeighbor, targetable, onC
   const meta = TEAM_META[player.team];
   const statuses = (Object.keys(STATUS_META) as StatusKey[]).filter((k) => player[k]);
   const tokens = playerTokens(player);
-  const avatar = roleArtUrl(player.role.id);
   const selectsTarget = Boolean(onClick) && targetable;
   // The active-player highlight wins; a quieter dashed accent marks neighbours.
   const showNeighbor = isNeighbor && !active && !targetable;
@@ -63,17 +61,7 @@ export function PlayerSeat({ player, active, isSelf, isNeighbor, targetable, onC
           ${active && !targetable ? 'animate-turn-pulse' : ''}
           ${showNeighbor ? 'ring-1 ring-dashed ring-fog/50' : ''}`}
       >
-        {avatar ? (
-          <img
-            src={avatar}
-            alt=""
-            loading="lazy"
-            className="h-8 w-8 shrink-0 rounded-md border bg-white object-cover"
-            style={{ borderColor: meta.color }}
-          />
-        ) : (
-          <span className="text-lg" aria-hidden="true">{meta.icon}</span>
-        )}
+        <span className="text-lg" aria-hidden="true">{meta.icon}</span>
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1 font-bold">
             <span className="truncate">

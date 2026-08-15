@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ActionCard, MarketCard, AnyCard } from '../types/cards';
 import { CARD_TYPE_META, MARKET_TYPE_META, CATEGORY_META } from '../constants/theme';
+import { cardArtUrl } from '../constants/cardArt';
 import { cardHover } from '../ui/motion';
 
 function isMarketCard(card: AnyCard): card is MarketCard {
@@ -17,8 +18,7 @@ function typeMeta(card: AnyCard) {
 
 /**
  * Every card renders at one fixed size and 5:7 aspect ratio so hands and rows
- * stay visually uniform. Cards are text-only (no printed art) so effect text is
- * always readable.
+ * stay visually uniform whether a card shows printed art or the CSS fallback.
  */
 const CARD_SIZE = 'w-[140px] aspect-[5/7]';
 
@@ -40,9 +40,9 @@ interface CardProps {
 }
 
 /**
- * A single game card (draw-pile action card or market card), rendered as a
- * text card with a type-coded border so Power/Evidence/Money/Event read at a
- * glance. On `preview` an enlarged, readable copy floats above it while hovered.
+ * A single game card (draw-pile action card or market card). Cards with printed
+ * art render full-face; the rest use the noir CSS card. Either way the border is
+ * color-coded by type; on `preview` an enlarged copy floats above it on hover.
  */
 export function Card({ card, faceDown, selected, disabled, dimmed, reason, preview, onClick }: CardProps) {
   const [hovered, setHovered] = useState(false);
@@ -60,6 +60,7 @@ export function Card({ card, faceDown, selected, disabled, dimmed, reason, previ
   const market = isMarketCard(card);
   const meta = typeMeta(card);
   const clickable = Boolean(onClick) && !disabled;
+  const art = cardArtUrl(card);
 
   const motionProps = clickable ? cardHover : {};
   const ring = selected ? 'ring-2 ring-amber ring-offset-2 ring-offset-ink' : '';
@@ -67,7 +68,24 @@ export function Card({ card, faceDown, selected, disabled, dimmed, reason, previ
   const typeBorder: React.CSSProperties = { borderColor: meta.color };
   const title = reason ? `${card.name} — ${reason}` : `${card.name} — ${card.description}`;
 
-  const button = (
+  const button = art ? (
+    <motion.button
+      type="button"
+      {...motionProps}
+      disabled={disabled || !onClick}
+      onClick={clickable ? () => onClick!(card) : undefined}
+      title={title}
+      style={typeBorder}
+      className={`relative ${CARD_SIZE} overflow-hidden rounded-xl border-2 bg-white shadow-noir ${ring} ${dim}`}
+    >
+      <img src={art} alt={card.name} loading="lazy" className="block h-full w-full object-contain" />
+      {market && (
+        <span className="absolute right-1 top-1 rounded-md px-1.5 text-xs font-extrabold text-ink" style={{ background: meta.color }}>
+          ${(card as MarketCard).cost}
+        </span>
+      )}
+    </motion.button>
+  ) : (
     <motion.button
       type="button"
       {...motionProps}
@@ -112,7 +130,7 @@ export function Card({ card, faceDown, selected, disabled, dimmed, reason, previ
     <div className="relative" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
       {button}
       <AnimatePresence>
-        {hovered && <CardPreview card={card} meta={meta} />}
+        {hovered && <CardPreview card={card} art={art} meta={meta} />}
       </AnimatePresence>
     </div>
   );
@@ -121,9 +139,11 @@ export function Card({ card, faceDown, selected, disabled, dimmed, reason, previ
 /** An enlarged, readable copy of a card, floated above it on hover. */
 function CardPreview({
   card,
+  art,
   meta,
 }: {
   card: AnyCard;
+  art: string | undefined;
   meta: { label: string; color: string; icon: string };
 }) {
   const market = isMarketCard(card);
@@ -138,6 +158,7 @@ function CardPreview({
                  rounded-2xl border-2 bg-panel p-3 shadow-noir"
       style={{ borderColor: meta.color }}
     >
+      {art && <img src={art} alt="" className="mb-2 max-h-56 w-full rounded-lg bg-white object-contain" />}
       <div className="flex items-center justify-between text-xs font-bold">
         <span style={{ color: meta.color }}>
           <span aria-hidden="true">{meta.icon}</span> {meta.label}

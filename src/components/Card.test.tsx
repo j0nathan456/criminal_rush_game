@@ -10,10 +10,11 @@ const evidence: ActionCard = {
   type: 'EVIDENCE', evidenceCategories: ['MEANS', 'LOCATION'],
 };
 
-// Signal Jammer has no printed art, so it renders via the CSS card path.
-const noArtWeapon: MarketCard = {
-  id: 'm0', name: 'Signal Jammer', description: '+2 power.',
-  cost: 5, source: 'PUBLIC', type: 'WEAPON',
+// A synthetic name with no printed art (every real card now has a face), so it
+// exercises the CSS card fallback path rather than a full-face image.
+const noArtCard: MarketCard = {
+  id: 'm0', name: 'Unmarked Gadget', description: 'Steal a card.',
+  cost: 3, source: 'BLACK_MARKET', type: 'PERK',
 };
 
 // Hammer has printed art, so it renders full-face as an image.
@@ -31,17 +32,16 @@ describe('<Card />', () => {
   });
 
   it('renders a market card without art using the CSS card (name + cost)', () => {
-    render(<Card card={noArtWeapon} />);
-    expect(screen.getByText('Signal Jammer')).toBeInTheDocument();
-    expect(screen.getByText('$5')).toBeInTheDocument();
+    render(<Card card={noArtCard} />);
+    expect(screen.getByText('Unmarked Gadget')).toBeInTheDocument();
+    expect(screen.getByText('$3')).toBeInTheDocument();
   });
 
-  it('renders every card as a text card (no printed art image)', () => {
+  it('renders a card with printed art full-face as an image', () => {
     render(<Card card={weapon} />);
-    // Cards are text-only now: name + cost show, and there is no <img>.
-    expect(screen.getByText('Hammer')).toBeInTheDocument();
-    expect(screen.getByText('$4')).toBeInTheDocument();
-    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    const img = screen.getByAltText('Hammer') as HTMLImageElement;
+    expect(img).toBeInTheDocument();
+    expect(img.getAttribute('src')).toContain('cards/market/hammer.png');
   });
 
   it('calls onClick with the card when clicked', () => {

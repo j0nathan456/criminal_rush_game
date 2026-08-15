@@ -38,6 +38,8 @@ const NAME_ALIASES: Record<string, string> = {
   'coffee-machine': 'coffee',
   'alarm-clock': 'alarm',
   mosquitos: 'mosquito',
+  'signal-jammer': 'satellite-ban', // weapon art is titled "Satellite Ban"
+  'hacked-passwords': 'hacking-key', // perk art is titled "Hacking Key"
 };
 
 /** Role ids (from constants/roles.ts) that have a role-mat image. */
@@ -66,11 +68,12 @@ const MARKET_ART = new Set([
   'alarm', 'arrows', 'axe', 'bank', 'barbed-wire', 'bat', 'brass-knuckles', 'bribery',
   'cannon', 'catapult', 'coffee', 'computer', 'corrosion-cannisters', 'corrupt-connections',
   'credit-card', 'disguise', 'drones', 'electric-baton', 'expand-network', 'express-shipping',
-  'getaway-car', 'hammer', 'harpoon', 'investment', 'ironworks', 'journal', 'laboratory',
+  'getaway-car', 'hacking-key', 'hammer', 'harpoon', 'investment', 'ironworks', 'journal', 'laboratory',
   'machine-gun', 'mafia-alliance', 'magnetic-deflector', 'manipulate', 'missile',
   'molotov-cocktail', 'mosquito', 'mutants', 'nerve-agents', 'parasites', 'pistol',
-  'pocket-knife', 'portal', 'radio', 'recycling-bin', 'robot-soldier', 'shady-press',
-  'switch-blade', 'toxic-gas', 'trash-can', 'viruses', 'vitamin', 'water-bottle',
+  'pocket-knife', 'portal', 'radio', 'recycling-bin', 'robot-soldier', 'satellite-ban',
+  'shady-press', 'switch-blade', 'toxic-gas', 'trash-can', 'viruses', 'vitamin',
+  'water-bottle',
 ]);
 
 function resolve(name: string): string {

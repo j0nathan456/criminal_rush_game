@@ -100,13 +100,6 @@
   .gold-rule { @apply h-px w-full; background: linear-gradient(90deg, transparent, rgba(245, 184, 51, 0.45), transparent); }
 
   .stage { @apply flex min-h-screen items-center justify-center p-5; }
-
-  /* The oval felt of the spatial table layout (see TableLayout.tsx). */
-  .table-surface {
-    @apply rounded-[50%] border border-line/60;
-    background: radial-gradient(ellipse at center, rgba(63, 208, 201, 0.06), rgba(10, 12, 16, 0.4) 70%);
-    box-shadow: var(--shadow-noir), inset 0 0 80px rgba(0, 0, 0, 0.45);
-  }
 }
 
 /* ------------------------------------------------------------------ *

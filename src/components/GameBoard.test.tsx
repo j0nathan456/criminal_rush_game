@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { GameBoard } from './GameBoard';
 import { MOCK_GAME } from '../mocks/mockGame';
 
 describe('<GameBoard />', () => {
-  it('renders the brand, the current player, and every seat', () => {
+  it('renders the brand, the current player, and every player in the roster', () => {
     render(<GameBoard state={MOCK_GAME} />);
 
     expect(screen.getByText('Criminal Rush')).toBeInTheDocument();
@@ -14,7 +14,8 @@ describe('<GameBoard />', () => {
     expect(banner).toBeInTheDocument();
     expect(banner).toHaveTextContent(/Ava/);
 
-    // All four players have a seat.
+    // Players live behind a button now; open the roster to reveal each one.
+    fireEvent.click(screen.getByText(/Players · Roles/).closest('button')!);
     for (const p of MOCK_GAME.players) {
       expect(screen.getAllByText(new RegExp(p.name)).length).toBeGreaterThan(0);
     }

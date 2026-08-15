@@ -12,10 +12,9 @@ import { RoleCard } from './RoleCard';
 import { PlayerHand } from './PlayerHand';
 import { ActionBar } from './ActionBar';
 import { GameLog } from './GameLog';
-import { PlayerSeat } from './PlayerSeat';
-import { TableLayout } from './TableLayout';
-import { SharedZones } from './SharedZones';
-import { MarketShelf } from './MarketShelf';
+import { Roster } from './Roster';
+import { TableCenter } from './TableCenter';
+import { Markets } from './Markets';
 import { TurnPhases } from './TurnPhases';
 import { CombatPanel } from './CombatPanel';
 import { RoleAbilityPanel } from './RoleAbilityPanel';
@@ -199,51 +198,28 @@ export function GameBoard({
         <AllySupportPanel state={state} viewerIndex={viewerIndex} onSubmit={onSubmitAllySupport} onCancel={onCancelAllySupport} />
       )}
 
-      {/* Spatial table layout (wide screens) — fills the screen. */}
-      <div className="hidden min-h-[70vh] flex-1 lg:block">
-        <TableLayout
-          state={state}
-          viewerIndex={viewerIndex}
-          viewer={viewer}
-          isViewersTurn={isViewersTurn}
-          targeting={Boolean(targeting)}
-          isTargetable={isTargetable}
-          onSelectTarget={onSelectTarget}
-          onPlayEvidence={onPlayEvidence}
-        />
-      </div>
+      {/* Main layout: HUD rail · shared centre + markets · case log */}
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[240px_minmax(0,1fr)_260px]">
+        <aside className="flex flex-col gap-4">
+          <ScoreBoard scores={state.teamScores} targets={state.vpTargets} winner={state.winner} />
+          <Roster
+            players={state.players}
+            currentPlayerIndex={state.currentPlayerIndex}
+            viewerIndex={viewerIndex}
+            targeting={Boolean(targeting)}
+            isTargetable={isTargetable}
+            onSelectTarget={onSelectTarget}
+          />
+        </aside>
 
-      {/* Collapsible market drawer (wide screens) — opens on demand for buying. */}
-      <div className="hidden lg:block">
-        <MarketShelf state={state} viewer={viewer} isViewersTurn={isViewersTurn} onBuy={onBuy} />
-      </div>
+        <main className="flex flex-col gap-4">
+          <TableCenter state={state} viewer={viewer} isViewersTurn={isViewersTurn} onPlayEvidence={onPlayEvidence} />
+          <Markets state={state} viewer={viewer} isViewersTurn={isViewersTurn} onBuy={onBuy} />
+        </main>
 
-      {/* Stacked fallback (narrow screens) */}
-      <div className="flex flex-col gap-4 lg:hidden">
-        <ScoreBoard scores={state.teamScores} targets={state.vpTargets} winner={state.winner} />
-        <section className="panel" aria-label="Players">
-          <header className="panel-head"><h2 className="panel-title">Players</h2></header>
-          <div className="flex flex-col gap-2">
-            {state.players.map((p, i) => (
-              <PlayerSeat
-                key={p.id}
-                player={p}
-                active={i === state.currentPlayerIndex}
-                isSelf={i === viewerIndex}
-                targetable={isTargetable(p)}
-                onClick={targeting ? (pl) => onSelectTarget?.(pl.id) : undefined}
-              />
-            ))}
-          </div>
-        </section>
-        <SharedZones
-          state={state}
-          viewer={viewer}
-          isViewersTurn={isViewersTurn}
-          onPlayEvidence={onPlayEvidence}
-          onBuy={onBuy}
-        />
-        <GameLog entries={state.gameLog} />
+        <aside className="flex flex-col gap-4">
+          <GameLog entries={state.gameLog} />
+        </aside>
       </div>
 
       {viewer && (
