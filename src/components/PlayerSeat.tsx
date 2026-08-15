@@ -70,7 +70,12 @@ export function PlayerSeat({ player, active, isSelf, isNeighbor, targetable, onC
               {isSelf ? ' (you)' : ''}
             </span>
             {isNeighbor && (
-              <span className="shrink-0 text-[11px]" title="Neighbour — combat & trade range">⚔️🤝</span>
+              <span
+                className="shrink-0 rounded-md bg-teal/15 px-1.5 py-0.5 text-[10px] font-bold text-teal ring-1 ring-teal/40"
+                title="Adjacent to you — in combat & trade range"
+              >
+                ⚔️ Adjacent
+              </span>
             )}
           </span>
           <span className="block truncate text-[12px] text-fog">{player.role.name}</span>

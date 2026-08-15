@@ -11,6 +11,8 @@ interface RosterProps {
   targeting: boolean;
   isTargetable: (player: Player) => boolean;
   onSelectTarget?: (playerId: string) => void;
+  /** Ids of the viewer's neighbours (combat/trade range), flagged in the list. */
+  neighborIds?: string[];
   /** Whether the roster starts expanded. */
   defaultOpen?: boolean;
 }
@@ -20,7 +22,7 @@ interface RosterProps {
  * Each entry is a PlayerSeat (click for full detail). While the board is asking
  * for a target the roster force-opens and its entries become the target picker.
  */
-export function Roster({ players, currentPlayerIndex, viewerIndex, targeting, isTargetable, onSelectTarget, defaultOpen = false }: RosterProps) {
+export function Roster({ players, currentPlayerIndex, viewerIndex, targeting, isTargetable, onSelectTarget, neighborIds = [], defaultOpen = false }: RosterProps) {
   const [open, setOpen] = useState(defaultOpen);
   const show = open || targeting;
 
@@ -60,6 +62,7 @@ export function Roster({ players, currentPlayerIndex, viewerIndex, targeting, is
                   player={p}
                   active={i === currentPlayerIndex}
                   isSelf={i === viewerIndex}
+                  isNeighbor={neighborIds.includes(p.id)}
                   targetable={isTargetable(p)}
                   onClick={targeting ? (pl) => onSelectTarget?.(pl.id) : undefined}
                 />

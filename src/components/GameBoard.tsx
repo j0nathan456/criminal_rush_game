@@ -4,7 +4,7 @@ import type { EvidenceCategory, AnyCard, MarketCard } from '../types/cards';
 import type { ActionMeta } from '../constants/theme';
 import type { RoleAbilityPayload, PerkPayload, EventOptions } from '../engine';
 import type { CombatChoiceInput } from '../types/game';
-import { actionsForTurn, actionAvailability, handCardPlayable } from '../engine';
+import { actionsForTurn, actionAvailability, handCardPlayable, neighborIds } from '../engine';
 import { TEAM_META } from '../constants/theme';
 
 import { ScoreBoard } from './ScoreBoard';
@@ -117,6 +117,7 @@ export function GameBoard({
 
   const maxActions = viewer ? actionsForTurn(viewer) : 0;
   const availability = viewer ? actionAvailability(state, viewerIndex) : {};
+  const viewerNeighborIds = viewer ? neighborIds(state, viewerIndex) : [];
 
   return (
     <div className="flex min-h-screen flex-col gap-2 p-3">
@@ -224,6 +225,7 @@ export function GameBoard({
           targeting={Boolean(targeting)}
           isTargetable={isTargetable}
           onSelectTarget={onSelectTarget}
+          neighborIds={viewerNeighborIds}
           defaultOpen
         />
         <div className="min-w-0">
