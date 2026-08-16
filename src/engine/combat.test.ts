@@ -3,6 +3,18 @@ import type { GameState, Player, RoleIdentity } from '../types/game.js';
 import type { ActionCard, MarketCard, Team, WeaponType } from '../types/cards.js';
 import { gameReducer, emptyGameState } from './reducer.js';
 import { computeBasePower, weaponPower, attackActionCost, powerCardValue } from './combat.js';
+import { shuffle } from './deck.js';
+
+/** Deterministic PRNG (mulberry32) so shuffle assertions are reproducible. */
+function seeded(seed: number): () => number {
+  return () => {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
 
 // --- Fixtures ----------------------------------------------------------------
 
@@ -344,6 +356,31 @@ describe('interactive combat — Leaving Evidence (AFTER phase)', () => {
     expect(next.combat).toBeNull(); // fight closed
     expect(next.drawPile.some((c) => c.id === 't1')).toBe(true); // reclaimed
     expect(next.discardPile.some((c) => c.id === 't1')).toBe(false);
+  });
+
+  it('genuinely shuffles the reclaimed cards into the deck rather than stacking them on top', () => {
+    const ev1: ActionCard = { id: 't1', name: 'Time Evidence', description: '', type: 'EVIDENCE', evidenceCategories: ['TIME'] };
+    const ev2: ActionCard = { id: 't2', name: 'Means Evidence', description: '', type: 'EVIDENCE', evidenceCategories: ['MEANS'] };
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('axe', 'Axe', 'MELEE', 5)] });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2) });
+    const filler = [junk('f1'), junk('f2'), junk('f3'), junk('f4'), junk('f5')];
+    const s = stateWith([atk, def], { currentPlayerIndex: 0, discardPile: [ev1, ev2], drawPile: filler });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'ATTACKER' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'DEFENDER' });
+
+    next = gameReducer(
+      next,
+      { type: 'COMBAT_CHOICE', input: { kind: 'LEAVING_EVIDENCE', evidenceIds: ['t1', 't2'] } },
+      seeded(42),
+    );
+
+    // Matches a plain shuffle() of the same cards under the same seed — proof
+    // it's a real Fisher-Yates shuffle, not [...taken, ...drawPile].
+    const expected = shuffle([ev1, ev2, ...filler], seeded(42));
+    expect(next.drawPile.map((c) => c.id)).toEqual(expected.map((c) => c.id));
+    expect(next.drawPile.map((c) => c.id)).not.toEqual(['t1', 't2', 'f1', 'f2', 'f3', 'f4', 'f5']);
   });
 
   it('closes immediately with no reclaimable evidence', () => {

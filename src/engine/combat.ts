@@ -17,6 +17,7 @@ import type {
 } from '../types/game.js';
 import type { ActionCard, MarketCard, WeaponType } from '../types/cards.js';
 import { applyScore, log, neighborIds, playerIndexById, updatePlayer } from './rules.js';
+import { shuffle, type Rng } from './deck.js';
 
 // --- Small inventory helpers -------------------------------------------------
 
@@ -330,7 +331,12 @@ function applyMutants(state: GameState, head: Extract<CombatChoice, { kind: 'MUT
   return log({ ...state, combat: newCombat }, `${holder.name}'s Mutants copy ${weapon.name} (+${copied} power).`);
 }
 
-function applyLeavingEvidence(state: GameState, head: Extract<CombatChoice, { kind: 'LEAVING_EVIDENCE' }>, input: CombatChoiceInput): GameState {
+function applyLeavingEvidence(
+  state: GameState,
+  head: Extract<CombatChoice, { kind: 'LEAVING_EVIDENCE' }>,
+  input: CombatChoiceInput,
+  rng: Rng,
+): GameState {
   const player = state.players[playerIndexById(state, head.playerId)];
   const ids = input.kind === 'LEAVING_EVIDENCE' ? input.evidenceIds.slice(0, 2) : [];
   const taken = state.discardPile.filter((c) => ids.includes(c.id) && c.type === 'EVIDENCE');
@@ -339,7 +345,7 @@ function applyLeavingEvidence(state: GameState, head: Extract<CombatChoice, { ki
   const s = {
     ...state,
     discardPile: state.discardPile.filter((c) => !takenIds.has(c.id)),
-    drawPile: [...taken, ...state.drawPile], // shuffled back toward the top of the deck
+    drawPile: shuffle([...taken, ...state.drawPile], rng), // genuinely shuffled in, not stacked on top
   };
   return log(s, `${player.name} shuffles ${taken.length} Evidence card(s) back into the deck (Leaving Evidence).`);
 }
@@ -349,7 +355,7 @@ function applyLeavingEvidence(state: GameState, head: Extract<CombatChoice, { ki
  * the phase: when the PRE queue empties the Power phase begins; when the AFTER
  * queue empties the fight closes.
  */
-export function applyCombatChoice(state: GameState, input: CombatChoiceInput): GameState {
+export function applyCombatChoice(state: GameState, input: CombatChoiceInput, rng: Rng = Math.random): GameState {
   const combat = state.combat;
   if (!combat || combat.pending.length === 0) return log(state, 'No pending combat choice.');
   const head = combat.pending[0];
@@ -360,7 +366,7 @@ export function applyCombatChoice(state: GameState, input: CombatChoiceInput): G
     case 'PORTAL': s = applyPortal(s, head, input); break;
     case 'DRONES': s = applyDrones(s, head, input); break;
     case 'MUTANTS': s = applyMutants(s, head, input); break;
-    case 'LEAVING_EVIDENCE': s = applyLeavingEvidence(s, head, input); break;
+    case 'LEAVING_EVIDENCE': s = applyLeavingEvidence(s, head, input, rng); break;
   }
 
   const current = s.combat;
