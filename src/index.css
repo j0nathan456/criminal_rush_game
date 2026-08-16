@@ -149,7 +149,8 @@
            bg-panel-2 px-3.5 py-2 text-sm font-semibold text-chalk transition;
   }
   .cr-role__cancel:hover,
-  .cr-combat__pass:hover { @apply border-amber/60; }
+  .cr-combat__pass:hover:not(:disabled) { @apply border-amber/60; }
+  .cr-combat__pass:disabled { @apply cursor-not-allowed opacity-40; }
 
   /* Machine Gun money-discard variant of the play button. */
   .cr-combat__mg { @apply ring-1 ring-teal/60; }

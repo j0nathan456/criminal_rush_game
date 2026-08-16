@@ -383,28 +383,67 @@ export function applyCombatChoice(state: GameState, input: CombatChoiceInput, rn
 // --- Power phase -------------------------------------------------------------
 
 /**
+ * Whether `by` may play `card` for `combatant`'s side right now (rulebook
+ * p.8-10): Shield is defense-only; Unexpected Allies can only be played for a
+ * teammate, never yourself; every other Power card can only be played by the
+ * combatant themselves or their Bodyguard (if currently protecting them);
+ * Mirror needs some other player to have already played a Power card this
+ * combat, or there's nothing for it to copy. Single source of truth for both
+ * the reducer's validation and the UI's "don't even offer illegal plays"
+ * filtering, so the two can never drift apart.
+ */
+export function powerCardEligible(
+  card: ActionCard,
+  by: Player,
+  combatant: Player,
+  side: CombatSide,
+  played: PlayedPowerCard[],
+): { enabled: boolean; reason?: string } {
+  const isSelf = by.id === combatant.id;
+  if (card.name === 'Shield' && side !== 'DEFENDER') {
+    return { enabled: false, reason: 'Shield can only be played on defence.' };
+  }
+  if (card.name === 'Unexpected Allies') {
+    if (isSelf) return { enabled: false, reason: 'Unexpected Allies can only be played for a teammate.' };
+    if (by.team !== combatant.team) return { enabled: false, reason: 'Unexpected Allies must be played by a teammate.' };
+  } else if (!isSelf) {
+    const isBodyguard = by.role.id === 'bodyguard' && combatant.hasBodyguardToken && by.team === combatant.team;
+    if (!isBodyguard) {
+      return { enabled: false, reason: 'Only the combatant (or their Bodyguard) may play that Power card for this side.' };
+    }
+  }
+  if (card.name === 'Mirror' && !played.some((p) => p.byPlayerId !== by.id)) {
+    return { enabled: false, reason: 'Mirror needs another player to have played a Power card first.' };
+  }
+  return { enabled: true };
+}
+
+/**
  * The power a Power card contributes when played. Returns both the card's own
  * base PL (what Mirror copies) and the final total (base + Mafia Alliance).
  * Mirror copies the base PL of a Power card played earlier this combat by
- * another player (explicit target, else the most recent such card).
+ * another player (explicit target, else the most recent such card) — and the
+ * name of whichever card it copied, for the "used Mirror to copy X" log line.
  */
 export function powerCardValue(
   card: ActionCard,
   byPlayer: Player,
   played: PlayedPowerCard[],
   mirrorTargetCardId?: string,
-): { basePower: number; power: number } {
+): { basePower: number; power: number; copiedCardName?: string } {
   let basePower: number;
+  let copiedCardName: string | undefined;
   if (card.name === 'Mirror') {
     const target = mirrorTargetCardId
       ? played.find((p) => p.cardId === mirrorTargetCardId)
       : [...played].reverse().find((p) => p.byPlayerId !== byPlayer.id);
     basePower = target ? target.basePower : 0;
+    copiedCardName = target?.name;
   } else {
     basePower = card.power ?? 0;
   }
   const mafiaBonus = hasItem(byPlayer, 'Mafia Alliance') ? 1 : 0;
-  return { basePower, power: basePower + mafiaBonus };
+  return { basePower, power: basePower + mafiaBonus, copiedCardName };
 }
 
 // --- Resolution --------------------------------------------------------------

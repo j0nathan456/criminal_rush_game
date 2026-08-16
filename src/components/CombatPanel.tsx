@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import type { GameState, CombatSide, Player, CombatChoiceInput } from '../types/game';
+import { powerCardEligible } from '../engine';
 import { TEAM_META } from '../constants/theme';
 import { CombatChoicePanel } from './CombatChoicePanel';
 
@@ -6,16 +8,24 @@ export interface CombatPanelProps {
   state: GameState;
   /** Index of the local player, for gating the PRE/AFTER choice panel to its decider. */
   viewerIndex: number;
-  onPlayPower?: (cardId: string, side: CombatSide, byPlayerId: string) => void;
+  onPlayPower?: (cardId: string, side: CombatSide, byPlayerId: string, mirrorTargetCardId?: string) => void;
   onPassCombat?: (side: CombatSide) => void;
   onDiscardMoney?: (side: CombatSide, cardIds: string[]) => void;
   onCombatChoice?: (input: CombatChoiceInput) => void;
 }
 
 /** Players who may contribute Power cards to a combatant's side: the combatant
- *  plus their teammates (the engine enforces which specific cards are legal). */
+ *  plus their teammates (powerCardEligible enforces which specific cards each may play). */
 function contributors(players: Player[], combatant: Player): Player[] {
   return players.filter((p) => p.team === combatant.team);
+}
+
+/** A Mirror the player has selected but not yet chosen a target card for. */
+interface MirrorPending {
+  side: CombatSide;
+  cardId: string;
+  byPlayerId: string;
+  byName: string;
 }
 
 /**
@@ -23,11 +33,15 @@ function contributors(players: Player[], combatant: Player): Player[] {
  * `state.combat` is set, on every connected player's own device — both the
  * combatants and their teammates may contribute Power cards to either side
  * (see `contributors`), so this phase is intentionally shared rather than
- * restricted to a single viewer. The PRE/AFTER phases below it are not: those
- * are one specific player's decision, gated in CombatChoicePanel. The fight
- * resolves automatically once both sides pass.
+ * restricted to a single viewer. Only cards each contributor is actually
+ * allowed to play are offered (powerCardEligible mirrors the reducer's own
+ * validation, so nobody sees a button that would just be rejected). The
+ * PRE/AFTER phases below it are not shared: those are one specific player's
+ * decision, gated in CombatChoicePanel. The fight resolves automatically once
+ * both sides pass.
  */
 export function CombatPanel({ state, viewerIndex, onPlayPower, onPassCombat, onDiscardMoney, onCombatChoice }: CombatPanelProps) {
+  const [mirrorPending, setMirrorPending] = useState<MirrorPending | null>(null);
   const combat = state.combat;
   if (!combat) return null;
 
@@ -39,6 +53,15 @@ export function CombatPanel({ state, viewerIndex, onPlayPower, onPassCombat, onD
   const byId = (id: string) => state.players.find((p) => p.id === id)!;
   const attacker = byId(combat.attacker.playerId);
   const defender = byId(combat.defender.playerId);
+  const viewer = state.players[viewerIndex];
+
+  const playCard = (side: CombatSide, byPlayerId: string, byName: string, cardId: string, cardName: string) => {
+    if (cardName === 'Mirror') {
+      setMirrorPending({ side, cardId, byPlayerId, byName });
+      return;
+    }
+    onPlayPower?.(cardId, side, byPlayerId);
+  };
 
   const renderSide = (side: CombatSide) => {
     const part = side === 'ATTACKER' ? combat.attacker : combat.defender;
@@ -46,6 +69,7 @@ export function CombatPanel({ state, viewerIndex, onPlayPower, onPassCombat, onD
     const total = part.basePower + part.powerCardBonus;
     const money = combatant.hand.filter((c) => c.type === 'MONEY');
     const hasMachineGun = combatant.inventory.some((c) => c.name === 'Machine Gun');
+    const allPassed = part.passed && combat.attacker.passed && combat.defender.passed;
 
     return (
       <div className="cr-combat__side" key={side}>
@@ -66,7 +90,9 @@ export function CombatPanel({ state, viewerIndex, onPlayPower, onPassCombat, onD
 
         {part.canPlayPower &&
           contributors(state.players, combatant).map((p) => {
-            const powers = p.hand.filter((c) => c.type === 'POWER');
+            const powers = p.hand
+              .filter((c) => c.type === 'POWER')
+              .filter((c) => powerCardEligible(c, p, combatant, side, combat.played).enabled);
             if (powers.length === 0) return null;
             return (
               <div className="cr-combat__cards" key={p.id}>
@@ -76,8 +102,8 @@ export function CombatPanel({ state, viewerIndex, onPlayPower, onPassCombat, onD
                     key={card.id}
                     type="button"
                     className="cr-combat__play"
-                    onClick={() => onPlayPower?.(card.id, side, p.id)}
-                    disabled={part.passed && combat.attacker.passed && combat.defender.passed}
+                    onClick={() => playCard(side, p.id, p.name, card.id, card.name)}
+                    disabled={allPassed}
                   >
                     {card.name}
                   </button>
@@ -85,6 +111,32 @@ export function CombatPanel({ state, viewerIndex, onPlayPower, onPassCombat, onD
               </div>
             );
           })}
+
+        {mirrorPending?.side === side && (
+          <div className="cr-combat__cards cr-choice__block">
+            <span className="cr-combat__cards-owner">Mirror — copy which Power card?</span>
+            <div className="cr-role__chips">
+              {combat.played
+                .filter((played) => played.byPlayerId !== mirrorPending.byPlayerId)
+                .map((played) => (
+                  <button
+                    key={played.cardId}
+                    type="button"
+                    className="cr-role__chip"
+                    onClick={() => {
+                      onPlayPower?.(mirrorPending.cardId, mirrorPending.side, mirrorPending.byPlayerId, played.cardId);
+                      setMirrorPending(null);
+                    }}
+                  >
+                    {played.name} (+{played.basePower})
+                  </button>
+                ))}
+            </div>
+            <button type="button" className="cr-role__cancel" onClick={() => setMirrorPending(null)}>
+              Cancel
+            </button>
+          </div>
+        )}
 
         {hasMachineGun && money.length > 0 && (
           <button
@@ -96,7 +148,13 @@ export function CombatPanel({ state, viewerIndex, onPlayPower, onPassCombat, onD
           </button>
         )}
 
-        <button type="button" className="cr-combat__pass" onClick={() => onPassCombat?.(side)}>
+        <button
+          type="button"
+          className="cr-combat__pass"
+          onClick={() => onPassCombat?.(side)}
+          disabled={viewer?.id !== combatant.id}
+          title={viewer?.id !== combatant.id ? `Only ${combatant.name} can pass for this side.` : undefined}
+        >
           {part.passed ? 'Passed ✓' : 'Pass'}
         </button>
       </div>

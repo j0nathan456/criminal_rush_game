@@ -30,6 +30,7 @@ export {
   attackError,
   attackActionCost,
   resolvePreCombat,
+  powerCardEligible,
   powerCardValue,
   resolveCombat,
   otherSide,

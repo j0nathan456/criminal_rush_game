@@ -100,16 +100,18 @@ export interface ApplyActionInput {
  * turn it is (the defender and teammates play Power cards). The engine's
  * reducer remains the authority on whether each is legal.
  */
-const COMBAT_PHASE_ACTIONS = new Set(['PLAY_POWER', 'PASS_COMBAT', 'COMBAT_DISCARD_MONEY']);
+const COMBAT_PHASE_ACTIONS = new Set(['PLAY_POWER', 'COMBAT_DISCARD_MONEY']);
 
 /**
  * Apply an engine action. Normal actions require it to be the requester's turn;
  * combat-phase actions are allowed from any room member (the reducer validates
- * them). COMBAT_CHOICE (Portal/Drones/Mutants/Leaving Evidence) is a decision
- * that belongs to one specific player — `combat.pending[0].playerId`, which is
- * often the defender, not whoever's turn it nominally is — so it's authorized
- * against that instead of the generic turn check. Returns the room unchanged
- * if the game is already over.
+ * them). Two combat actions are each one specific player's decision, not "any
+ * room member" or "whoever's turn it nominally is":
+ *  - COMBAT_CHOICE (Portal/Drones/Mutants/Leaving Evidence) belongs to
+ *    `combat.pending[0].playerId`, often the defender.
+ *  - PASS_COMBAT belongs to whichever combatant `action.side` names — a
+ *    player may only pass their own side, never their opponent's.
+ * Returns the room unchanged if the game is already over.
  */
 export function applyAction(room: Room, { token, action, reducer }: ApplyActionInput): Room {
   if (!room.started || !room.state) throw new RoomError('Game has not started.');
@@ -120,6 +122,10 @@ export function applyAction(room: Room, { token, action, reducer }: ApplyActionI
   if (action.type === 'COMBAT_CHOICE') {
     const decider = room.state.combat?.pending[0]?.playerId;
     if (!decider || me.id !== decider) throw new RoomError('It is not your combat choice to make.');
+  } else if (action.type === 'PASS_COMBAT') {
+    const combat = room.state.combat;
+    const combatantId = action.side === 'ATTACKER' ? combat?.attacker.playerId : combat?.defender.playerId;
+    if (!combatantId || me.id !== combatantId) throw new RoomError('You can only pass for yourself.');
   } else if (!COMBAT_PHASE_ACTIONS.has(action.type)) {
     const currentId = room.state.players[room.state.currentPlayerIndex]?.id;
     if (me.id !== currentId) throw new RoomError('It is not your turn.');

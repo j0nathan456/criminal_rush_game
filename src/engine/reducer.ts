@@ -26,6 +26,7 @@ import {
   enterPowerPhase,
   hasItem,
   otherSide,
+  powerCardEligible,
   powerCardValue,
   resolveCombat,
   resolvePreCombat,
@@ -866,18 +867,15 @@ function playPower(
   const card = by.hand.find((c) => c.id === cardId);
   if (!card || card.type !== 'POWER') return log(state, 'That is not a Power card in that hand.');
 
-  // Who may play what for whom.
-  const isSelf = by.id === combatant.id;
-  if (card.name === 'Shield' && side !== 'DEFENDER') return log(state, 'Shield can only be played on defence.');
-  if (card.name === 'Unexpected Allies') {
-    if (isSelf) return log(state, 'Unexpected Allies can only be played for a teammate.');
-    if (by.team !== combatant.team) return log(state, 'Unexpected Allies must be played by a teammate.');
-  } else if (!isSelf) {
-    const isBodyguard = by.role.id === 'bodyguard' && combatant.hasBodyguardToken && by.team === combatant.team;
-    if (!isBodyguard) return log(state, 'Only the combatant (or their Bodyguard) may play that Power card for this side.');
+  // Who may play what for whom (Shield/Unexpected Allies/Bodyguard/Mirror).
+  const eligibility = powerCardEligible(card, by, combatant, side, combat.played);
+  if (!eligibility.enabled) return log(state, eligibility.reason ?? 'You cannot play that Power card here.');
+  if (card.name === 'Mirror' && mirrorTargetCardId) {
+    const validTarget = combat.played.some((p) => p.cardId === mirrorTargetCardId && p.byPlayerId !== by.id);
+    if (!validTarget) return log(state, 'Choose one of the already-played Power cards to copy.');
   }
 
-  const { basePower, power } = powerCardValue(card, by, combat.played, mirrorTargetCardId);
+  const { basePower, power, copiedCardName } = powerCardValue(card, by, combat.played, mirrorTargetCardId);
 
   // Discard the card from its owner's hand.
   let s = updatePlayer(state, byIdx, (p) => ({ ...p, hand: p.hand.filter((c) => c.id !== cardId) }));
@@ -892,7 +890,11 @@ function playPower(
     played: [...combat.played, { cardId, name: card.name, byPlayerId: by.id, side, power, basePower }],
   };
   s = { ...s, combat: newCombat };
-  return log(s, `${by.name} plays ${card.name} for ${power} power on ${side === 'ATTACKER' ? 'attack' : 'defence'}.`);
+  const message =
+    card.name === 'Mirror' && copiedCardName
+      ? `${by.name} used Mirror to copy ${copiedCardName} to get +${power} PL.`
+      : `${by.name} plays ${card.name} for ${power} power on ${side === 'ATTACKER' ? 'attack' : 'defence'}.`;
+  return log(s, message);
 }
 
 /**

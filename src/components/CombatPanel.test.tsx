@@ -52,8 +52,65 @@ describe('<CombatPanel />', () => {
     expect(onPassCombat).toHaveBeenCalledWith('ATTACKER');
   });
 
+  it('only lets a combatant pass for their own side, not their opponent’s', () => {
+    const onPassCombat = vi.fn();
+    // Viewer 0 is the attacker (Mona).
+    render(<CombatPanel state={combatState()} viewerIndex={0} onPassCombat={onPassCombat} />);
+    const [attackerPass, defenderPass] = screen.getAllByText('Pass').map((el) => el.closest('button')!);
+    expect(attackerPass).toBeEnabled(); // Mona may pass for herself
+
+    fireEvent.click(defenderPass); // disabled — clicking does nothing
+    expect(defenderPass).toBeDisabled();
+    expect(onPassCombat).not.toHaveBeenCalledWith('DEFENDER');
+  });
+
   it('renders nothing when there is no combat', () => {
     const { container } = render(<CombatPanel state={emptyGameState()} viewerIndex={0} />);
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('never offers a teammate’s Power card for a play they are not allowed to make', () => {
+    const attacker = mkPlayer({ id: 'atk', name: 'Mona', role: role('hitman', 'CRIMINAL', 3) });
+    const defender = mkPlayer({ id: 'def', name: 'Dora', role: role('mayor', 'CIVILIAN', 2) });
+    const mate: ActionCard = { id: 'b2', name: 'Boost', description: '', type: 'POWER', power: 1 };
+    const teammate = mkPlayer({ id: 'mate', name: 'Nia', role: role('attorney', 'CIVILIAN', 3), team: 'CIVILIAN', hand: [mate] });
+    const state: GameState = {
+      ...emptyGameState(),
+      players: [attacker, defender, teammate],
+      combat: {
+        attacker: { playerId: 'atk', basePower: 5, powerCardBonus: 0, passed: false, canPlayPower: true },
+        defender: { playerId: 'def', basePower: 2, powerCardBonus: 0, passed: false, canPlayPower: true },
+        turn: 'ATTACKER', played: [], actionCost: 2, playerCount: 3, phase: 'POWER', pending: [],
+      },
+    };
+    render(<CombatPanel state={state} viewerIndex={0} />);
+    // Nia's Boost is a legal card, but she's neither the defender nor their Bodyguard.
+    expect(screen.queryByText("Nia's Power cards")).not.toBeInTheDocument();
+  });
+
+  it('only offers Mirror once someone else has played a Power card this combat, and opens a target picker', () => {
+    const onPlayPower = vi.fn();
+    const mirror: ActionCard = { id: 'mir', name: 'Mirror', description: '', type: 'POWER', power: 0 };
+    const attacker = mkPlayer({ id: 'atk', name: 'Mona', role: role('hitman', 'CRIMINAL', 3), hand: [mirror] });
+    const defender = mkPlayer({ id: 'def', name: 'Dora', role: role('mayor', 'CIVILIAN', 2) });
+    const base: GameState = {
+      ...emptyGameState(),
+      players: [attacker, defender],
+      combat: {
+        attacker: { playerId: 'atk', basePower: 5, powerCardBonus: 0, passed: false, canPlayPower: true },
+        defender: { playerId: 'def', basePower: 2, powerCardBonus: 2, passed: false, canPlayPower: true },
+        turn: 'ATTACKER', played: [{ cardId: 'surge1', name: 'Surge', byPlayerId: 'def', side: 'DEFENDER', power: 2, basePower: 2 }],
+        actionCost: 2, playerCount: 2, phase: 'POWER', pending: [],
+      },
+    };
+    const { rerender } = render(<CombatPanel state={{ ...base, combat: { ...base.combat!, played: [] } }} viewerIndex={0} onPlayPower={onPlayPower} />);
+    expect(screen.queryByText('Mirror')).not.toBeInTheDocument(); // nothing played yet
+
+    rerender(<CombatPanel state={base} viewerIndex={0} onPlayPower={onPlayPower} />);
+    fireEvent.click(screen.getByText('Mirror'));
+    expect(onPlayPower).not.toHaveBeenCalled(); // opens the picker instead of dispatching immediately
+
+    fireEvent.click(screen.getByText('Surge (+2)'));
+    expect(onPlayPower).toHaveBeenCalledWith('mir', 'ATTACKER', 'atk', 'surge1');
   });
 });

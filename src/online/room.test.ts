@@ -132,6 +132,33 @@ describe('applyAction', () => {
     const after = applyAction(room, { token: `t${deciderSeat}`, action: choice, reducer: gameReducer });
     expect(after.state?.combat).toBeNull();
   });
+
+  it('only lets a combatant PASS_COMBAT for their own side', () => {
+    const started = startRoom(roomWith(['A', 'B', 'C', 'D']), { token: 't0', newGame });
+    const state = started.state as GameState;
+    const attackerSeat = state.currentPlayerIndex;
+    const defenderSeat = (attackerSeat + 1) % 4;
+    const room: Room = {
+      ...started,
+      state: {
+        ...state,
+        combat: {
+          attacker: { playerId: state.players[attackerSeat].id, basePower: 0, powerCardBonus: 0, passed: false, canPlayPower: true },
+          defender: { playerId: state.players[defenderSeat].id, basePower: 0, powerCardBonus: 0, passed: false, canPlayPower: true },
+          turn: 'ATTACKER', played: [], actionCost: 2, playerCount: 4, phase: 'POWER', pending: [],
+        },
+      },
+    };
+
+    // The attacker (whose turn it nominally is) cannot pass for the defender.
+    expect(() =>
+      applyAction(room, { token: `t${attackerSeat}`, action: { type: 'PASS_COMBAT', side: 'DEFENDER' }, reducer: gameReducer }),
+    ).toThrow(/only pass for yourself/);
+
+    // The defender can pass for themselves, despite it not being "their turn".
+    const after = applyAction(room, { token: `t${defenderSeat}`, action: { type: 'PASS_COMBAT', side: 'DEFENDER' }, reducer: gameReducer });
+    expect(after.state?.combat?.defender.passed).toBe(true);
+  });
 });
 
 describe('viewFor redaction', () => {

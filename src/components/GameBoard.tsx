@@ -38,7 +38,7 @@ export interface GameBoardHandlers {
   onSell?: (card: MarketCard) => void;
   onSelectTarget?: (playerId: string) => void;
   onCancelTargeting?: () => void;
-  onPlayPower?: (cardId: string, side: CombatSide, byPlayerId: string) => void;
+  onPlayPower?: (cardId: string, side: CombatSide, byPlayerId: string, mirrorTargetCardId?: string) => void;
   onPassCombat?: (side: CombatSide) => void;
   onDiscardMoney?: (side: CombatSide, cardIds: string[]) => void;
   onCombatChoice?: (input: CombatChoiceInput) => void;

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { GameState, Player, RoleIdentity } from '../types/game.js';
 import type { ActionCard, MarketCard, Team, WeaponType } from '../types/cards.js';
 import { gameReducer, emptyGameState } from './reducer.js';
-import { computeBasePower, weaponPower, attackActionCost, powerCardValue } from './combat.js';
+import { computeBasePower, weaponPower, attackActionCost, powerCardValue, powerCardEligible } from './combat.js';
 import { shuffle } from './deck.js';
 
 /** Deterministic PRNG (mulberry32) so shuffle assertions are reproducible. */
@@ -152,7 +152,46 @@ describe('powerCardValue', () => {
 
     const plain = mkPlayer({ id: 'b', role: role('mayor', 'CIVILIAN', 2) });
     const played = [{ cardId: 'ua', name: 'Unexpected Allies', byPlayerId: 'z', side: 'DEFENDER' as const, power: 2, basePower: 2 }];
-    expect(powerCardValue(pow('mir', 'Mirror', 0), plain, played)).toEqual({ basePower: 2, power: 2 });
+    expect(powerCardValue(pow('mir', 'Mirror', 0), plain, played)).toEqual({ basePower: 2, power: 2, copiedCardName: 'Unexpected Allies' });
+  });
+});
+
+describe('powerCardEligible', () => {
+  const combatant = mkPlayer({ id: 'c', role: role('mayor', 'CIVILIAN', 2) });
+  const teammate = mkPlayer({ id: 't', role: role('attorney', 'CIVILIAN', 3) });
+  const bodyguard = mkPlayer({ id: 'g', role: role('bodyguard', 'CIVILIAN', 3) });
+  const enemy = mkPlayer({ id: 'e', role: role('hitman', 'CRIMINAL', 3) });
+
+  it('lets the combatant play any Power card for themselves (except Unexpected Allies)', () => {
+    expect(powerCardEligible(pow('b', 'Boost', 1), combatant, combatant, 'ATTACKER', []).enabled).toBe(true);
+    expect(powerCardEligible(pow('ua', 'Unexpected Allies', 2), combatant, combatant, 'ATTACKER', []).enabled).toBe(false);
+  });
+
+  it('refuses a teammate who is not the Bodyguard, but always allows Unexpected Allies from a teammate', () => {
+    expect(powerCardEligible(pow('b', 'Boost', 1), teammate, combatant, 'ATTACKER', []).enabled).toBe(false);
+    expect(powerCardEligible(pow('ua', 'Unexpected Allies', 2), teammate, combatant, 'ATTACKER', []).enabled).toBe(true);
+    expect(powerCardEligible(pow('ua', 'Unexpected Allies', 2), enemy, combatant, 'ATTACKER', []).enabled).toBe(false); // not even a teammate
+  });
+
+  it('lets the active Bodyguard play any Power card for their protected teammate', () => {
+    const protectedCombatant = { ...combatant, hasBodyguardToken: true };
+    expect(powerCardEligible(pow('b', 'Boost', 1), bodyguard, protectedCombatant, 'ATTACKER', []).enabled).toBe(true);
+    // Not protecting anyone right now — the token matters, not just the role.
+    expect(powerCardEligible(pow('b', 'Boost', 1), bodyguard, combatant, 'ATTACKER', []).enabled).toBe(false);
+  });
+
+  it('refuses Shield on offence', () => {
+    expect(powerCardEligible(pow('s', 'Shield', 3), combatant, combatant, 'ATTACKER', []).enabled).toBe(false);
+    expect(powerCardEligible(pow('s', 'Shield', 3), combatant, combatant, 'DEFENDER', []).enabled).toBe(true);
+  });
+
+  it('refuses Mirror until someone else has played a Power card this combat', () => {
+    expect(powerCardEligible(pow('m', 'Mirror', 0), combatant, combatant, 'ATTACKER', []).enabled).toBe(false);
+    const played = [{ cardId: 's', name: 'Surge', byPlayerId: 'e', side: 'DEFENDER' as const, power: 2, basePower: 2 }];
+    expect(powerCardEligible(pow('m', 'Mirror', 0), combatant, combatant, 'ATTACKER', played).enabled).toBe(true);
+    // Only your own prior plays don't count.
+    const ownPlay = [{ cardId: 'b', name: 'Boost', byPlayerId: 'c', side: 'ATTACKER' as const, power: 1, basePower: 1 }];
+    expect(powerCardEligible(pow('m', 'Mirror', 0), combatant, combatant, 'ATTACKER', ownPlay).enabled).toBe(false);
   });
 });
 
@@ -224,6 +263,50 @@ describe('interactive combat — rule guards', () => {
     const fight = setupFight({ atkHand: [pow('ua', 'Unexpected Allies', 2)] });
     const after = gameReducer(fight, { type: 'PLAY_POWER', cardId: 'ua', side: 'ATTACKER', byPlayerId: 'atk' });
     expect(after.combat!.attacker.powerCardBonus).toBe(0);
+  });
+
+  it('rejects a non-Bodyguard teammate playing a Power card for the combatant, but allows the active Bodyguard', () => {
+    const atk = mkPlayer({ id: 'atk', role: role('hitman', 'CRIMINAL', 3) });
+    const def = mkPlayer({ id: 'def', role: role('mayor', 'CIVILIAN', 2), hasBodyguardToken: true });
+    const mate = mkPlayer({ id: 'mate', role: role('attorney', 'CIVILIAN', 3), hand: [pow('b1', 'Boost', 1)] });
+    const guard = mkPlayer({ id: 'grd', role: role('bodyguard', 'CIVILIAN', 3), hand: [pow('b2', 'Boost', 1)] });
+    const s = stateWith([atk, def, mate, guard], { currentPlayerIndex: 0 });
+    const fight = gameReducer(s, { type: 'ATTACK', targetId: 'def' });
+
+    const afterMate = gameReducer(fight, { type: 'PLAY_POWER', cardId: 'b1', side: 'DEFENDER', byPlayerId: 'mate' });
+    expect(afterMate.combat!.defender.powerCardBonus).toBe(0); // not the Bodyguard — rejected
+    expect(afterMate.players.find((p) => p.id === 'mate')!.hand).toHaveLength(1); // card untouched
+
+    const afterGuard = gameReducer(fight, { type: 'PLAY_POWER', cardId: 'b2', side: 'DEFENDER', byPlayerId: 'grd' });
+    expect(afterGuard.combat!.defender.powerCardBonus).toBe(1); // active Bodyguard — allowed
+  });
+
+  it('rejects Mirror before anyone else has played a Power card, and logs the copy once one has', () => {
+    const atk = mkPlayer({ id: 'atk', role: role('hitman', 'CRIMINAL', 3), hand: [pow('m', 'Mirror', 0)] });
+    const def = mkPlayer({ id: 'def', role: role('mayor', 'CIVILIAN', 2), hand: [pow('s', 'Surge', 2)] });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+    let fight = gameReducer(s, { type: 'ATTACK', targetId: 'def' });
+
+    const early = gameReducer(fight, { type: 'PLAY_POWER', cardId: 'm', side: 'ATTACKER', byPlayerId: 'atk' });
+    expect(early.combat!.attacker.powerCardBonus).toBe(0); // nothing to copy yet
+    expect(early.players.find((p) => p.id === 'atk')!.hand.some((c) => c.id === 'm')).toBe(true); // still in hand
+
+    fight = gameReducer(fight, { type: 'PLAY_POWER', cardId: 's', side: 'DEFENDER', byPlayerId: 'def' });
+    const after = gameReducer(fight, { type: 'PLAY_POWER', cardId: 'm', side: 'ATTACKER', byPlayerId: 'atk', mirrorTargetCardId: 's' });
+    expect(after.combat!.attacker.powerCardBonus).toBe(2); // copied Surge's +2
+    expect(after.gameLog.at(-1)).toBe('atk used Mirror to copy Surge to get +2 PL.');
+  });
+
+  it('rejects an explicit mirrorTargetCardId that was not actually played by someone else', () => {
+    const atk = mkPlayer({ id: 'atk', role: role('hitman', 'CRIMINAL', 3), hand: [pow('m', 'Mirror', 0), pow('b', 'Boost', 1)] });
+    const def = mkPlayer({ id: 'def', role: role('mayor', 'CIVILIAN', 2) });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+    let fight = gameReducer(s, { type: 'ATTACK', targetId: 'def' });
+    fight = gameReducer(fight, { type: 'PLAY_POWER', cardId: 'b', side: 'ATTACKER', byPlayerId: 'atk' }); // own play, doesn't count
+
+    const after = gameReducer(fight, { type: 'PLAY_POWER', cardId: 'm', side: 'ATTACKER', byPlayerId: 'atk', mirrorTargetCardId: 'b' });
+    expect(after.combat!.attacker.powerCardBonus).toBe(1); // unchanged — still just Boost's +1
+    expect(after.players.find((p) => p.id === 'atk')!.hand.some((c) => c.id === 'm')).toBe(true); // Mirror rejected, stays in hand
   });
 
   it('Machine Gun discards Money cards for +1 power each', () => {

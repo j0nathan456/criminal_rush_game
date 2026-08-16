@@ -167,7 +167,8 @@ export function useBoardInteractions(
     onSell: (card) => dispatch({ type: 'SELL', cardId: card.id }),
     onSelectTarget,
     onCancelTargeting: () => setTargeting(null),
-    onPlayPower: (cardId, side, byPlayerId) => dispatch({ type: 'PLAY_POWER', cardId, side, byPlayerId }),
+    onPlayPower: (cardId, side, byPlayerId, mirrorTargetCardId) =>
+      dispatch({ type: 'PLAY_POWER', cardId, side, byPlayerId, mirrorTargetCardId }),
     onPassCombat: (side) => dispatch({ type: 'PASS_COMBAT', side }),
     onDiscardMoney: (side, cardIds) => dispatch({ type: 'COMBAT_DISCARD_MONEY', side, cardIds }),
     onCombatChoice: (input) => dispatch({ type: 'COMBAT_CHOICE', input }),
