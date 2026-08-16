@@ -209,31 +209,6 @@ export function GameBoard({
         />
       )}
 
-      {roleAbilityOpen && !state.combat && !state.winner && (
-        <RoleAbilityPanel state={state} viewerIndex={viewerIndex} onSubmit={onSubmitRoleAbility} onCancel={onCancelRoleAbility} />
-      )}
-      {activePerkId && !state.combat && !state.winner && (
-        <PerkActionPanel state={state} viewerIndex={viewerIndex} perkId={activePerkId} onSubmit={onSubmitPerk} onCancel={onCancelPerk} />
-      )}
-      {allySupportCardId && !state.combat && !state.winner && (
-        <AllySupportPanel state={state} viewerIndex={viewerIndex} onSubmit={onSubmitAllySupport} onCancel={onCancelAllySupport} />
-      )}
-      {eventCardId && !state.combat && !state.winner && (() => {
-        const eventCard = viewer?.hand.find((c) => c.id === eventCardId);
-        return eventCard ? (
-          <EventPanel state={state} viewerIndex={viewerIndex} card={eventCard} onSubmit={onSubmitEvent} onCancel={onCancelEvent} />
-        ) : null;
-      })()}
-      {viewer && state.pendingMarketDiscount?.playerId === viewer.id && !state.combat && !state.winner && (
-        <MarketDiscountPanel
-          state={state}
-          viewerIndex={viewerIndex}
-          amount={state.pendingMarketDiscount.amount}
-          onBuy={onUseMarketDiscount}
-          onSkip={onSkipMarketDiscount}
-        />
-      )}
-
       {/* Board grid — columns 1:3:1, three rows:
           row 1  Score Board · Evidence Grid · Case Log
           row 2  Players     · Markets       · Deck/Discard
@@ -298,6 +273,35 @@ export function GameBoard({
                 <button type="button" className="btn self-start" onClick={onClearTraffic}>
                   Clear Traffic token ($1)
                 </button>
+              )}
+
+              {/* Ability/perk/event "gather more input" panels render here, right
+                  under the viewer's own hand, rather than up at the top of the
+                  page — this is their own decision, so it belongs next to the
+                  hand they're making it from. */}
+              {roleAbilityOpen && !state.combat && !state.winner && (
+                <RoleAbilityPanel state={state} viewerIndex={viewerIndex} onSubmit={onSubmitRoleAbility} onCancel={onCancelRoleAbility} />
+              )}
+              {activePerkId && !state.combat && !state.winner && (
+                <PerkActionPanel state={state} viewerIndex={viewerIndex} perkId={activePerkId} onSubmit={onSubmitPerk} onCancel={onCancelPerk} />
+              )}
+              {allySupportCardId && !state.combat && !state.winner && (
+                <AllySupportPanel state={state} viewerIndex={viewerIndex} onSubmit={onSubmitAllySupport} onCancel={onCancelAllySupport} />
+              )}
+              {eventCardId && !state.combat && !state.winner && (() => {
+                const eventCard = viewer.hand.find((c) => c.id === eventCardId);
+                return eventCard ? (
+                  <EventPanel state={state} viewerIndex={viewerIndex} card={eventCard} onSubmit={onSubmitEvent} onCancel={onCancelEvent} />
+                ) : null;
+              })()}
+              {state.pendingMarketDiscount?.playerId === viewer.id && !state.combat && !state.winner && (
+                <MarketDiscountPanel
+                  state={state}
+                  viewerIndex={viewerIndex}
+                  amount={state.pendingMarketDiscount.amount}
+                  onBuy={onUseMarketDiscount}
+                  onSkip={onSkipMarketDiscount}
+                />
               )}
             </div>
 
