@@ -314,6 +314,20 @@ const weapon = (id: string, wt: NonNullable<MarketCard['weaponType']>, cost = 4,
 });
 
 describe('gameReducer — USE_ROLE_ABILITY (Civilians)', () => {
+  it('refuses an injured or captured player, unlike a perk Action', () => {
+    const injured = stateWith([mkPlayer({ id: 'p0', role: role('collector', 'CIVILIAN'), money: 5, isInjured: true })], {
+      publicMarket: [marketPerk('m1', 2)],
+    });
+    const afterInjured = gameReducer(injured, { type: 'USE_ROLE_ABILITY', payload: { cardId: 'm1' } });
+    expect(afterInjured.players[0].inventory).toHaveLength(0); // ability did not fire
+
+    const captured = stateWith([mkPlayer({ id: 'p0', role: role('crime-lord', 'CRIMINAL'), money: 5, isCaptured: true })], {
+      blackMarket: [{ id: 'en', name: 'Expand Network', description: '', cost: 5, source: 'BLACK_MARKET', type: 'SPECIAL', vpValue: 1 }],
+    });
+    const afterCaptured = gameReducer(captured, { type: 'USE_ROLE_ABILITY', payload: { cardId: 'en' } });
+    expect(afterCaptured.players[0].inventory).toHaveLength(0); // ability did not fire
+  });
+
   it('Collector buys a card and collects $1, without using the once-per-turn purchase', () => {
     const s = stateWith([mkPlayer({ id: 'p0', role: role('collector', 'CIVILIAN'), money: 5 })], {
       publicMarket: [marketPerk('m1', 2)],
@@ -595,6 +609,17 @@ describe('gameReducer — Event cards', () => {
     expect(next.players[1].money).toBe(3);
   });
 
+  it('Tax Collection refuses an opponent with no money (no free money for the actor)', () => {
+    const evt: ActionCard = { id: 'e', name: 'Tax Collection', description: '', type: 'EVENT' };
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 2, hand: [evt] }),
+      mkPlayer({ id: 'p1', role: role('hitman', 'CRIMINAL'), money: 0 }),
+    ]);
+    const next = gameReducer(s, { type: 'PLAY_CARD', cardId: 'e', targetId: 'p1' });
+    expect(next.players[0].money).toBe(2); // actor gains nothing
+    expect(next.players[1].money).toBe(0);
+  });
+
   it('Business Opportunity sells an item for its cost + $1', () => {
     const evt: ActionCard = { id: 'e', name: 'Business Opportunity', description: '', type: 'EVENT' };
     const item: MarketCard = { id: 'i1', name: 'Bat', description: '', cost: 3, source: 'PUBLIC', type: 'WEAPON', weaponType: 'MELEE', power: 2 };
@@ -778,6 +803,24 @@ describe('gameReducer — USE_PERK', () => {
     expect(next.players[0].money).toBe(3); // 2 + 1
     expect(next.players[0].hand.some((c) => c.id === 't')).toBe(true); // drew
     expect(next.players[0].actionsRemaining).toBe(2);
+  });
+
+  it('an injured Civilian can still use a perk Action (only role abilities and combat are blocked)', () => {
+    const bank = perk('pk', 'Bank');
+    const cash: ActionCard = { id: 'm', name: 'Profit', description: '', type: 'MONEY', value: 2 };
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 0, hand: [cash], inventory: [bank], isInjured: true })]);
+    const next = gameReducer(s, { type: 'USE_PERK', perkId: 'pk', payload: { cardId: 'm' } });
+    expect(next.players[0].money).toBe(3); // 2 + 1, perk worked despite being injured
+  });
+
+  it('a captured Criminal can still use a perk Action', () => {
+    const manip = perk('pk', 'Manipulate', { source: 'BLACK_MARKET' });
+    const c = (id: string): ActionCard => ({ id, name: id, description: '', type: 'MONEY', value: 1 });
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL'), inventory: [manip], isCaptured: true })], {
+      drawPile: [c('a'), c('b'), c('cc')],
+    });
+    const next = gameReducer(s, { type: 'USE_PERK', perkId: 'pk' });
+    expect(next.players[0].hand.map((x) => x.id)).toContain('a'); // perk worked despite being captured
   });
 
   it('Water Bottle is discarded for a free extra action', () => {

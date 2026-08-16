@@ -9,6 +9,7 @@
 import type { GameState, Player, CombatSide, CombatState, CombatChoiceInput } from '../types/game.js';
 import type { ActionCard, EvidenceCategory, MarketCard, WeaponType } from '../types/cards.js';
 import { determineWinner } from './scoring.js';
+import type { Rng } from './deck.js';
 import {
   actionsForTurn,
   applyScore,
@@ -186,7 +187,7 @@ function refillMarkets(state: GameState): GameState {
 /** Actions that are valid while a combat's Power phase is in progress. */
 const COMBAT_ACTIONS = new Set(['PLAY_POWER', 'COMBAT_DISCARD_MONEY', 'PASS_COMBAT', 'COMBAT_CHOICE']);
 
-export function gameReducer(state: GameState, action: GameAction): GameState {
+export function gameReducer(state: GameState, action: GameAction, rng: Rng = Math.random): GameState {
   if (state.winner) return state; // game over — ignore further actions
   const idx = state.currentPlayerIndex;
   const player = state.players[idx];
@@ -217,7 +218,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'COMBAT_DISCARD_MONEY':
       return combatDiscardMoney(state, action.side, action.cardIds);
     case 'COMBAT_CHOICE':
-      return applyCombatChoice(state, action.input);
+      return applyCombatChoice(state, action.input, rng);
     case 'PASS_COMBAT':
       return passCombat(state, action.side);
     case 'USE_ROLE_ABILITY':
@@ -346,7 +347,8 @@ function resolveEvent(state: GameState, idx: number, name: string, targetId: str
       const victimIndex = targetId ? playerIndexById(state, targetId) : -1;
       const victim = state.players[victimIndex];
       if (!victim || victim.team === actor.team) return log(state, 'Choose an opponent to tax.');
-      let s = updatePlayer(state, victimIndex, (p) => ({ ...p, money: Math.max(0, p.money - 1) }));
+      if (victim.money < 1) return log(state, `${victim.name} has no money to tax.`);
+      let s = updatePlayer(state, victimIndex, (p) => ({ ...p, money: p.money - 1 }));
       s = updatePlayer(s, idx, (p) => ({ ...p, money: p.money + 1 }));
       return log(s, `${actor.name} taxed ${victim.name} for $1.`);
     }
@@ -1245,9 +1247,9 @@ function applyPerk(
   const perk = opts.perk ?? player.inventory.find((c) => c.id === perkId);
   if (!perk) return log(state, 'You do not own that perk.');
   const ownsPerk = player.inventory.some((c) => c.id === perk.id);
-  if (!opts.free && (player.isInjured || player.isCaptured)) {
-    return log(state, `${player.name} cannot use perks while injured or captured.`);
-  }
+  // Unlike a role ability or combat, injured/captured players may still use
+  // perk Actions (Bank, Credit Card, Shady Press, etc.) — the rulebook only
+  // strips their role ability and their ability to attack/be attacked.
 
   // Water Bottle: discard for an extra action (no action cost to use).
   if (perk.name === 'Water Bottle') {

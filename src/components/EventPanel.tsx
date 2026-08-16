@@ -87,10 +87,11 @@ export function EventPanel({ state, viewerIndex, card, onSubmit, onCancel }: Eve
       break;
     }
     case 'Tax Collection': {
+      const taxable = opponents.filter((p) => p.money >= 1);
       body = (
         <>
-          <p>Choose an opponent to take $1 from:</p>
-          {playerRow(opponents)}
+          <p>Choose an opponent with $1 or more to take $1 from:</p>
+          {playerRow(taxable)}
         </>
       );
       canSubmit = !!targetId;
