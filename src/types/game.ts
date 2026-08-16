@@ -210,4 +210,14 @@ export interface GameState {
    * The engine never writes card identities into the shared `gameLog`.
    */
   lastPeek?: { playerId: string; cards: ActionCard[] } | null;
+
+  /**
+   * Spring Cleaning's follow-up: after the Market is discarded-and-refilled,
+   * the player may buy one (now-visible) Market card at a discount. The refill
+   * draws are unknown ahead of the event, so this can't be bundled into the
+   * same dispatch as the discard choice — it's offered as a separate pending
+   * step, resolved via USE_MARKET_DISCOUNT/SKIP_MARKET_DISCOUNT and cleared at
+   * end of turn if unused.
+   */
+  pendingMarketDiscount?: { playerId: string; amount: number } | null;
 }

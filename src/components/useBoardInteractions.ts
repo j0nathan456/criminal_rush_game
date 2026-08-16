@@ -12,6 +12,7 @@ import type { AnyCard, EvidenceCategory } from '../types/cards';
 import type { GameAction, RoleAbilityPayload, PerkPayload, EventOptions } from '../engine';
 import type { ActionMeta } from '../constants/theme';
 import type { GameBoardHandlers, TargetMode } from './GameBoard';
+import { CONFIGURABLE_EVENTS } from './panelConstants';
 
 export interface BoardInteractions {
   selectedCardId: string | null;
@@ -23,6 +24,8 @@ export interface BoardInteractions {
   activePerkId: string | null;
   /** The Ally Support event card being played, or null. */
   allySupportCardId: string | null;
+  /** The Event card (needing a target/option) being configured, or null. */
+  eventCardId: string | null;
   handlers: GameBoardHandlers;
   /** Clear transient selection/targeting (e.g. after ending a turn). */
   reset: () => void;
@@ -39,6 +42,7 @@ export function useBoardInteractions(
   const [roleAbilityOpen, setRoleAbilityOpen] = useState(false);
   const [activePerkId, setActivePerkId] = useState<string | null>(null);
   const [allySupportCardId, setAllySupportCardId] = useState<string | null>(null);
+  const [eventCardId, setEventCardId] = useState<string | null>(null);
 
   const viewer = state.players[viewerIndex];
   const selectedCard = viewer?.hand.find((c) => c.id === selectedCardId);
@@ -50,15 +54,30 @@ export function useBoardInteractions(
     setRoleAbilityOpen(false);
     setActivePerkId(null);
     setAllySupportCardId(null);
+    setEventCardId(null);
   };
 
-  /** Play a hand card — Ally Support opens a copy panel; everything else dispatches. */
+  /**
+   * Play a hand card. Ally Support and any Event needing a target/option
+   * (Market Access, Tax Collection, Gain Influence, Business Opportunity,
+   * Market Exchange, Spring Cleaning, Traffic Jam) open a panel to gather it
+   * instead of dispatching blind — everything else dispatches immediately.
+   */
   const playFromHand = (card: { id: string; type: string; name: string }) => {
     if (card.type === 'EVENT' && card.name === 'Ally Support') {
       setSelectedCardId(null);
       setRoleAbilityOpen(false);
       setActivePerkId(null);
+      setEventCardId(null);
       setAllySupportCardId(card.id);
+      return;
+    }
+    if (card.type === 'EVENT' && CONFIGURABLE_EVENTS.has(card.name)) {
+      setSelectedCardId(null);
+      setRoleAbilityOpen(false);
+      setActivePerkId(null);
+      setAllySupportCardId(null);
+      setEventCardId(card.id);
       return;
     }
     dispatch({ type: 'PLAY_CARD', cardId: card.id });
@@ -176,7 +195,19 @@ export function useBoardInteractions(
       setSelectedCardId(null);
     },
     onCancelAllySupport: () => setAllySupportCardId(null),
+    onSubmitEvent: (targetId: string | undefined, options: EventOptions) => {
+      if (eventCardId) {
+        dispatch({ type: 'PLAY_CARD', cardId: eventCardId, targetId, options });
+      }
+      setEventCardId(null);
+      setSelectedCardId(null);
+    },
+    onCancelEvent: () => setEventCardId(null),
+    onUseMarketDiscount: (cardId: string) => dispatch({ type: 'USE_MARKET_DISCOUNT', cardId }),
+    onSkipMarketDiscount: () => dispatch({ type: 'SKIP_MARKET_DISCOUNT' }),
   };
 
-  return { selectedCardId, targeting, notice, roleAbilityOpen, activePerkId, allySupportCardId, handlers, reset };
+  return {
+    selectedCardId, targeting, notice, roleAbilityOpen, activePerkId, allySupportCardId, eventCardId, handlers, reset,
+  };
 }

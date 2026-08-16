@@ -22,6 +22,8 @@ import { CombatPanel } from './CombatPanel';
 import { RoleAbilityPanel } from './RoleAbilityPanel';
 import { PerkActionPanel } from './PerkActionPanel';
 import { AllySupportPanel } from './AllySupportPanel';
+import { EventPanel } from './EventPanel';
+import { MarketDiscountPanel } from './MarketDiscountPanel';
 
 /** Which target the board is currently asking the player to pick. */
 export type TargetMode = 'attack' | 'expose' | null;
@@ -48,6 +50,10 @@ export interface GameBoardHandlers {
   onClearTraffic?: () => void;
   onSubmitAllySupport?: (teammateId: string, options: EventOptions) => void;
   onCancelAllySupport?: () => void;
+  onSubmitEvent?: (targetId: string | undefined, options: EventOptions) => void;
+  onCancelEvent?: () => void;
+  onUseMarketDiscount?: (cardId: string) => void;
+  onSkipMarketDiscount?: () => void;
 }
 
 interface GameBoardProps extends GameBoardHandlers {
@@ -64,6 +70,8 @@ interface GameBoardProps extends GameBoardHandlers {
   activePerkId?: string | null;
   /** The Ally Support event card being played, or null. */
   allySupportCardId?: string | null;
+  /** The Event card (needing a target/option) being configured, or null. */
+  eventCardId?: string | null;
 }
 
 /**
@@ -80,6 +88,7 @@ export function GameBoard({
   roleAbilityOpen = false,
   activePerkId = null,
   allySupportCardId = null,
+  eventCardId = null,
   onAction,
   onEndTurn,
   onSelectCard,
@@ -101,6 +110,10 @@ export function GameBoard({
   onClearTraffic,
   onSubmitAllySupport,
   onCancelAllySupport,
+  onSubmitEvent,
+  onCancelEvent,
+  onUseMarketDiscount,
+  onSkipMarketDiscount,
 }: GameBoardProps) {
   const viewer = state.players[viewerIndex];
   const isViewersTurn = viewerIndex === state.currentPlayerIndex;
@@ -203,6 +216,21 @@ export function GameBoard({
       )}
       {allySupportCardId && !state.combat && !state.winner && (
         <AllySupportPanel state={state} viewerIndex={viewerIndex} onSubmit={onSubmitAllySupport} onCancel={onCancelAllySupport} />
+      )}
+      {eventCardId && !state.combat && !state.winner && (() => {
+        const eventCard = viewer?.hand.find((c) => c.id === eventCardId);
+        return eventCard ? (
+          <EventPanel state={state} viewerIndex={viewerIndex} card={eventCard} onSubmit={onSubmitEvent} onCancel={onCancelEvent} />
+        ) : null;
+      })()}
+      {viewer && state.pendingMarketDiscount?.playerId === viewer.id && !state.combat && !state.winner && (
+        <MarketDiscountPanel
+          state={state}
+          viewerIndex={viewerIndex}
+          amount={state.pendingMarketDiscount.amount}
+          onBuy={onUseMarketDiscount}
+          onSkip={onSkipMarketDiscount}
+        />
       )}
 
       {/* Board grid — columns 1:3:1, three rows:

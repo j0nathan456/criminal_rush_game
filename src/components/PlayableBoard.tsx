@@ -14,7 +14,8 @@ interface PlayableBoardProps {
  * so both the local and online drivers can frame it however they like.
  */
 export function PlayableBoard({ state, viewerIndex, dispatch }: PlayableBoardProps) {
-  const { selectedCardId, targeting, notice, roleAbilityOpen, activePerkId, allySupportCardId, handlers } = useBoardInteractions(state, viewerIndex, dispatch);
+  const { selectedCardId, targeting, notice, roleAbilityOpen, activePerkId, allySupportCardId, eventCardId, handlers } =
+    useBoardInteractions(state, viewerIndex, dispatch);
   return (
     <GameBoard
       state={state}
@@ -25,6 +26,7 @@ export function PlayableBoard({ state, viewerIndex, dispatch }: PlayableBoardPro
       roleAbilityOpen={roleAbilityOpen}
       activePerkId={activePerkId}
       allySupportCardId={allySupportCardId}
+      eventCardId={eventCardId}
       {...handlers}
     />
   );

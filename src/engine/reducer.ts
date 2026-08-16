@@ -46,6 +46,8 @@ export type GameAction =
   | { type: 'TRADE'; targetId: string; give: TradeItem; receive: TradeItem }
   | { type: 'USE_PERK'; perkId: string; payload?: PerkPayload }
   | { type: 'CLEAR_TRAFFIC' }
+  | { type: 'USE_MARKET_DISCOUNT'; cardId: string }
+  | { type: 'SKIP_MARKET_DISCOUNT' }
   | { type: 'END_TURN' };
 
 /**
@@ -92,13 +94,13 @@ export interface RoleAbilityPayload {
 
 /**
  * Secondary choices some Event cards need beyond `targetId` (see resolveEvent):
- *  - marketCardId    — a Market card to buy (Market Access, Spring Cleaning).
+ *  - marketCardId    — a Market card to buy (Market Access).
  *  - inventoryCardId — an owned perk/weapon (Business Opportunity sell,
- *                      Market Exchange give).
+ *                      Market Exchange give/take).
  *  - takePerk        — Market Exchange direction: take from the teammate (true)
  *                      vs give to them (false, the default).
- *  - discardMarketIds— Market cards to bin for Spring Cleaning (defaults to the
- *                      first 3 face-up cards).
+ *  - discardMarketIds— exactly 3 Market card ids to bin for Spring Cleaning; the
+ *                      player must choose these (no default — see resolveEvent).
  * Omitted choices fall back to sensible defaults or leave the effect manual.
  */
 export interface EventOptions {
@@ -144,6 +146,7 @@ export function emptyGameState(): GameState {
     blackMarketDeck: [],
     expandNetworkPile: [],
     trashPile: [],
+    pendingMarketDiscount: null,
   };
 }
 
@@ -225,6 +228,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return applyPerk(state, idx, player, action.perkId, action.payload ?? {});
     case 'CLEAR_TRAFFIC':
       return clearTraffic(state, idx, player);
+    case 'USE_MARKET_DISCOUNT':
+      return redeemMarketDiscount(state, idx, player, action.cardId);
+    case 'SKIP_MARKET_DISCOUNT':
+      return skipMarketDiscount(state, player);
     case 'END_TURN':
       return endTurn(state, idx);
     default:
@@ -336,13 +343,12 @@ function resolveEvent(state: GameState, idx: number, name: string, targetId: str
       );
     }
     case 'Tax Collection': {
-      const victimIndex = targetId
-        ? playerIndexById(state, targetId)
-        : state.players.findIndex((p, i) => i !== idx && p.money > 0);
-      if (victimIndex < 0) return log(state, 'No one to tax.');
+      const victimIndex = targetId ? playerIndexById(state, targetId) : -1;
+      const victim = state.players[victimIndex];
+      if (!victim || victim.team === actor.team) return log(state, 'Choose an opponent to tax.');
       let s = updatePlayer(state, victimIndex, (p) => ({ ...p, money: Math.max(0, p.money - 1) }));
       s = updatePlayer(s, idx, (p) => ({ ...p, money: p.money + 1 }));
-      return log(s, `${actor.name} taxed ${state.players[victimIndex].name} for $1.`);
+      return log(s, `${actor.name} taxed ${victim.name} for $1.`);
     }
     case 'Market Access': {
       // Buy one Market card at a $1 discount (doesn't use the turn's purchase).
@@ -355,10 +361,10 @@ function resolveEvent(state: GameState, idx: number, name: string, targetId: str
       return s;
     }
     case 'Gain Influence': {
-      // Randomly take a card from a chosen player (we take the first as "random").
+      // Randomly take a card from a chosen opponent (we take the first as "random").
       const victimIndex = targetId ? playerIndexById(state, targetId) : -1;
       const victim = state.players[victimIndex];
-      if (!victim || victimIndex === idx) return log(state, 'Choose another player to influence.');
+      if (!victim || victim.team === actor.team) return log(state, 'Choose an opponent to influence.');
       if (victim.hand.length === 0) return log(state, `${victim.name} has no cards to take.`);
       const taken = victim.hand[0];
       let s = updatePlayer(state, victimIndex, (p) => ({ ...p, hand: p.hand.slice(1) }));
@@ -408,21 +414,17 @@ function resolveEvent(state: GameState, idx: number, name: string, targetId: str
       return log(s, `${actor.name} plays the Lottery: reveals ${revealed.length} card(s) and banks $${gain}.`);
     }
     case 'Spring Cleaning': {
-      // Bin 3 Market cards, replace them, then buy 1 at a $1 discount.
-      const toBin = options.discardMarketIds?.length
-        ? new Set(options.discardMarketIds)
-        : new Set(state.publicMarket.slice(0, 3).map((c) => c.id));
+      // Bin exactly 3 chosen Market cards and replace them from the deck. The
+      // replacements are unknown ahead of time, so the discounted purchase the
+      // rulebook offers afterward is a separate pending step the player resolves
+      // once they can see the refreshed Market (see pendingMarketDiscount).
+      const chosen = (options.discardMarketIds ?? []).filter((id) => state.publicMarket.some((c) => c.id === id));
+      if (chosen.length !== 3) return log(state, 'Choose exactly 3 Market cards to discard.');
+      const toBin = new Set(chosen);
       let s: GameState = { ...state, publicMarket: state.publicMarket.filter((c) => !toBin.has(c.id)) };
       s = refillMarkets(s);
-      if (options.marketCardId) {
-        const bought = doPurchase(s, idx, s.players[idx], options.marketCardId, {
-          spendAction: false,
-          setPurchaseFlag: false,
-          costDelta: -1,
-        });
-        s = bought.state;
-      }
-      return log(s, `${actor.name} does some Spring Cleaning of the Market.`);
+      s = log(s, `${actor.name} does some Spring Cleaning of the Market.`);
+      return { ...s, pendingMarketDiscount: { playerId: actor.id, amount: 1 } };
     }
     case 'Traffic Jam': {
       // Give an opponent a Traffic token (trading with them costs 2 actions).
@@ -615,6 +617,29 @@ function purchase(state: GameState, idx: number, player: Player, cardId: string)
     setPurchaseFlag: true,
   });
   return ok ? next : log(state, next.gameLog[next.gameLog.length - 1] ?? 'Purchase failed.');
+}
+
+/**
+ * Spring Cleaning's follow-up purchase: spends no action and doesn't count
+ * against the once-per-turn Market limit, since the discount was already
+ * earned by playing the Event. Only the player it was offered to may use it.
+ */
+function redeemMarketDiscount(state: GameState, idx: number, player: Player, cardId: string): GameState {
+  const pending = state.pendingMarketDiscount;
+  if (!pending || pending.playerId !== player.id) return log(state, 'No Market discount is available right now.');
+  const { state: next, ok } = doPurchase(state, idx, player, cardId, {
+    spendAction: false,
+    setPurchaseFlag: false,
+    costDelta: -pending.amount,
+  });
+  if (!ok) return next;
+  return { ...next, pendingMarketDiscount: null };
+}
+
+function skipMarketDiscount(state: GameState, player: Player): GameState {
+  const pending = state.pendingMarketDiscount;
+  if (!pending || pending.playerId !== player.id) return state;
+  return { ...state, pendingMarketDiscount: null };
 }
 
 interface PurchaseOptions {
@@ -1386,8 +1411,14 @@ function clearTraffic(state: GameState, idx: number, player: Player): GameState 
 }
 
 function endTurn(state: GameState, idx: number): GameState {
+  // An unused Spring Cleaning discount is forfeit once the turn ends.
+  const finishing = state.players[idx];
+  const clearedDiscount =
+    finishing && state.pendingMarketDiscount?.playerId === finishing.id ? null : state.pendingMarketDiscount;
+
   // Reset the finishing player's per-turn flags and heal them if injured.
-  let s = updatePlayer(state, idx, (p) => ({
+  let s: GameState = { ...state, pendingMarketDiscount: clearedDiscount };
+  s = updatePlayer(s, idx, (p) => ({
     ...p,
     hasPurchasedFromMarket: false,
     hasUsedRoleAbility: false,

@@ -563,6 +563,38 @@ describe('gameReducer — Event cards', () => {
     expect(next.players[1].hand).toHaveLength(0);
   });
 
+  it('Gain Influence refuses to target a teammate', () => {
+    const evt: ActionCard = { id: 'e', name: 'Gain Influence', description: '', type: 'EVENT' };
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), hand: [evt] }),
+      mkPlayer({ id: 'p1', role: role('attorney', 'CIVILIAN'), hand: [money('x', 1)] }),
+    ]);
+    const next = gameReducer(s, { type: 'PLAY_CARD', cardId: 'e', targetId: 'p1' });
+    expect(next.players[1].hand).toHaveLength(1); // untouched
+  });
+
+  it('Tax Collection takes $1 from a chosen opponent', () => {
+    const evt: ActionCard = { id: 'e', name: 'Tax Collection', description: '', type: 'EVENT' };
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 2, hand: [evt] }),
+      mkPlayer({ id: 'p1', role: role('hitman', 'CRIMINAL'), money: 3 }),
+    ]);
+    const next = gameReducer(s, { type: 'PLAY_CARD', cardId: 'e', targetId: 'p1' });
+    expect(next.players[0].money).toBe(3);
+    expect(next.players[1].money).toBe(2);
+  });
+
+  it('Tax Collection refuses to target a teammate', () => {
+    const evt: ActionCard = { id: 'e', name: 'Tax Collection', description: '', type: 'EVENT' };
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 2, hand: [evt] }),
+      mkPlayer({ id: 'p1', role: role('attorney', 'CIVILIAN'), money: 3 }),
+    ]);
+    const next = gameReducer(s, { type: 'PLAY_CARD', cardId: 'e', targetId: 'p1' });
+    expect(next.players[0].money).toBe(2); // still just the card played, nothing taxed
+    expect(next.players[1].money).toBe(3);
+  });
+
   it('Business Opportunity sells an item for its cost + $1', () => {
     const evt: ActionCard = { id: 'e', name: 'Business Opportunity', description: '', type: 'EVENT' };
     const item: MarketCard = { id: 'i1', name: 'Bat', description: '', cost: 3, source: 'PUBLIC', type: 'WEAPON', weaponType: 'MELEE', power: 2 };
@@ -606,6 +638,78 @@ describe('gameReducer — Event cards', () => {
     expect(next.players[0].inventory).toHaveLength(0);
     expect(next.players[1].inventory.map((c) => c.id)).toContain('i1');
     expect(next.players[0].hand.some((c) => c.id === 'd')).toBe(true); // drew
+  });
+
+  it('Spring Cleaning refuses without exactly 3 chosen Market cards', () => {
+    const evt: ActionCard = { id: 'e', name: 'Spring Cleaning', description: '', type: 'EVENT' };
+    const market: MarketCard[] = ['m1', 'm2', 'm3', 'm4', 'm5'].map((id) => ({
+      id, name: id, description: '', cost: 2, source: 'PUBLIC', type: 'PERK',
+    }));
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), hand: [evt] })], { publicMarket: market });
+    const next = gameReducer(s, { type: 'PLAY_CARD', cardId: 'e', options: { discardMarketIds: ['m1', 'm2'] } });
+    expect(next.publicMarket).toHaveLength(5); // untouched
+    expect(next.pendingMarketDiscount).toBeFalsy();
+  });
+
+  it('Spring Cleaning discards the 3 chosen cards, refills, and offers a pending discount', () => {
+    const evt: ActionCard = { id: 'e', name: 'Spring Cleaning', description: '', type: 'EVENT' };
+    const market: MarketCard[] = ['m1', 'm2', 'm3', 'm4', 'm5'].map((id) => ({
+      id, name: id, description: '', cost: 2, source: 'PUBLIC', type: 'PERK',
+    }));
+    const deck: MarketCard[] = ['n1', 'n2', 'n3'].map((id) => ({
+      id, name: id, description: '', cost: 2, source: 'PUBLIC', type: 'PERK',
+    }));
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), hand: [evt] })], {
+      publicMarket: market,
+      publicMarketDeck: deck,
+    });
+    const next = gameReducer(s, { type: 'PLAY_CARD', cardId: 'e', options: { discardMarketIds: ['m1', 'm2', 'm3'] } });
+    expect(next.publicMarket).toHaveLength(5);
+    expect(next.publicMarket.map((c) => c.id)).toEqual(['m4', 'm5', 'n1', 'n2', 'n3']);
+    expect(next.pendingMarketDiscount).toEqual({ playerId: 'p0', amount: 1 });
+  });
+});
+
+describe('gameReducer — USE_MARKET_DISCOUNT / SKIP_MARKET_DISCOUNT', () => {
+  it('buys a Market card at the pending discount without spending an action', () => {
+    const perk: MarketCard = { id: 'm1', name: 'Computer', description: '', cost: 3, source: 'PUBLIC', type: 'PERK' };
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 5 })], {
+      publicMarket: [perk],
+      pendingMarketDiscount: { playerId: 'p0', amount: 1 },
+    });
+    const next = gameReducer(s, { type: 'USE_MARKET_DISCOUNT', cardId: 'm1' });
+    expect(next.players[0].money).toBe(3); // 5 - (3 - 1)
+    expect(next.players[0].inventory).toHaveLength(1);
+    expect(next.players[0].actionsRemaining).toBe(3); // unspent
+    expect(next.players[0].hasPurchasedFromMarket).toBe(false);
+    expect(next.pendingMarketDiscount).toBeNull();
+  });
+
+  it('refuses when no discount is pending for this player', () => {
+    const perk: MarketCard = { id: 'm1', name: 'Computer', description: '', cost: 3, source: 'PUBLIC', type: 'PERK' };
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 5 })], { publicMarket: [perk] });
+    const next = gameReducer(s, { type: 'USE_MARKET_DISCOUNT', cardId: 'm1' });
+    expect(next.players[0].inventory).toHaveLength(0);
+  });
+
+  it('SKIP_MARKET_DISCOUNT clears the pending discount', () => {
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN') })], {
+      pendingMarketDiscount: { playerId: 'p0', amount: 1 },
+    });
+    const next = gameReducer(s, { type: 'SKIP_MARKET_DISCOUNT' });
+    expect(next.pendingMarketDiscount).toBeNull();
+  });
+
+  it('an unused pending discount is forfeit at END_TURN', () => {
+    const s = stateWith(
+      [
+        mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN') }),
+        mkPlayer({ id: 'p1', role: role('attorney', 'CIVILIAN') }),
+      ],
+      { pendingMarketDiscount: { playerId: 'p0', amount: 1 } },
+    );
+    const next = gameReducer(s, { type: 'END_TURN' });
+    expect(next.pendingMarketDiscount).toBeNull();
   });
 });
 
