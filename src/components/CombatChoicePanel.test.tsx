@@ -28,12 +28,18 @@ describe('<CombatChoicePanel />', () => {
       attacker: part('a'), defender: part('d'), turn: 'ATTACKER', played: [], actionCost: 2, playerCount: 2,
       phase: 'PRE', pending: [{ kind: 'PORTAL', playerId: 'a', weaponId: 'por', side: 'ATTACKER' }],
     };
-    render(<CombatChoicePanel state={stateWith([holder, mkPlayer({ id: 'd', name: 'Dee', role: role('mayor', 'CIVILIAN') })], combat)} onCombatChoice={onCombatChoice} />);
+    render(
+      <CombatChoicePanel
+        state={stateWith([holder, mkPlayer({ id: 'd', name: 'Dee', role: role('mayor', 'CIVILIAN') })], combat)}
+        viewerIndex={0}
+        onCombatChoice={onCombatChoice}
+      />,
+    );
     fireEvent.click(screen.getByText('Draw 2 cards'));
     expect(onCombatChoice).toHaveBeenCalledWith({ kind: 'PORTAL', mode: 'DRAW' });
   });
 
-  it('Leaving Evidence: pick a card and shuffle it back', () => {
+  it('Leaving Evidence: the injured defender picks a card and shuffles it back', () => {
     const onCombatChoice = vi.fn();
     const ev: ActionCard = { id: 't1', name: 'Time Evidence', description: '', type: 'EVIDENCE', evidenceCategories: ['TIME'] };
     const def = mkPlayer({ id: 'd', name: 'Dee', role: role('mayor', 'CIVILIAN') });
@@ -41,9 +47,28 @@ describe('<CombatChoicePanel />', () => {
       attacker: part('a'), defender: part('d'), turn: 'ATTACKER', played: [], actionCost: 2, playerCount: 2,
       phase: 'AFTER', pending: [{ kind: 'LEAVING_EVIDENCE', playerId: 'd', side: 'DEFENDER' }],
     };
-    render(<CombatChoicePanel state={stateWith([mkPlayer({ id: 'a', name: 'Mona', role: role('hitman', 'CRIMINAL') }), def], combat, { discardPile: [ev] })} onCombatChoice={onCombatChoice} />);
+    const state = stateWith([mkPlayer({ id: 'a', name: 'Mona', role: role('hitman', 'CRIMINAL') }), def], combat, { discardPile: [ev] });
+    render(<CombatChoicePanel state={state} viewerIndex={1} onCombatChoice={onCombatChoice} />);
     fireEvent.click(screen.getByText('Time Evidence'));
     fireEvent.click(screen.getByText('Shuffle 1 back'));
     expect(onCombatChoice).toHaveBeenCalledWith({ kind: 'LEAVING_EVIDENCE', evidenceIds: ['t1'] });
+  });
+
+  it("Leaving Evidence: everyone but the injured defender sees a read-only waiting notice, not the picker", () => {
+    const onCombatChoice = vi.fn();
+    const ev: ActionCard = { id: 't1', name: 'Time Evidence', description: '', type: 'EVIDENCE', evidenceCategories: ['TIME'] };
+    const attacker = mkPlayer({ id: 'a', name: 'Mona', role: role('hitman', 'CRIMINAL') });
+    const def = mkPlayer({ id: 'd', name: 'Dee', role: role('mayor', 'CIVILIAN') });
+    const combat: CombatState = {
+      attacker: part('a'), defender: part('d'), turn: 'ATTACKER', played: [], actionCost: 2, playerCount: 2,
+      phase: 'AFTER', pending: [{ kind: 'LEAVING_EVIDENCE', playerId: 'd', side: 'DEFENDER' }],
+    };
+    const state = stateWith([attacker, def], combat, { discardPile: [ev] });
+
+    // The attacker (e.g. a Criminal who just injured the defender) is not the decider.
+    render(<CombatChoicePanel state={state} viewerIndex={0} onCombatChoice={onCombatChoice} />);
+    expect(screen.getByText(/waiting for dee/i)).toBeInTheDocument();
+    expect(screen.queryByText('Time Evidence')).not.toBeInTheDocument();
+    expect(screen.queryByText('Confirm')).not.toBeInTheDocument();
   });
 });

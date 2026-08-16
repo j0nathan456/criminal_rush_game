@@ -105,7 +105,11 @@ const COMBAT_PHASE_ACTIONS = new Set(['PLAY_POWER', 'PASS_COMBAT', 'COMBAT_DISCA
 /**
  * Apply an engine action. Normal actions require it to be the requester's turn;
  * combat-phase actions are allowed from any room member (the reducer validates
- * them). Returns the room unchanged if the game is already over.
+ * them). COMBAT_CHOICE (Portal/Drones/Mutants/Leaving Evidence) is a decision
+ * that belongs to one specific player — `combat.pending[0].playerId`, which is
+ * often the defender, not whoever's turn it nominally is — so it's authorized
+ * against that instead of the generic turn check. Returns the room unchanged
+ * if the game is already over.
  */
 export function applyAction(room: Room, { token, action, reducer }: ApplyActionInput): Room {
   if (!room.started || !room.state) throw new RoomError('Game has not started.');
@@ -113,7 +117,10 @@ export function applyAction(room: Room, { token, action, reducer }: ApplyActionI
   if (!me) throw new RoomError('You are not in this room.');
   if (room.state.winner) return room; // game over — ignore
 
-  if (!COMBAT_PHASE_ACTIONS.has(action.type)) {
+  if (action.type === 'COMBAT_CHOICE') {
+    const decider = room.state.combat?.pending[0]?.playerId;
+    if (!decider || me.id !== decider) throw new RoomError('It is not your combat choice to make.');
+  } else if (!COMBAT_PHASE_ACTIONS.has(action.type)) {
     const currentId = room.state.players[room.state.currentPlayerIndex]?.id;
     if (me.id !== currentId) throw new RoomError('It is not your turn.');
   }

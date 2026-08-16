@@ -201,6 +201,7 @@ export function GameBoard({
       {state.combat && !state.winner && (
         <CombatPanel
           state={state}
+          viewerIndex={viewerIndex}
           onPlayPower={onPlayPower}
           onPassCombat={onPassCombat}
           onDiscardMoney={onDiscardMoney}

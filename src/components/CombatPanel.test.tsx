@@ -33,7 +33,7 @@ function combatState(): GameState {
 
 describe('<CombatPanel />', () => {
   it('shows both combatants with their power totals', () => {
-    render(<CombatPanel state={combatState()} />);
+    render(<CombatPanel state={combatState()} viewerIndex={0} />);
     expect(screen.getByText('⚔️ Combat — Power phase')).toBeInTheDocument();
     expect(screen.getByText('Mona')).toBeInTheDocument();
     expect(screen.getByText('Dora')).toBeInTheDocument();
@@ -43,7 +43,7 @@ describe('<CombatPanel />', () => {
   it('plays a Power card and passes via the handlers', () => {
     const onPlayPower = vi.fn();
     const onPassCombat = vi.fn();
-    render(<CombatPanel state={combatState()} onPlayPower={onPlayPower} onPassCombat={onPassCombat} />);
+    render(<CombatPanel state={combatState()} viewerIndex={0} onPlayPower={onPlayPower} onPassCombat={onPassCombat} />);
 
     fireEvent.click(screen.getByText('Boost'));
     expect(onPlayPower).toHaveBeenCalledWith('b1', 'ATTACKER', 'atk');
@@ -53,7 +53,7 @@ describe('<CombatPanel />', () => {
   });
 
   it('renders nothing when there is no combat', () => {
-    const { container } = render(<CombatPanel state={emptyGameState()} />);
+    const { container } = render(<CombatPanel state={emptyGameState()} viewerIndex={0} />);
     expect(container).toBeEmptyDOMElement();
   });
 });

@@ -4,15 +4,21 @@ import { TEAM_META } from '../constants/theme';
 
 export interface CombatChoicePanelProps {
   state: GameState;
+  /** Index of the local player — only `head.playerId` gets the interactive form. */
+  viewerIndex: number;
   onCombatChoice?: (input: CombatChoiceInput) => void;
 }
 
 /**
  * Renders the active pre/post-combat choice (PRE or AFTER phase): Portal
- * (draw / swap), Drones (exchange), Mutants (copy), or Leaving Evidence.
- * Pass-and-play, so the device operates whichever combatant must decide.
+ * (draw / swap), Drones (exchange), Mutants (copy), or Leaving Evidence. This
+ * is always one specific player's decision (`head.playerId` — often the
+ * defender, not whoever's turn it nominally is, e.g. Leaving Evidence belongs
+ * to the injured Civilian even when the Criminal attacker is the current
+ * player). Every other viewer sees a read-only "waiting on" notice instead —
+ * online play is per-player devices, not a shared pass-and-play screen.
  */
-export function CombatChoicePanel({ state, onCombatChoice }: CombatChoicePanelProps) {
+export function CombatChoicePanel({ state, viewerIndex, onCombatChoice }: CombatChoicePanelProps) {
   const [teammateId, setTeammateId] = useState<string>();
   const [weaponId, setWeaponId] = useState<string>();
   const [myCardId, setMyCardId] = useState<string>();
@@ -25,8 +31,29 @@ export function CombatChoicePanel({ state, onCombatChoice }: CombatChoicePanelPr
 
   const byId = (id: string) => state.players.find((p) => p.id === id)!;
   const holder = byId(head.playerId);
+  const viewer = state.players[viewerIndex];
   const teammates = state.players.filter((p) => p.team === holder.team && p.id !== holder.id);
   const teammate = teammateId ? byId(teammateId) : undefined;
+
+  const title = head.kind === 'LEAVING_EVIDENCE' ? 'Leaving Evidence' : `${holder.name}: ${head.kind[0]}${head.kind.slice(1).toLowerCase()}`;
+
+  if (viewer?.id !== holder.id) {
+    return (
+      <section className="cr-combat" aria-label="Combat choice">
+        <header className="cr-combat__head">
+          <h2>⚔️ Combat — {title}</h2>
+          <span className="cr-combat__turn" style={{ color: TEAM_META[holder.team].color }}>{holder.name} is deciding…</span>
+        </header>
+        <div className="cr-role__body">
+          <p className="cr-role__desc">
+            {head.kind === 'LEAVING_EVIDENCE'
+              ? `Waiting for ${holder.name} to choose whether to shuffle any discarded Evidence back into the deck.`
+              : `Waiting for ${holder.name} to decide.`}
+          </p>
+        </div>
+      </section>
+    );
+  }
 
   const chip = (label: string, selected: boolean, onClick: () => void, key: string) => (
     <button key={key} type="button" className={`cr-role__chip${selected ? ' is-selected' : ''}`} onClick={onClick}>
@@ -142,8 +169,6 @@ export function CombatChoicePanel({ state, onCombatChoice }: CombatChoicePanelPr
       </>
     );
   }
-
-  const title = head.kind === 'LEAVING_EVIDENCE' ? 'Leaving Evidence' : `${holder.name}: ${head.kind[0]}${head.kind.slice(1).toLowerCase()}`;
 
   return (
     <section className="cr-combat" aria-label="Combat choice">

@@ -102,6 +102,36 @@ describe('applyAction', () => {
       /not started/,
     );
   });
+
+  it('authorizes COMBAT_CHOICE against the pending choice\'s actual decider, not the current turn', () => {
+    const started = startRoom(roomWith(['A', 'B', 'C', 'D']), { token: 't0', newGame });
+    const state = started.state as GameState;
+    const currentSeat = state.currentPlayerIndex;
+    const deciderSeat = (currentSeat + 1) % 4; // e.g. the injured defender in Leaving Evidence — not the current player
+    const deciderId = state.players[deciderSeat].id;
+    const room: Room = {
+      ...started,
+      state: {
+        ...state,
+        combat: {
+          attacker: { playerId: state.players[currentSeat].id, basePower: 0, powerCardBonus: 0, passed: false, canPlayPower: true },
+          defender: { playerId: deciderId, basePower: 0, powerCardBonus: 0, passed: false, canPlayPower: true },
+          turn: 'ATTACKER', played: [], actionCost: 2, playerCount: 4, phase: 'AFTER',
+          pending: [{ kind: 'LEAVING_EVIDENCE', playerId: deciderId, side: 'DEFENDER' }],
+        },
+      },
+    };
+    const choice = { type: 'COMBAT_CHOICE' as const, input: { kind: 'LEAVING_EVIDENCE' as const, evidenceIds: [] } };
+
+    // Even the current-turn player (e.g. the attacker who just injured them) can't make this choice.
+    expect(() => applyAction(room, { token: `t${currentSeat}`, action: choice, reducer: gameReducer })).toThrow(
+      /not your combat choice/,
+    );
+
+    // The actual decider succeeds, despite it not being "their turn".
+    const after = applyAction(room, { token: `t${deciderSeat}`, action: choice, reducer: gameReducer });
+    expect(after.state?.combat).toBeNull();
+  });
 });
 
 describe('viewFor redaction', () => {

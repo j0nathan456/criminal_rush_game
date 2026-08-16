@@ -4,6 +4,8 @@ import { CombatChoicePanel } from './CombatChoicePanel';
 
 export interface CombatPanelProps {
   state: GameState;
+  /** Index of the local player, for gating the PRE/AFTER choice panel to its decider. */
+  viewerIndex: number;
   onPlayPower?: (cardId: string, side: CombatSide, byPlayerId: string) => void;
   onPassCombat?: (side: CombatSide) => void;
   onDiscardMoney?: (side: CombatSide, cardIds: string[]) => void;
@@ -18,17 +20,20 @@ function contributors(players: Player[], combatant: Player): Player[] {
 
 /**
  * The interactive Power-phase panel (rulebook p.8-10). Shown whenever
- * `state.combat` is set. Pass-and-play: the device operates both sides — it can
- * play any eligible Power card, discard Money via Machine Gun, and pass. The
- * fight resolves automatically once both sides pass.
+ * `state.combat` is set, on every connected player's own device — both the
+ * combatants and their teammates may contribute Power cards to either side
+ * (see `contributors`), so this phase is intentionally shared rather than
+ * restricted to a single viewer. The PRE/AFTER phases below it are not: those
+ * are one specific player's decision, gated in CombatChoicePanel. The fight
+ * resolves automatically once both sides pass.
  */
-export function CombatPanel({ state, onPlayPower, onPassCombat, onDiscardMoney, onCombatChoice }: CombatPanelProps) {
+export function CombatPanel({ state, viewerIndex, onPlayPower, onPassCombat, onDiscardMoney, onCombatChoice }: CombatPanelProps) {
   const combat = state.combat;
   if (!combat) return null;
 
   // PRE (Portal/Drones/Mutants) and AFTER (Leaving Evidence) phases need a choice.
   if (combat.phase !== 'POWER') {
-    return <CombatChoicePanel state={state} onCombatChoice={onCombatChoice} />;
+    return <CombatChoicePanel state={state} viewerIndex={viewerIndex} onCombatChoice={onCombatChoice} />;
   }
 
   const byId = (id: string) => state.players.find((p) => p.id === id)!;
