@@ -42,19 +42,27 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
           <h1 className="text-center text-4xl font-extrabold tracking-wide">Criminal Rush</h1>
           <p className="mt-1 text-center text-teal">Save the City… or Control It</p>
           <div className="gold-rule my-5" />
-          <p className="mb-4 text-center text-sm text-fog">Create a room, then share the code with friends.</p>
+          <p className="mb-4 text-center text-sm text-fog">
+            Enter your name, then create a new room or join one with a code.
+          </p>
 
+          <label htmlFor="player-name" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-fog/80">
+            Your name <span className="text-crim">*</span> <span className="normal-case text-fog/60">(needed either way)</span>
+          </label>
           <input
+            id="player-name"
             className="input"
-            placeholder="Your name"
+            placeholder="e.g. Ava"
             value={name}
             maxLength={20}
             onChange={(e) => setName(e.target.value)}
           />
 
+          <div className="gold-rule my-5" />
+
           <button
             type="button"
-            className="btn btn-primary mt-3 w-full py-3 text-base"
+            className="btn btn-primary w-full py-3 text-base"
             disabled={!name.trim() || game.connecting}
             onClick={() => game.createRoom(name.trim())}
           >
@@ -65,8 +73,12 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
             <span className="h-px flex-1 bg-line" /> or <span className="h-px flex-1 bg-line" />
           </div>
 
+          <label htmlFor="room-code" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-fog/80">
+            Have a room code?
+          </label>
           <div className="flex gap-2">
             <input
+              id="room-code"
               className="input flex-[2]"
               placeholder="Room code"
               value={code}
@@ -82,6 +94,9 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
               Join
             </button>
           </div>
+          {!name.trim() && code.trim().length >= 4 && (
+            <p className="mt-2 text-xs text-amber">Enter your name above to join.</p>
+          )}
 
           {game.error && <p className="mt-4 text-center text-sm text-crim">{game.error}</p>}
 
