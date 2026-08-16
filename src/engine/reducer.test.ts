@@ -936,16 +936,42 @@ describe('gameReducer — remaining perks & events', () => {
     expect(next.drawPile.map((x) => x.id)).toEqual(['cc', 'd']); // third kept on top
   });
 
-  it('Shady Press plays a chosen player’s Event card', () => {
+  it('Shady Press plays the chosen opponent Event card, not just the first one', () => {
     const press = perk('pk', 'Shady Press', { source: 'BLACK_MARKET' });
-    const victimEvent: ActionCard = { id: 'v', name: 'Generational Wealth', description: '', type: 'EVENT' };
+    const decoy: ActionCard = { id: 'd', name: 'Lottery', description: '', type: 'EVENT' };
+    const chosen: ActionCard = { id: 'v', name: 'Generational Wealth', description: '', type: 'EVENT' };
     const s = stateWith([
       mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL'), inventory: [press] }),
-      mkPlayer({ id: 'p1', role: role('mayor', 'CIVILIAN'), money: 0, hand: [victimEvent] }),
+      mkPlayer({ id: 'p1', role: role('mayor', 'CIVILIAN'), money: 0, hand: [decoy, chosen] }),
+    ]);
+    const next = gameReducer(s, { type: 'USE_PERK', perkId: 'pk', payload: { targetId: 'p1', cardId: 'v' } });
+    expect(next.players[1].hand.map((c) => c.id)).toEqual(['d']); // only the chosen card left their hand
+    expect(next.players[1].money).toBe(1); // Generational Wealth resolved for p1's team
+    expect(next.players[0].actionsRemaining).toBe(2);
+  });
+
+  it('Shady Press refuses to target a teammate', () => {
+    const press = perk('pk', 'Shady Press', { source: 'BLACK_MARKET' });
+    const evt: ActionCard = { id: 'v', name: 'Generational Wealth', description: '', type: 'EVENT' };
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL'), inventory: [press] }),
+      mkPlayer({ id: 'p1', role: role('robber', 'CRIMINAL'), hand: [evt] }),
+    ]);
+    const next = gameReducer(s, { type: 'USE_PERK', perkId: 'pk', payload: { targetId: 'p1', cardId: 'v' } });
+    expect(next.players[1].hand).toHaveLength(1); // untouched
+    expect(next.players[0].actionsRemaining).toBe(3); // action not spent
+  });
+
+  it('Shady Press wastes the action when the target has no Event cards', () => {
+    const press = perk('pk', 'Shady Press', { source: 'BLACK_MARKET' });
+    const money: ActionCard = { id: 'm', name: 'Profit', description: '', type: 'MONEY', value: 2 };
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL'), inventory: [press] }),
+      mkPlayer({ id: 'p1', role: role('mayor', 'CIVILIAN'), hand: [money] }),
     ]);
     const next = gameReducer(s, { type: 'USE_PERK', perkId: 'pk', payload: { targetId: 'p1' } });
-    expect(next.players[1].hand).toHaveLength(0); // event played out of their hand
-    expect(next.players[1].money).toBe(1); // Generational Wealth resolved for p1's team
+    expect(next.players[1].hand).toHaveLength(1); // nothing happens to their hand
+    expect(next.players[0].actionsRemaining).toBe(2); // but the action is still spent
   });
 });
 

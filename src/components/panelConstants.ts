@@ -8,9 +8,10 @@
 /** Roles whose ability is passive (no per-turn Action to trigger or copy). */
 export const PASSIVE_ROLES = new Set(['mayor', 'attorney', 'vigilante', 'hitman', 'spy']);
 
-/** Perks with an engine-backed "Action:" (see reducer.usePerk). */
+/** Perks with an engine-backed "Action:" (see reducer.applyPerk). */
 export const ACTIONABLE_PERKS = new Set([
   'Water Bottle', 'Bank', 'Credit Card', 'Recycling Bin', 'Hacked Passwords', 'Alarm Clock', 'Coffee Machine',
+  'Trash Can', 'Manipulate', 'Shady Press',
 ]);
 
 /**

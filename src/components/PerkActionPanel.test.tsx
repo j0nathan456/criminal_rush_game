@@ -50,4 +50,30 @@ describe('<PerkActionPanel />', () => {
     fireEvent.click(screen.getByText('Use'));
     expect(onSubmit).toHaveBeenCalledWith('cc', expect.objectContaining({ marketCardId: 'shop', discardForBonus: false }));
   });
+
+  it('Shady Press: pick an opponent, then one of their Event cards', () => {
+    const onSubmit = vi.fn();
+    const evt: ActionCard = { id: 'e1', name: 'Tax Collection', description: '', type: 'EVENT' };
+    const viewer = mkPlayer({ id: 'p0', name: 'Ana', team: 'CRIMINAL', inventory: [perk('sp', 'Shady Press')] });
+    const opponent = mkPlayer({ id: 'p1', name: 'Ben', team: 'CIVILIAN', hand: [evt] });
+    render(<PerkActionPanel state={stateWith([viewer, opponent])} viewerIndex={0} perkId="sp" onSubmit={onSubmit} onCancel={() => {}} />);
+
+    expect(screen.getByText('Use').closest('button')).toBeDisabled();
+    fireEvent.click(screen.getByText('Ben'));
+    expect(screen.getByText('Use').closest('button')).toBeDisabled(); // still need a card choice
+    fireEvent.click(screen.getByText('Tax Collection'));
+    fireEvent.click(screen.getByText('Use'));
+    expect(onSubmit).toHaveBeenCalledWith('sp', expect.objectContaining({ targetId: 'p1', cardId: 'e1' }));
+  });
+
+  it('Shady Press: an opponent with no Event cards can still be confirmed (wastes the action)', () => {
+    const onSubmit = vi.fn();
+    const viewer = mkPlayer({ id: 'p0', name: 'Ana', team: 'CRIMINAL', inventory: [perk('sp', 'Shady Press')] });
+    const opponent = mkPlayer({ id: 'p1', name: 'Ben', team: 'CIVILIAN', hand: [money('m1')] });
+    render(<PerkActionPanel state={stateWith([viewer, opponent])} viewerIndex={0} perkId="sp" onSubmit={onSubmit} onCancel={() => {}} />);
+
+    fireEvent.click(screen.getByText('Ben'));
+    fireEvent.click(screen.getByText('Use'));
+    expect(onSubmit).toHaveBeenCalledWith('sp', expect.objectContaining({ targetId: 'p1', cardId: undefined }));
+  });
 });

@@ -1229,8 +1229,7 @@ function trade(
 /**
  * Resolve an "Action:" perk (rulebook p.6, p.13-15). Each costs 1 action and is
  * usable once per turn; Water Bottle is the exception (a free discard for an
- * extra action). Perks that need bespoke sub-state — Coffee Machine, Trash Can,
- * Manipulate, Shady Press, Journal — remain manual for now.
+ * extra action).
  */
 function applyPerk(
   state: GameState,
@@ -1380,12 +1379,18 @@ function applyPerk(
       return log(spend(s), `${player.name} uses Manipulate on the top of the deck.`);
     }
     case 'Shady Press': {
-      // See a chosen player's Event cards and play one of them immediately.
+      // Choose an opponent, see all their Event cards, and play one of them
+      // immediately (as if they had played it). If they hold none, the action
+      // is still spent — "nothing happens" (rulebook), not a free retry.
       const ti = payload.targetId ? playerIndexById(state, payload.targetId) : -1;
       const victim = state.players[ti];
-      if (!victim || ti === idx) return log(state, 'Choose another player for Shady Press.');
-      const evt = victim.hand.find((c) => c.type === 'EVENT');
-      if (!evt) return log(state, `${victim.name} has no Event cards.`);
+      if (!victim || victim.team === player.team) return log(state, 'Shady Press must target an opponent.');
+      const events = victim.hand.filter((c) => c.type === 'EVENT');
+      if (events.length === 0) {
+        return log(spend(state), `${victim.name} has no Event cards — the Action is wasted.`);
+      }
+      const evt = events.find((c) => c.id === payload.cardId);
+      if (!evt) return log(state, `Choose one of ${victim.name}'s Event cards to play.`);
       let s = updatePlayer(state, ti, (p) => ({ ...p, hand: p.hand.filter((c) => c.id !== evt.id) }));
       s = { ...s, discardPile: [...s.discardPile, evt] };
       s = resolveEvent(s, ti, evt.name, undefined, {});

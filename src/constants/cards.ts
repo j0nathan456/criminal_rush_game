@@ -139,7 +139,7 @@ export const BLACK_MARKET_PERKS: CardDef<MarketCard>[] = [
   { name: 'Bribery', description: 'When sold, pay $1 to a Civilian to discard 1 Evidence card from the grid.', cost: 1, source: 'BLACK_MARKET', type: 'PERK', copies: 1 },
   { name: 'Laboratory', description: 'Start of turn: draw a card. Your Chemical/Tech weapons are +1 PL.', cost: 3, source: 'BLACK_MARKET', type: 'PERK', isPassive: true, copies: 1 },
   { name: 'Ironworks', description: 'Start of turn: gain $1. Your Melee/Ranged weapons are +1 PL.', cost: 3, source: 'BLACK_MARKET', type: 'PERK', isPassive: true, copies: 1 },
-  { name: 'Shady Press', description: 'Action: view a player’s Event cards and play one immediately.', cost: 2, source: 'BLACK_MARKET', type: 'PERK', copies: 1 },
+  { name: 'Shady Press', description: 'Action: choose an opponent, see all their Event cards, and play one immediately.', cost: 2, source: 'BLACK_MARKET', type: 'PERK', copies: 1 },
   { name: 'Corrupt Connections', description: 'Start of turn: gain an extra action this turn.', cost: 3, source: 'BLACK_MARKET', type: 'PERK', isPassive: true, copies: 1 },
   { name: 'Disguise', description: 'On purchase, draw 2 cards. Cannot be Exposed while held. Start of turn: discard it.', cost: 1, source: 'BLACK_MARKET', type: 'PERK', copies: 1 },
 ];

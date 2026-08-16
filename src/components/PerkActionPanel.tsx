@@ -35,6 +35,8 @@ export function PerkActionPanel({ state, viewerIndex, perkId, onSubmit, onCancel
 
   const teammates = state.players.filter((p) => p.team === viewer.team && p.id !== viewer.id);
   const others = state.players.filter((p) => p.id !== viewer.id);
+  const opponents = state.players.filter((p) => p.team !== viewer.team);
+  const target = targetId ? state.players.find((p) => p.id === targetId) : undefined;
   const market: MarketCard[] = viewer.team === 'CRIMINAL' ? [...state.publicMarket, ...state.blackMarket] : state.publicMarket;
 
   const chip = (label: string, selected: boolean, onClick: () => void, key?: string) => (
@@ -107,6 +109,42 @@ export function PerkActionPanel({ state, viewerIndex, perkId, onSubmit, onCancel
         </>
       );
       canSubmit = true; // defaults to self
+      break;
+    case 'Trash Can': {
+      const pile = state.trashPile ?? [];
+      body = (
+        <>
+          <p>Buy from the trash can at a $1 discount:</p>
+          <div className="cr-role__chips">
+            {pile.length === 0 && <span className="cr-role__empty">The trash can is empty.</span>}
+            {pile.map((c) => chip(`${c.name} ($${Math.max(0, c.cost - 1)})`, marketCardId === c.id, () => setMarketCardId(c.id), c.id))}
+          </div>
+        </>
+      );
+      canSubmit = !!marketCardId;
+      break;
+    }
+    case 'Manipulate':
+      body = <p>Look at the top 3 cards of the deck: take 1, discard 1, and keep 1 on top.</p>;
+      canSubmit = true;
+      break;
+    case 'Shady Press':
+      body = (
+        <>
+          <p>Choose an opponent to see their Event cards:</p>
+          <div className="cr-role__chips">
+            {opponents.length === 0 && <span className="cr-role__empty">No opponents.</span>}
+            {opponents.map((p) => chip(p.name, targetId === p.id, () => { setTargetId(p.id); setCardId(undefined); }, p.id))}
+          </div>
+          {target && (
+            <>
+              <p className="cr-role__sub">Play which of {target.name}'s Event cards?</p>
+              {cardRow(target.hand.filter((c) => c.type === 'EVENT'), `${target.name} has no Event cards — using this wastes the action.`)}
+            </>
+          )}
+        </>
+      );
+      canSubmit = !!targetId && (target ? target.hand.filter((c) => c.type === 'EVENT').length === 0 || !!cardId : false);
       break;
     default:
       body = <p>{perk.name} is resolved manually at the table.</p>;
