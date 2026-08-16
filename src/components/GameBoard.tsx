@@ -24,6 +24,7 @@ import { PerkActionPanel } from './PerkActionPanel';
 import { AllySupportPanel } from './AllySupportPanel';
 import { EventPanel } from './EventPanel';
 import { MarketDiscountPanel } from './MarketDiscountPanel';
+import { TargetPicker } from './TargetPicker';
 
 /** Which target the board is currently asking the player to pick. */
 export type TargetMode = 'attack' | 'expose' | null;
@@ -181,19 +182,14 @@ export function GameBoard({
       )}
 
       <AnimatePresence>
-        {(notice || targeting) && !state.winner && !state.combat && (
+        {notice && !targeting && !state.winner && !state.combat && (
           <motion.div
             initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             className="flex items-center justify-between gap-3 rounded-lg border border-amber/40 bg-amber/10 px-4 py-2.5 text-amber"
           >
-            <span>{targeting ? `Select a target to ${targeting}.` : notice}</span>
-            {targeting && (
-              <button type="button" className="btn btn-ghost border-amber/60 px-3 py-1 text-amber" onClick={onCancelTargeting}>
-                Cancel
-              </button>
-            )}
+            <span>{notice}</span>
           </motion.div>
         )}
       </AnimatePresence>
@@ -275,10 +271,13 @@ export function GameBoard({
                 </button>
               )}
 
-              {/* Ability/perk/event "gather more input" panels render here, right
-                  under the viewer's own hand, rather than up at the top of the
-                  page — this is their own decision, so it belongs next to the
+              {/* Ability/perk/event/target "gather more input" panels render here,
+                  right under the viewer's own hand, rather than up at the top of
+                  the page — this is their own decision, so it belongs next to the
                   hand they're making it from. */}
+              {targeting && !state.combat && !state.winner && (
+                <TargetPicker state={state} viewerIndex={viewerIndex} mode={targeting} onSelectTarget={onSelectTarget} onCancel={onCancelTargeting} />
+              )}
               {roleAbilityOpen && !state.combat && !state.winner && (
                 <RoleAbilityPanel state={state} viewerIndex={viewerIndex} onSubmit={onSubmitRoleAbility} onCancel={onCancelRoleAbility} />
               )}
