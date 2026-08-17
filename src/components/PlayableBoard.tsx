@@ -16,7 +16,7 @@ interface PlayableBoardProps {
 export function PlayableBoard({ state, viewerIndex, dispatch }: PlayableBoardProps) {
   const {
     selectedCardId, targeting, notice, roleAbilityOpen, activePerkId, allySupportCardId, eventCardId, exposeTargetId,
-    handlers,
+    tradeOpen, handlers,
   } = useBoardInteractions(state, viewerIndex, dispatch);
   return (
     <GameBoard
@@ -30,6 +30,7 @@ export function PlayableBoard({ state, viewerIndex, dispatch }: PlayableBoardPro
       allySupportCardId={allySupportCardId}
       eventCardId={eventCardId}
       exposeTargetId={exposeTargetId}
+      tradeOpen={tradeOpen}
       {...handlers}
     />
   );

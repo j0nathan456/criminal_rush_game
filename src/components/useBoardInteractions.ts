@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import type { GameState } from '../types/game';
 import type { AnyCard, EvidenceCategory } from '../types/cards';
-import type { GameAction, RoleAbilityPayload, PerkPayload, EventOptions } from '../engine';
+import type { GameAction, RoleAbilityPayload, PerkPayload, EventOptions, TradeItem } from '../engine';
 import type { ActionMeta } from '../constants/theme';
 import type { GameBoardHandlers, TargetMode } from './GameBoard';
 import { CONFIGURABLE_EVENTS } from './panelConstants';
@@ -28,6 +28,8 @@ export interface BoardInteractions {
   eventCardId: string | null;
   /** The Criminal being Exposed, once a grid category needs a card choice, or null. */
   exposeTargetId: string | null;
+  /** Whether the Trade panel is open for the viewer to initiate a trade. */
+  tradeOpen: boolean;
   handlers: GameBoardHandlers;
   /** Clear transient selection/targeting (e.g. after ending a turn). */
   reset: () => void;
@@ -46,6 +48,7 @@ export function useBoardInteractions(
   const [allySupportCardId, setAllySupportCardId] = useState<string | null>(null);
   const [eventCardId, setEventCardId] = useState<string | null>(null);
   const [exposeTargetId, setExposeTargetId] = useState<string | null>(null);
+  const [tradeOpen, setTradeOpen] = useState(false);
 
   const viewer = state.players[viewerIndex];
   const selectedCard = viewer?.hand.find((c) => c.id === selectedCardId);
@@ -59,6 +62,7 @@ export function useBoardInteractions(
     setAllySupportCardId(null);
     setEventCardId(null);
     setExposeTargetId(null);
+    setTradeOpen(false);
   };
 
   /**
@@ -116,7 +120,9 @@ export function useBoardInteractions(
         setRoleAbilityOpen(true);
         break;
       case 'TRADE':
-        setNotice('Trading is resolved manually at the table for now.');
+        setSelectedCardId(null);
+        setTargeting(null);
+        setTradeOpen(true);
         break;
       case 'SPECIAL_GOAL':
         if (viewer?.team === 'CIVILIAN') setTargeting('expose');
@@ -223,10 +229,17 @@ export function useBoardInteractions(
       setExposeTargetId(null);
     },
     onCancelExpose: () => setExposeTargetId(null),
+    onInitiateTrade: (targetId: string, give: TradeItem) => {
+      dispatch({ type: 'INITIATE_TRADE', targetId, give });
+      setTradeOpen(false);
+    },
+    onResolveTradeReturn: (give: TradeItem | null) => dispatch({ type: 'RESOLVE_TRADE_RETURN', give }),
+    onCancelTrade: () => setTradeOpen(false),
+    onResolveExpressShipping: (mode: 'MONEY' | 'DRAW') => dispatch({ type: 'RESOLVE_EXPRESS_SHIPPING', mode }),
   };
 
   return {
     selectedCardId, targeting, notice, roleAbilityOpen, activePerkId, allySupportCardId, eventCardId, exposeTargetId,
-    handlers, reset,
+    tradeOpen, handlers, reset,
   };
 }

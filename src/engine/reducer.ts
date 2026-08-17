@@ -45,7 +45,9 @@ export type GameAction =
   | { type: 'COMBAT_CHOICE'; input: CombatChoiceInput }
   | { type: 'PASS_COMBAT'; side: CombatSide }
   | { type: 'USE_ROLE_ABILITY'; payload?: RoleAbilityPayload }
-  | { type: 'TRADE'; targetId: string; give: TradeItem; receive: TradeItem }
+  | { type: 'INITIATE_TRADE'; targetId: string; give: TradeItem }
+  | { type: 'RESOLVE_TRADE_RETURN'; give: TradeItem | null }
+  | { type: 'RESOLVE_EXPRESS_SHIPPING'; mode: 'MONEY' | 'DRAW' }
   | { type: 'USE_PERK'; perkId: string; payload?: PerkPayload }
   | { type: 'CLEAR_TRAFFIC' }
   | { type: 'USE_MARKET_DISCOUNT'; cardId: string }
@@ -76,9 +78,11 @@ export interface PerkPayload {
 }
 
 /**
- * One side of a trade (rulebook p.7). A trade swaps exactly one of these each
- * way. Perks are intentionally not tradeable, so only money, a hand card, or a
- * weapon (by `cardId`) can move.
+ * One trade gift (rulebook p.7): money, a hand card, or a weapon (by
+ * `cardId`). Perks are intentionally not tradeable. A trade is two one-way
+ * gifts, not a single atomic swap — INITIATE_TRADE's `give` is the
+ * initiator's choice; RESOLVE_TRADE_RETURN's `give` is the *teammate's own*
+ * choice of what to give back (or null if they have nothing to give).
  */
 export interface TradeItem {
   kind: 'MONEY' | 'CARD' | 'WEAPON';
@@ -162,6 +166,8 @@ export function emptyGameState(): GameState {
     trashPile: [],
     pendingMarketDiscount: null,
     pendingThreaten: null,
+    pendingTrade: null,
+    pendingExpressShipping: null,
   };
 }
 
@@ -235,6 +241,19 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
     return log(state, 'Resolve the Threaten choice before taking other actions.');
   }
 
+  // Trade's return gift belongs to the teammate who received the first half,
+  // not whoever's turn it nominally is — block everything else until they
+  // give something back (or confirm they have nothing to).
+  if (state.pendingTrade && action.type !== 'RESOLVE_TRADE_RETURN') {
+    return log(state, 'Resolve the pending trade before taking other actions.');
+  }
+
+  // Express Shipping's $1-or-draw choice is a direct consequence of the Trade
+  // that just resolved — block everything else until it's answered.
+  if (state.pendingExpressShipping && action.type !== 'RESOLVE_EXPRESS_SHIPPING') {
+    return log(state, 'Choose Express Shipping\'s payout before taking other actions.');
+  }
+
   switch (action.type) {
     case 'DRAW_CARD':
       return drawCard(state, idx, player);
@@ -260,8 +279,12 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
       return passCombat(state, action.side);
     case 'USE_ROLE_ABILITY':
       return applyRoleAbility(state, idx, player, action.payload ?? {});
-    case 'TRADE':
-      return trade(state, idx, player, action.targetId, action.give, action.receive);
+    case 'INITIATE_TRADE':
+      return initiateTrade(state, idx, player, action.targetId, action.give);
+    case 'RESOLVE_TRADE_RETURN':
+      return resolveTradeReturn(state, action.give);
+    case 'RESOLVE_EXPRESS_SHIPPING':
+      return resolveExpressShipping(state, action.mode);
     case 'USE_PERK':
       return applyPerk(state, idx, player, action.perkId, action.payload ?? {});
     case 'CLEAR_TRAFFIC':
@@ -1242,18 +1265,30 @@ function applyTradeItem(
 }
 
 /**
- * Trade with a teammate (rulebook p.7): give one money/card/weapon and receive
- * one back. Costs 1 action, +1 if the teammate holds a Traffic token, −1 (once
- * per turn) if the trader has a Radio. Express Shipping pays its owner $1 after
- * a trade on their own turn.
+ * A trade gift's case-log label — the card's identity stays private (never
+ * written to the shared log), but a weapon's name and $1 are public.
  */
-function trade(
+function tradeGiftLabel(giver: Player, item: TradeItem): string {
+  if (item.kind === 'MONEY') return '$1';
+  if (item.kind === 'WEAPON') {
+    const w = giver.inventory.find((c) => c.id === item.cardId);
+    return w ? w.name : 'a weapon';
+  }
+  return 'a card';
+}
+
+/**
+ * Trade with a teammate (rulebook p.7): the initiator gives one money/card/
+ * weapon; the teammate then must give one back — their own choice, not the
+ * initiator's (see resolveTradeReturn). Costs 1 action, +1 if the teammate
+ * holds a Traffic token, −1 (once per turn) if the trader has a Radio.
+ */
+function initiateTrade(
   state: GameState,
   idx: number,
   player: Player,
   targetId: string,
   give: TradeItem,
-  receive: TradeItem,
 ): GameState {
   const ti = playerIndexById(state, targetId);
   const mate = state.players[ti];
@@ -1264,28 +1299,70 @@ function trade(
   const cost = Math.max(0, 1 + (mate.trafficToken ? 1 : 0) - (usesRadio ? 1 : 0));
   if (player.actionsRemaining < cost) return log(state, `Trading costs ${cost} action(s).`);
 
-  // Player gives first, then the teammate gives back (roles swap on the return).
-  const outbound = applyTradeItem(player, mate, give);
-  if (!outbound.ok) return log(state, outbound.error);
-  const inbound = applyTradeItem(outbound.to, outbound.from, receive);
-  if (!inbound.ok) return log(state, inbound.error);
-  const playerFinal = inbound.to; // the trader after giving and receiving
-  const mateFinal = inbound.from; // the teammate after receiving and giving back
+  const moved = applyTradeItem(player, mate, give);
+  if (!moved.ok) return log(state, moved.error);
 
   let s = updatePlayer(state, idx, () => ({
-    ...playerFinal,
-    actionsRemaining: playerFinal.actionsRemaining - cost,
-    hasUsedRadio: usesRadio ? true : playerFinal.hasUsedRadio,
+    ...moved.from,
+    actionsRemaining: moved.from.actionsRemaining - cost,
+    hasUsedRadio: usesRadio ? true : moved.from.hasUsedRadio,
   }));
-  s = updatePlayer(s, ti, () => mateFinal);
-  s = log(s, `${player.name} trades with ${mate.name}.`);
+  s = updatePlayer(s, ti, () => moved.to);
+  s = log(s, `${player.name} trades ${tradeGiftLabel(player, give)} to ${mate.name}.`);
+  return { ...s, pendingTrade: { initiatorId: player.id, recipientId: mate.id } };
+}
 
-  // Express Shipping: gain $1 after trading on your own turn.
-  if (player.inventory.some((c) => c.name === 'Express Shipping')) {
-    s = updatePlayer(s, idx, (p) => ({ ...p, money: p.money + 1 }));
-    s = log(s, `${player.name}'s Express Shipping pays $1.`);
+/**
+ * The teammate's half of a trade: give one item back to the initiator (their
+ * own choice), or `null` if they truly have nothing to give. Express
+ * Shipping — "after you trade, during your own turn's Trade action"
+ * (rulebook clarification) — pays out only to the *initiator*, never the
+ * teammate, and only once the whole trade is done; see resolveExpressShipping
+ * for the $1-or-draw choice that follows.
+ */
+function resolveTradeReturn(state: GameState, give: TradeItem | null): GameState {
+  const pending = state.pendingTrade;
+  if (!pending) return state;
+  const initIdx = playerIndexById(state, pending.initiatorId);
+  const recIdx = playerIndexById(state, pending.recipientId);
+  const initiator = state.players[initIdx];
+  const recipient = state.players[recIdx];
+  if (!initiator || !recipient) return { ...state, pendingTrade: null };
+
+  let s: GameState;
+  if (!give) {
+    s = log(state, `${recipient.name} has nothing to trade back.`);
+  } else {
+    const moved = applyTradeItem(recipient, initiator, give);
+    if (!moved.ok) return log(state, moved.error); // stays pending — let them pick again
+    s = updatePlayer(state, recIdx, () => moved.from);
+    s = updatePlayer(s, initIdx, () => moved.to);
+    s = log(s, `${recipient.name} trades ${tradeGiftLabel(recipient, give)} to ${initiator.name}.`);
+  }
+
+  s = { ...s, pendingTrade: null };
+  if (initiator.inventory.some((c) => c.name === 'Express Shipping')) {
+    s = log(s, `${initiator.name}'s Express Shipping triggers — choose $1 or draw a card.`);
+    s = { ...s, pendingExpressShipping: { playerId: initiator.id } };
   }
   return s;
+}
+
+/** Express Shipping's payout: $1, or a card draw — the owner's choice, never both. */
+function resolveExpressShipping(state: GameState, mode: 'MONEY' | 'DRAW'): GameState {
+  const pending = state.pendingExpressShipping;
+  if (!pending) return state;
+  const idx = playerIndexById(state, pending.playerId);
+  const player = state.players[idx];
+  if (!player) return { ...state, pendingExpressShipping: null };
+
+  let s: GameState;
+  if (mode === 'DRAW') {
+    s = log(gameReducerDraw(state), `${player.name}'s Express Shipping draws a card.`);
+  } else {
+    s = log(updatePlayer(state, idx, (p) => ({ ...p, money: p.money + 1 })), `${player.name}'s Express Shipping pays $1.`);
+  }
+  return { ...s, pendingExpressShipping: null };
 }
 
 /**

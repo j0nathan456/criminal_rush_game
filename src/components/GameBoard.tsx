@@ -2,7 +2,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { GameState, Player, CombatSide } from '../types/game';
 import type { EvidenceCategory, AnyCard, MarketCard } from '../types/cards';
 import type { ActionMeta } from '../constants/theme';
-import type { RoleAbilityPayload, PerkPayload, EventOptions } from '../engine';
+import type { RoleAbilityPayload, PerkPayload, EventOptions, TradeItem } from '../engine';
 import type { CombatChoiceInput } from '../types/game';
 import { actionsForTurn, actionAvailability, handCardPlayable, neighborIds } from '../engine';
 import { TEAM_META } from '../constants/theme';
@@ -26,6 +26,8 @@ import { EventPanel } from './EventPanel';
 import { MarketDiscountPanel } from './MarketDiscountPanel';
 import { ThreatenPanel } from './ThreatenPanel';
 import { ExposeEvidencePanel } from './ExposeEvidencePanel';
+import { TradePanel } from './TradePanel';
+import { ExpressShippingPanel } from './ExpressShippingPanel';
 import { TargetPicker } from './TargetPicker';
 
 /** Which target the board is currently asking the player to pick. */
@@ -60,6 +62,10 @@ export interface GameBoardHandlers {
   onResolveThreaten?: (mode: 'MONEY' | 'DISCARD') => void;
   onSubmitExpose?: (targetId: string, evidenceChoices: Partial<Record<EvidenceCategory, string>>) => void;
   onCancelExpose?: () => void;
+  onInitiateTrade?: (targetId: string, give: TradeItem) => void;
+  onResolveTradeReturn?: (give: TradeItem | null) => void;
+  onCancelTrade?: () => void;
+  onResolveExpressShipping?: (mode: 'MONEY' | 'DRAW') => void;
 }
 
 interface GameBoardProps extends GameBoardHandlers {
@@ -80,6 +86,8 @@ interface GameBoardProps extends GameBoardHandlers {
   eventCardId?: string | null;
   /** The Criminal being Exposed, once a grid category needs a card choice, or null. */
   exposeTargetId?: string | null;
+  /** Whether the Trade panel is open for the viewer to initiate a trade. */
+  tradeOpen?: boolean;
 }
 
 /**
@@ -98,6 +106,7 @@ export function GameBoard({
   allySupportCardId = null,
   eventCardId = null,
   exposeTargetId = null,
+  tradeOpen = false,
   onAction,
   onEndTurn,
   onSelectCard,
@@ -126,6 +135,10 @@ export function GameBoard({
   onResolveThreaten,
   onSubmitExpose,
   onCancelExpose,
+  onInitiateTrade,
+  onResolveTradeReturn,
+  onCancelTrade,
+  onResolveExpressShipping,
 }: GameBoardProps) {
   const viewer = state.players[viewerIndex];
   const isViewersTurn = viewerIndex === state.currentPlayerIndex;
@@ -220,6 +233,21 @@ export function GameBoard({
         <ThreatenPanel state={state} viewerIndex={viewerIndex} onResolveThreaten={onResolveThreaten} />
       )}
 
+      {(tradeOpen || state.pendingTrade) && !state.combat && !state.pendingThreaten && !state.winner && (
+        <TradePanel
+          key={state.pendingTrade ? `return-${state.pendingTrade.recipientId}` : 'initiate'}
+          state={state}
+          viewerIndex={viewerIndex}
+          onInitiate={onInitiateTrade}
+          onResolveReturn={onResolveTradeReturn}
+          onCancel={onCancelTrade}
+        />
+      )}
+
+      {state.pendingExpressShipping && !state.combat && !state.winner && (
+        <ExpressShippingPanel state={state} viewerIndex={viewerIndex} onResolve={onResolveExpressShipping} />
+      )}
+
       {/* Board grid — columns 1:3:1, three rows:
           row 1  Score Board · Evidence Grid · Case Log
           row 2  Players     · Markets       · Deck/Discard
@@ -294,10 +322,10 @@ export function GameBoard({
                   right under the viewer's own hand, rather than up at the top of
                   the page — this is their own decision, so it belongs next to the
                   hand they're making it from. */}
-              {targeting && !state.combat && !state.pendingThreaten && !state.winner && (
+              {targeting && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.winner && (
                 <TargetPicker state={state} viewerIndex={viewerIndex} mode={targeting} onSelectTarget={onSelectTarget} onCancel={onCancelTargeting} />
               )}
-              {exposeTargetId && !state.combat && !state.pendingThreaten && !state.winner && (
+              {exposeTargetId && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.winner && (
                 <ExposeEvidencePanel
                   state={state}
                   viewerIndex={viewerIndex}
@@ -306,22 +334,22 @@ export function GameBoard({
                   onCancel={onCancelExpose}
                 />
               )}
-              {roleAbilityOpen && !state.combat && !state.pendingThreaten && !state.winner && (
+              {roleAbilityOpen && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.winner && (
                 <RoleAbilityPanel state={state} viewerIndex={viewerIndex} onSubmit={onSubmitRoleAbility} onCancel={onCancelRoleAbility} />
               )}
-              {activePerkId && !state.combat && !state.pendingThreaten && !state.winner && (
+              {activePerkId && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.winner && (
                 <PerkActionPanel state={state} viewerIndex={viewerIndex} perkId={activePerkId} onSubmit={onSubmitPerk} onCancel={onCancelPerk} />
               )}
-              {allySupportCardId && !state.combat && !state.pendingThreaten && !state.winner && (
+              {allySupportCardId && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.winner && (
                 <AllySupportPanel state={state} viewerIndex={viewerIndex} onSubmit={onSubmitAllySupport} onCancel={onCancelAllySupport} />
               )}
-              {eventCardId && !state.combat && !state.pendingThreaten && !state.winner && (() => {
+              {eventCardId && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.winner && (() => {
                 const eventCard = viewer.hand.find((c) => c.id === eventCardId);
                 return eventCard ? (
                   <EventPanel state={state} viewerIndex={viewerIndex} card={eventCard} onSubmit={onSubmitEvent} onCancel={onCancelEvent} />
                 ) : null;
               })()}
-              {state.pendingMarketDiscount?.playerId === viewer.id && !state.combat && !state.pendingThreaten && !state.winner && (
+              {state.pendingMarketDiscount?.playerId === viewer.id && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.winner && (
                 <MarketDiscountPanel
                   state={state}
                   viewerIndex={viewerIndex}

@@ -159,6 +159,39 @@ describe('applyAction', () => {
     const after = applyAction(room, { token: `t${defenderSeat}`, action: { type: 'PASS_COMBAT', side: 'DEFENDER' }, reducer: gameReducer });
     expect(after.state?.combat?.defender.passed).toBe(true);
   });
+
+  it('authorizes RESOLVE_THREATEN against the Arsonist\'s target, not the current turn', () => {
+    const started = startRoom(roomWith(['A', 'B', 'C', 'D']), { token: 't0', newGame });
+    const state = started.state as GameState;
+    const currentSeat = state.currentPlayerIndex;
+    const targetSeat = (currentSeat + 1) % 4;
+    const room: Room = { ...started, state: { ...state, pendingThreaten: { targetId: state.players[targetSeat].id } } };
+    const action = { type: 'RESOLVE_THREATEN' as const, mode: 'MONEY' as const };
+
+    // Even the current-turn player (the Arsonist who threatened them) can't resolve it.
+    expect(() => applyAction(room, { token: `t${currentSeat}`, action, reducer: gameReducer })).toThrow(/not your Threaten choice/);
+
+    const after = applyAction(room, { token: `t${targetSeat}`, action, reducer: gameReducer });
+    expect(after.state?.pendingThreaten).toBeNull();
+  });
+
+  it('authorizes RESOLVE_TRADE_RETURN against the recipient, not the initiator', () => {
+    const started = startRoom(roomWith(['A', 'B', 'C', 'D']), { token: 't0', newGame });
+    const state = started.state as GameState;
+    const initiatorSeat = state.currentPlayerIndex;
+    const recipientSeat = (initiatorSeat + 1) % 4;
+    const room: Room = {
+      ...started,
+      state: { ...state, pendingTrade: { initiatorId: state.players[initiatorSeat].id, recipientId: state.players[recipientSeat].id } },
+    };
+    const action = { type: 'RESOLVE_TRADE_RETURN' as const, give: null };
+
+    // The initiator (whose turn it nominally is) can't answer for the recipient.
+    expect(() => applyAction(room, { token: `t${initiatorSeat}`, action, reducer: gameReducer })).toThrow(/not your trade/);
+
+    const after = applyAction(room, { token: `t${recipientSeat}`, action, reducer: gameReducer });
+    expect(after.state?.pendingTrade).toBeNull();
+  });
 });
 
 describe('viewFor redaction', () => {

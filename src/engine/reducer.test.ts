@@ -854,25 +854,30 @@ describe('gameReducer — USE_MARKET_DISCOUNT / SKIP_MARKET_DISCOUNT', () => {
   });
 });
 
-describe('gameReducer — TRADE', () => {
+describe('gameReducer — INITIATE_TRADE / RESOLVE_TRADE_RETURN', () => {
   const money = (id: string): ActionCard => ({ id, name: 'Profit', description: '', type: 'MONEY', value: 2 });
+  const weapon = (id: string, name: string): MarketCard => ({ id, name, description: '', cost: 3, source: 'PUBLIC', type: 'WEAPON', weaponType: 'MELEE', power: 2 });
 
-  it('swaps a card for $1 with a teammate and spends 1 action', () => {
+  it('gives a card, sets a pending return, and spends 1 action — the card stays out of the log', () => {
     const s = stateWith([
-      mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 2, hand: [money('c1')] }),
-      mkPlayer({ id: 'p1', role: role('attorney', 'CIVILIAN'), money: 3 }),
+      mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), hand: [money('c1')] }),
+      mkPlayer({ id: 'p1', role: role('attorney', 'CIVILIAN') }),
     ]);
-    const next = gameReducer(s, {
-      type: 'TRADE',
-      targetId: 'p1',
-      give: { kind: 'CARD', cardId: 'c1' },
-      receive: { kind: 'MONEY' },
-    });
+    const next = gameReducer(s, { type: 'INITIATE_TRADE', targetId: 'p1', give: { kind: 'CARD', cardId: 'c1' } });
     expect(next.players[0].hand).toHaveLength(0);
-    expect(next.players[0].money).toBe(3); // gave a card, received $1
     expect(next.players[1].hand.map((c) => c.id)).toContain('c1');
-    expect(next.players[1].money).toBe(2);
     expect(next.players[0].actionsRemaining).toBe(2);
+    expect(next.pendingTrade).toEqual({ initiatorId: 'p0', recipientId: 'p1' });
+    expect(next.gameLog.at(-1)).toBe('p0 trades a card to p1.');
+  });
+
+  it('names a traded weapon in the log but never a traded card', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), inventory: [weapon('w1', 'Parasites')] }),
+      mkPlayer({ id: 'p1', role: role('attorney', 'CIVILIAN') }),
+    ]);
+    const next = gameReducer(s, { type: 'INITIATE_TRADE', targetId: 'p1', give: { kind: 'WEAPON', cardId: 'w1' } });
+    expect(next.gameLog.at(-1)).toBe('p0 trades Parasites to p1.');
   });
 
   it('refuses to trade with an opponent', () => {
@@ -880,8 +885,9 @@ describe('gameReducer — TRADE', () => {
       mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 2 }),
       mkPlayer({ id: 'p1', role: role('hitman', 'CRIMINAL'), money: 2 }),
     ]);
-    const next = gameReducer(s, { type: 'TRADE', targetId: 'p1', give: { kind: 'MONEY' }, receive: { kind: 'MONEY' } });
+    const next = gameReducer(s, { type: 'INITIATE_TRADE', targetId: 'p1', give: { kind: 'MONEY' } });
     expect(next.players[0].money).toBe(2); // unchanged
+    expect(next.pendingTrade).toBeNull();
   });
 
   it('costs 2 actions when the teammate holds a Traffic token', () => {
@@ -889,19 +895,108 @@ describe('gameReducer — TRADE', () => {
       mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 2 }),
       mkPlayer({ id: 'p1', role: role('attorney', 'CIVILIAN'), money: 2, trafficToken: true }),
     ]);
-    const next = gameReducer(s, { type: 'TRADE', targetId: 'p1', give: { kind: 'MONEY' }, receive: { kind: 'MONEY' } });
+    const next = gameReducer(s, { type: 'INITIATE_TRADE', targetId: 'p1', give: { kind: 'MONEY' } });
     expect(next.players[0].actionsRemaining).toBe(1); // 3 - 2
   });
 
-  it('Express Shipping pays $1 after a trade', () => {
+  it('costs 0 actions with a Radio, once per turn', () => {
+    const radio: MarketCard = { id: 'r1', name: 'Radio', description: '', cost: 2, source: 'PUBLIC', type: 'PERK' };
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 3, inventory: [radio] }),
+      mkPlayer({ id: 'p1', role: role('attorney', 'CIVILIAN'), money: 0 }),
+    ]);
+    const next = gameReducer(s, { type: 'INITIATE_TRADE', targetId: 'p1', give: { kind: 'MONEY' } });
+    expect(next.players[0].actionsRemaining).toBe(3); // unspent — Radio covers it
+    expect(next.players[0].hasUsedRadio).toBe(true);
+  });
+
+  it('blocks other actions until the pending trade is resolved', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 2 }),
+      mkPlayer({ id: 'p1', role: role('attorney', 'CIVILIAN'), money: 2 }),
+    ]);
+    const pending = gameReducer(s, { type: 'INITIATE_TRADE', targetId: 'p1', give: { kind: 'MONEY' } });
+    const blocked = gameReducer(pending, { type: 'DRAW_CARD' });
+    expect(blocked.pendingTrade).toEqual({ initiatorId: 'p0', recipientId: 'p1' });
+    expect(blocked.players[0].hand).toHaveLength(0); // DRAW_CARD never ran
+  });
+
+  it('lets the recipient — not the initiator — choose the return gift', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 2 }),
+      mkPlayer({ id: 'p1', role: role('attorney', 'CIVILIAN'), money: 2, inventory: [weapon('w1', 'Axe')] }),
+    ]);
+    const pending = gameReducer(s, { type: 'INITIATE_TRADE', targetId: 'p1', give: { kind: 'MONEY' } });
+    const next = gameReducer(pending, { type: 'RESOLVE_TRADE_RETURN', give: { kind: 'WEAPON', cardId: 'w1' } });
+    expect(next.pendingTrade).toBeNull();
+    expect(next.players[0].inventory.map((c) => c.id)).toContain('w1'); // initiator received the weapon
+    expect(next.players[1].inventory).toHaveLength(0);
+    expect(next.gameLog.at(-1)).toBe('p1 trades Axe to p0.');
+  });
+
+  it('lets the recipient decline when they have nothing to give back', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 2 }),
+      mkPlayer({ id: 'p1', role: role('attorney', 'CIVILIAN'), money: 0, hand: [], inventory: [] }),
+    ]);
+    const pending = gameReducer(s, { type: 'INITIATE_TRADE', targetId: 'p1', give: { kind: 'MONEY' } });
+    const next = gameReducer(pending, { type: 'RESOLVE_TRADE_RETURN', give: null });
+    expect(next.pendingTrade).toBeNull();
+    expect(next.gameLog.at(-1)).toBe('p1 has nothing to trade back.');
+  });
+
+  it('refuses a weapon return once the initiator already has 2 weapons', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 2, inventory: [weapon('w1', 'Axe'), weapon('w2', 'Bat')] }),
+      mkPlayer({ id: 'p1', role: role('attorney', 'CIVILIAN'), money: 0, inventory: [weapon('w3', 'Pistol')] }),
+    ]);
+    const pending = gameReducer(s, { type: 'INITIATE_TRADE', targetId: 'p1', give: { kind: 'MONEY' } });
+    const next = gameReducer(pending, { type: 'RESOLVE_TRADE_RETURN', give: { kind: 'WEAPON', cardId: 'w3' } });
+    expect(next.pendingTrade).toEqual({ initiatorId: 'p0', recipientId: 'p1' }); // still pending — refused
+    expect(next.players[1].inventory.map((c) => c.id)).toContain('w3'); // never left p1
+  });
+
+  it('Express Shipping offers the initiator a $1-or-draw choice once the trade fully resolves', () => {
     const shipping: MarketCard = { id: 'i1', name: 'Express Shipping', description: '', cost: 2, source: 'PUBLIC', type: 'PERK' };
     const s = stateWith([
       mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 2, inventory: [shipping] }),
-      mkPlayer({ id: 'p1', role: role('attorney', 'CIVILIAN'), money: 2 }),
+      mkPlayer({ id: 'p1', role: role('attorney', 'CIVILIAN'), money: 2, inventory: [shipping] }),
     ]);
-    const next = gameReducer(s, { type: 'TRADE', targetId: 'p1', give: { kind: 'MONEY' }, receive: { kind: 'MONEY' } });
-    // -$1 given +$1 received +$1 Express Shipping = net +$1.
-    expect(next.players[0].money).toBe(3);
+    const pending = gameReducer(s, { type: 'INITIATE_TRADE', targetId: 'p1', give: { kind: 'MONEY' } });
+    expect(pending.players[0].money).toBe(1); // no Express Shipping payout yet
+
+    const returned = gameReducer(pending, { type: 'RESOLVE_TRADE_RETURN', give: { kind: 'MONEY' } });
+    expect(returned.pendingTrade).toBeNull();
+    expect(returned.pendingExpressShipping).toEqual({ playerId: 'p0' });
+    expect(returned.players[0].money).toBe(2); // received $1 back, but no payout yet — still pending the choice
+    // p1 also holds Express Shipping, but it isn't their turn's Trade action.
+    expect(returned.players[1].money).toBe(2);
+
+    // Other actions are blocked until the choice is made.
+    const blocked = gameReducer(returned, { type: 'DRAW_CARD' });
+    expect(blocked.pendingExpressShipping).toEqual({ playerId: 'p0' });
+
+    const withMoney = gameReducer(returned, { type: 'RESOLVE_EXPRESS_SHIPPING', mode: 'MONEY' });
+    expect(withMoney.pendingExpressShipping).toBeNull();
+    expect(withMoney.players[0].money).toBe(3);
+    expect(withMoney.players[0].hand).toHaveLength(0);
+  });
+
+  it('Express Shipping can draw a card instead of $1', () => {
+    const shipping: MarketCard = { id: 'i1', name: 'Express Shipping', description: '', cost: 2, source: 'PUBLIC', type: 'PERK' };
+    const s = stateWith(
+      [
+        mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 2, inventory: [shipping] }),
+        mkPlayer({ id: 'p1', role: role('attorney', 'CIVILIAN'), money: 2 }),
+      ],
+      { drawPile: [{ id: 'd1', name: 'Drawn', description: '', type: 'MONEY', value: 1 }] },
+    );
+    const pending = gameReducer(s, { type: 'INITIATE_TRADE', targetId: 'p1', give: { kind: 'MONEY' } });
+    const returned = gameReducer(pending, { type: 'RESOLVE_TRADE_RETURN', give: { kind: 'MONEY' } });
+    const next = gameReducer(returned, { type: 'RESOLVE_EXPRESS_SHIPPING', mode: 'DRAW' });
+    expect(next.pendingExpressShipping).toBeNull();
+    expect(next.players[0].hand.map((c) => c.id)).toEqual(['d1']);
+    expect(next.players[0].money).toBe(2); // no $1 — drew instead
   });
 });
 

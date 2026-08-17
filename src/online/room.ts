@@ -105,12 +105,16 @@ const COMBAT_PHASE_ACTIONS = new Set(['PLAY_POWER', 'COMBAT_DISCARD_MONEY']);
 /**
  * Apply an engine action. Normal actions require it to be the requester's turn;
  * combat-phase actions are allowed from any room member (the reducer validates
- * them). Two combat actions are each one specific player's decision, not "any
+ * them). Several actions are each one specific player's decision, not "any
  * room member" or "whoever's turn it nominally is":
  *  - COMBAT_CHOICE (Portal/Drones/Mutants/Pistol/Nurse's Triage/Leaving Evidence) belongs to
  *    `combat.pending[0].playerId`, often the defender.
  *  - PASS_COMBAT belongs to whichever combatant `action.side` names — a
  *    player may only pass their own side, never their opponent's.
+ *  - RESOLVE_THREATEN belongs to `pendingThreaten.targetId` — the Arsonist's
+ *    victim, not the Arsonist (whose turn it nominally still is).
+ *  - RESOLVE_TRADE_RETURN belongs to `pendingTrade.recipientId` — the
+ *    teammate who owes a return gift, not the trade's initiator.
  * Returns the room unchanged if the game is already over.
  */
 export function applyAction(room: Room, { token, action, reducer }: ApplyActionInput): Room {
@@ -126,6 +130,12 @@ export function applyAction(room: Room, { token, action, reducer }: ApplyActionI
     const combat = room.state.combat;
     const combatantId = action.side === 'ATTACKER' ? combat?.attacker.playerId : combat?.defender.playerId;
     if (!combatantId || me.id !== combatantId) throw new RoomError('You can only pass for yourself.');
+  } else if (action.type === 'RESOLVE_THREATEN') {
+    const targetId = room.state.pendingThreaten?.targetId;
+    if (!targetId || me.id !== targetId) throw new RoomError('It is not your Threaten choice to make.');
+  } else if (action.type === 'RESOLVE_TRADE_RETURN') {
+    const recipientId = room.state.pendingTrade?.recipientId;
+    if (!recipientId || me.id !== recipientId) throw new RoomError('It is not your trade to respond to.');
   } else if (!COMBAT_PHASE_ACTIONS.has(action.type)) {
     const currentId = room.state.players[room.state.currentPlayerIndex]?.id;
     if (me.id !== currentId) throw new RoomError('It is not your turn.');

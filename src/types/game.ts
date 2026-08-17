@@ -104,6 +104,7 @@ export type CombatPhase = 'PRE' | 'POWER' | 'AFTER';
 export type CombatChoice =
   | { kind: 'PORTAL'; playerId: string; weaponId: string; side: CombatSide }
   | { kind: 'DRONES'; playerId: string; weaponId: string; side: CombatSide }
+  | { kind: 'DRONES_RETURN'; playerId: string; holderId: string; holderCardId: string; side: CombatSide }
   | { kind: 'MUTANTS'; playerId: string; weaponId: string; side: CombatSide }
   | { kind: 'PISTOL'; playerId: string; weaponId: string; side: CombatSide }
   | { kind: 'NURSE_HEAL'; playerId: string; injuredId: string; side: CombatSide }
@@ -114,7 +115,8 @@ export type CombatChoiceInput =
   | { kind: 'PORTAL'; mode: 'DRAW' }
   | { kind: 'PORTAL'; mode: 'SWAP'; teammateId: string; teammateWeaponId: string }
   | { kind: 'DRONES'; mode: 'SKIP' }
-  | { kind: 'DRONES'; mode: 'EXCHANGE'; cardId: string; teammateId: string; teammateCardId: string }
+  | { kind: 'DRONES'; mode: 'EXCHANGE'; cardId: string; teammateId: string }
+  | { kind: 'DRONES_RETURN'; cardId: string }
   | { kind: 'MUTANTS'; mode: 'SKIP' }
   | { kind: 'MUTANTS'; mode: 'COPY'; opponentWeaponId: string }
   | { kind: 'PISTOL'; cardId: string }
@@ -240,4 +242,22 @@ export interface GameState {
    * different player's decision than whoever's turn it nominally is.
    */
   pendingThreaten?: { targetId: string } | null;
+
+  /**
+   * Trade's second half (rulebook p.7): the initiator already gave one item;
+   * this teammate now owes a return gift — their own choice, not the
+   * initiator's. Blocks other actions until resolved via
+   * RESOLVE_TRADE_RETURN, mirroring pendingThreaten/combat's pending choices.
+   */
+  pendingTrade?: { initiatorId: string; recipientId: string } | null;
+
+  /**
+   * Express Shipping's payout: once a Trade its owner initiated fully
+   * resolves, they choose $1 or a card draw — never both, never automatic.
+   * Always the current player (Express Shipping only pays out on your own
+   * turn's Trade action), but modeled as a blocking pending choice like
+   * pendingTrade/pendingThreaten for a consistent "resolve this pop-up first"
+   * pattern rather than folding it silently into resolveTradeReturn.
+   */
+  pendingExpressShipping?: { playerId: string } | null;
 }
