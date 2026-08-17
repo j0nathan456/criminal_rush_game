@@ -4,10 +4,10 @@ import type { Player, RoleIdentity } from '../types/game';
 import type { Team } from '../types/cards';
 import { ActionBar } from './ActionBar';
 
-function makePlayer(team: Team, actionsRemaining: number): Player {
+function makePlayer(team: Team, actionsRemaining: number, roleId = 'r'): Player {
   const role: RoleIdentity = {
-    id: 'r', name: 'Tester', team, powerlevel: 3,
-    abilityName: 'A', abilityDescription: 'desc',
+    id: roleId, name: 'Tester', team, powerlevel: 3,
+    abilityName: 'Ability Name', abilityDescription: 'desc',
   };
   return {
     id: 'p', name: 'Test', team, role, hand: [], inventory: [], money: 5,
@@ -35,6 +35,17 @@ describe('<ActionBar />', () => {
 
     rerender(<ActionBar player={{ ...makePlayer('CRIMINAL', 3), isCaptured: true }} onAction={() => {}} />);
     expect(screen.getByText(/\+\$1 more/)).toBeInTheDocument();
+  });
+
+  it('shows Role Action for a role with a real Action (Crime Lord)', () => {
+    render(<ActionBar player={makePlayer('CRIMINAL', 3, 'crime-lord')} onAction={() => {}} />);
+    expect(screen.getByText('Ability Name')).toBeInTheDocument(); // the role's abilityName, not a generic label
+  });
+
+  it('omits Role Action entirely for a passive role (Mayor) — no action point to spend', () => {
+    render(<ActionBar player={makePlayer('CIVILIAN', 3, 'mayor')} onAction={() => {}} />);
+    expect(screen.queryByText('Ability Name')).not.toBeInTheDocument();
+    expect(screen.queryByText('Role Action')).not.toBeInTheDocument();
   });
 
   it('disables Combat (2 AP) when the player has fewer than 2 actions left', () => {

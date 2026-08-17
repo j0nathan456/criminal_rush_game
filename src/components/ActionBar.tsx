@@ -2,6 +2,7 @@ import type { Player, PlayerActionType } from '../types/game';
 import type { ActionAvailability } from '../engine';
 import { TURN_ACTIONS, TEAM_META, BASE_ACTIONS_PER_TURN } from '../constants/theme';
 import type { ActionMeta } from '../constants/theme';
+import { PASSIVE_ROLES } from './panelConstants';
 
 interface ActionBarProps {
   player: Player;
@@ -37,10 +38,15 @@ function Pips({ total, filled, color }: { total: number; filled: number; color: 
  * TURN_ACTIONS, shows the player's remaining AP, marks each action's AP cost as
  * pips (so the 2-AP Combat reads as distinct), names the actual role ability,
  * and disables any action the player can't afford or that the engine reports as
- * currently illegal (with the reason surfaced as a tooltip).
+ * currently illegal (with the reason surfaced as a tooltip). A passive role
+ * (Mayor, Attorney, Vigilante, Hitman, Spy, Nurse — see PASSIVE_ROLES) has no
+ * Action to spend a point on — its ability triggers automatically — so Role
+ * Action is omitted entirely rather than shown as a live, costed option.
  */
 export function ActionBar({ player, maxActions = BASE_ACTIONS_PER_TURN, availability = {}, onAction, onEndTurn }: ActionBarProps) {
-  const actions = TURN_ACTIONS.filter((a) => !a.team || a.team === player.team);
+  const actions = TURN_ACTIONS.filter(
+    (a) => (!a.team || a.team === player.team) && (a.type !== 'ROLE_ABILITY' || !PASSIVE_ROLES.has(player.role.id)),
+  );
   const teamColor = TEAM_META[player.team].color;
 
   return (
