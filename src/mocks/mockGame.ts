@@ -81,10 +81,10 @@ export const MOCK_GAME: GameState = {
   publicMarket: market,
   blackMarket,
   evidenceGrid: {
-    TIME: { isFilled: true, cardName: 'Forensic Files' },
-    MEANS: { isFilled: true, cardName: 'Metal Chain' },
-    LOCATION: { isFilled: false, cardName: null },
-    MOTIVE: { isFilled: false, cardName: null },
+    TIME: { cards: [hand[1]] }, // Forensic Files
+    MEANS: { cards: [hand[2]] }, // Metal Chain
+    LOCATION: { cards: [] },
+    MOTIVE: { cards: [] },
   },
   teamScores: { CIVILIAN: 2, CRIMINAL: 3 },
   vpTargets: { CIVILIAN: 4, CRIMINAL: 5 },

@@ -26,6 +26,8 @@ export interface BoardInteractions {
   allySupportCardId: string | null;
   /** The Event card (needing a target/option) being configured, or null. */
   eventCardId: string | null;
+  /** The Criminal being Exposed, once a grid category needs a card choice, or null. */
+  exposeTargetId: string | null;
   handlers: GameBoardHandlers;
   /** Clear transient selection/targeting (e.g. after ending a turn). */
   reset: () => void;
@@ -43,6 +45,7 @@ export function useBoardInteractions(
   const [activePerkId, setActivePerkId] = useState<string | null>(null);
   const [allySupportCardId, setAllySupportCardId] = useState<string | null>(null);
   const [eventCardId, setEventCardId] = useState<string | null>(null);
+  const [exposeTargetId, setExposeTargetId] = useState<string | null>(null);
 
   const viewer = state.players[viewerIndex];
   const selectedCard = viewer?.hand.find((c) => c.id === selectedCardId);
@@ -55,6 +58,7 @@ export function useBoardInteractions(
     setActivePerkId(null);
     setAllySupportCardId(null);
     setEventCardId(null);
+    setExposeTargetId(null);
   };
 
   /**
@@ -146,8 +150,15 @@ export function useBoardInteractions(
   };
 
   const onSelectTarget = (playerId: string) => {
-    if (targeting === 'attack') dispatch({ type: 'ATTACK', targetId: playerId });
-    else if (targeting === 'expose') dispatch({ type: 'EXPOSE', targetId: playerId });
+    if (targeting === 'attack') {
+      dispatch({ type: 'ATTACK', targetId: playerId });
+    } else if (targeting === 'expose') {
+      // A category with more than one card needs the exposer to choose which
+      // is spent — open that follow-up instead of dispatching blind.
+      const needsChoice = Object.values(state.evidenceGrid).some((slot) => slot.cards.length > 1);
+      if (needsChoice) setExposeTargetId(playerId);
+      else dispatch({ type: 'EXPOSE', targetId: playerId });
+    }
     setTargeting(null);
   };
 
@@ -207,9 +218,15 @@ export function useBoardInteractions(
     onUseMarketDiscount: (cardId: string) => dispatch({ type: 'USE_MARKET_DISCOUNT', cardId }),
     onSkipMarketDiscount: () => dispatch({ type: 'SKIP_MARKET_DISCOUNT' }),
     onResolveThreaten: (mode: 'MONEY' | 'DISCARD') => dispatch({ type: 'RESOLVE_THREATEN', mode }),
+    onSubmitExpose: (targetId, evidenceChoices) => {
+      dispatch({ type: 'EXPOSE', targetId, evidenceChoices });
+      setExposeTargetId(null);
+    },
+    onCancelExpose: () => setExposeTargetId(null),
   };
 
   return {
-    selectedCardId, targeting, notice, roleAbilityOpen, activePerkId, allySupportCardId, eventCardId, handlers, reset,
+    selectedCardId, targeting, notice, roleAbilityOpen, activePerkId, allySupportCardId, eventCardId, exposeTargetId,
+    handlers, reset,
   };
 }

@@ -184,9 +184,6 @@ function preCombatFor(state: GameState, selfId: string, oppId: string, isAttacke
         s = log(s, `${self.name}'s Hammer draws a card before combat.`);
         s = drawForPlayer(s, selfId);
         break;
-      case 'Pistol':
-        s = discardFirstCard(s, selfId, 'Pistol');
-        break;
       case 'Barbed Wire':
         s = discardFirstCard(s, oppId, 'Barbed Wire');
         break;
@@ -204,8 +201,9 @@ function preCombatFor(state: GameState, selfId: string, oppId: string, isAttacke
         }
         break;
       }
-      // Portal (draw/swap), Drones (exchange), and Mutants (copy) are interactive
-      // choices resolved in the PRE phase — see buildPendingChoices / applyCombatChoice.
+      // Portal (draw/swap), Drones (exchange), Mutants (copy), and Pistol
+      // (choose which card to discard) are interactive choices resolved in the
+      // PRE phase — see buildPendingChoices / applyCombatChoice.
       default:
         break;
     }
@@ -220,18 +218,21 @@ export function resolvePreCombat(state: GameState, attackerId: string, defenderI
   return s;
 }
 
-// --- Interactive pre-combat choices (Portal / Drones / Mutants) --------------
+// --- Interactive pre-combat choices (Portal / Drones / Mutants / Pistol) ----
 
 /** Weapons that require an interactive pre-combat decision. */
 const CHOICE_WEAPONS: Record<string, CombatChoice['kind']> = {
   Portal: 'PORTAL',
   Drones: 'DRONES',
   Mutants: 'MUTANTS',
+  Pistol: 'PISTOL',
 };
 
 /**
  * Build the queue of interactive pre-combat choices — attacker's weapons first,
- * then the defender's. The Power phase begins once all are resolved.
+ * then the defender's. The Power phase begins once all are resolved. Pistol is
+ * only queued when the holder actually has a card to discard ("if possible" —
+ * an empty hand means there's no choice to make).
  */
 export function buildPendingChoices(state: GameState, attackerId: string, defenderId: string): CombatChoice[] {
   const choices: CombatChoice[] = [];
@@ -240,7 +241,9 @@ export function buildPendingChoices(state: GameState, attackerId: string, defend
     if (!player) return;
     for (const w of weaponsOf(player)) {
       const kind = CHOICE_WEAPONS[w.name];
-      if (kind && kind !== 'LEAVING_EVIDENCE') choices.push({ kind, playerId, weaponId: w.id, side } as CombatChoice);
+      if (!kind || kind === 'LEAVING_EVIDENCE') continue;
+      if (kind === 'PISTOL' && player.hand.length === 0) continue;
+      choices.push({ kind, playerId, weaponId: w.id, side } as CombatChoice);
     }
   };
   add(attackerId, 'ATTACKER');
@@ -331,6 +334,16 @@ function applyMutants(state: GameState, head: Extract<CombatChoice, { kind: 'MUT
   return log({ ...state, combat: newCombat }, `${holder.name}'s Mutants copy ${weapon.name} (+${copied} power).`);
 }
 
+/** Pistol: the holder chooses which of their own cards to discard before combat. */
+function applyPistol(state: GameState, head: Extract<CombatChoice, { kind: 'PISTOL' }>, input: CombatChoiceInput): GameState {
+  const hi = playerIndexById(state, head.playerId);
+  const holder = state.players[hi];
+  const card = input.kind === 'PISTOL' ? holder.hand.find((c) => c.id === input.cardId) : undefined;
+  if (!card) return log(state, `${holder.name} must choose a card from hand to discard for Pistol.`);
+  const s = updatePlayer(state, hi, (p) => ({ ...p, hand: p.hand.filter((c) => c.id !== card.id) }));
+  return log({ ...s, discardPile: [...s.discardPile, card] }, `${holder.name} discards ${card.name} (Pistol).`);
+}
+
 function applyLeavingEvidence(
   state: GameState,
   head: Extract<CombatChoice, { kind: 'LEAVING_EVIDENCE' }>,
@@ -366,6 +379,7 @@ export function applyCombatChoice(state: GameState, input: CombatChoiceInput, rn
     case 'PORTAL': s = applyPortal(s, head, input); break;
     case 'DRONES': s = applyDrones(s, head, input); break;
     case 'MUTANTS': s = applyMutants(s, head, input); break;
+    case 'PISTOL': s = applyPistol(s, head, input); break;
     case 'LEAVING_EVIDENCE': s = applyLeavingEvidence(s, head, input, rng); break;
   }
 

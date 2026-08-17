@@ -94,7 +94,7 @@ export interface CombatParticipant {
 
 /**
  * Combat phases:
- *  - PRE: interactive pre-combat weapon choices (Portal / Drones / Mutants) are pending.
+ *  - PRE: interactive pre-combat weapon choices (Portal / Drones / Mutants / Pistol) are pending.
  *  - POWER: base powers set; both sides play/pass Power cards.
  *  - AFTER: post-combat choice pending (Leaving Evidence) before the fight closes.
  */
@@ -105,6 +105,7 @@ export type CombatChoice =
   | { kind: 'PORTAL'; playerId: string; weaponId: string; side: CombatSide }
   | { kind: 'DRONES'; playerId: string; weaponId: string; side: CombatSide }
   | { kind: 'MUTANTS'; playerId: string; weaponId: string; side: CombatSide }
+  | { kind: 'PISTOL'; playerId: string; weaponId: string; side: CombatSide }
   | { kind: 'LEAVING_EVIDENCE'; playerId: string; side: CombatSide };
 
 /** The decision a player submits for the current pending CombatChoice. */
@@ -115,6 +116,7 @@ export type CombatChoiceInput =
   | { kind: 'DRONES'; mode: 'EXCHANGE'; cardId: string; teammateId: string; teammateCardId: string }
   | { kind: 'MUTANTS'; mode: 'SKIP' }
   | { kind: 'MUTANTS'; mode: 'COPY'; opponentWeaponId: string }
+  | { kind: 'PISTOL'; cardId: string }
   | { kind: 'LEAVING_EVIDENCE'; evidenceIds: string[] };
 
 /** The interactive combat sub-state machine. Null when no fight is in progress. */
@@ -148,9 +150,14 @@ export type PlayerActionType =
   | 'CONVICT';          // Civilians: Spend full grid to penalize Criminal (1 AP)
 
 
+/**
+ * One Evidence Grid category. Cards accumulate here as Civilians play them —
+ * more than one may pile up in the same category — and stay put until an
+ * Expose spends exactly one from each category (the exposing Civilian's
+ * choice when a category holds more than one; see resolveExpose).
+ */
 export interface EvidenceSlot {
-  isFilled: boolean;
-  cardName: string | null;
+  cards: ActionCard[];
 }
 
 /** Per-team starting resources (rulebook setup table, p.3). */

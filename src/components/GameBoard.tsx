@@ -25,6 +25,7 @@ import { AllySupportPanel } from './AllySupportPanel';
 import { EventPanel } from './EventPanel';
 import { MarketDiscountPanel } from './MarketDiscountPanel';
 import { ThreatenPanel } from './ThreatenPanel';
+import { ExposeEvidencePanel } from './ExposeEvidencePanel';
 import { TargetPicker } from './TargetPicker';
 
 /** Which target the board is currently asking the player to pick. */
@@ -57,6 +58,8 @@ export interface GameBoardHandlers {
   onUseMarketDiscount?: (cardId: string) => void;
   onSkipMarketDiscount?: () => void;
   onResolveThreaten?: (mode: 'MONEY' | 'DISCARD') => void;
+  onSubmitExpose?: (targetId: string, evidenceChoices: Partial<Record<EvidenceCategory, string>>) => void;
+  onCancelExpose?: () => void;
 }
 
 interface GameBoardProps extends GameBoardHandlers {
@@ -75,6 +78,8 @@ interface GameBoardProps extends GameBoardHandlers {
   allySupportCardId?: string | null;
   /** The Event card (needing a target/option) being configured, or null. */
   eventCardId?: string | null;
+  /** The Criminal being Exposed, once a grid category needs a card choice, or null. */
+  exposeTargetId?: string | null;
 }
 
 /**
@@ -92,6 +97,7 @@ export function GameBoard({
   activePerkId = null,
   allySupportCardId = null,
   eventCardId = null,
+  exposeTargetId = null,
   onAction,
   onEndTurn,
   onSelectCard,
@@ -118,6 +124,8 @@ export function GameBoard({
   onUseMarketDiscount,
   onSkipMarketDiscount,
   onResolveThreaten,
+  onSubmitExpose,
+  onCancelExpose,
 }: GameBoardProps) {
   const viewer = state.players[viewerIndex];
   const isViewersTurn = viewerIndex === state.currentPlayerIndex;
@@ -288,6 +296,15 @@ export function GameBoard({
                   hand they're making it from. */}
               {targeting && !state.combat && !state.pendingThreaten && !state.winner && (
                 <TargetPicker state={state} viewerIndex={viewerIndex} mode={targeting} onSelectTarget={onSelectTarget} onCancel={onCancelTargeting} />
+              )}
+              {exposeTargetId && !state.combat && !state.pendingThreaten && !state.winner && (
+                <ExposeEvidencePanel
+                  state={state}
+                  viewerIndex={viewerIndex}
+                  targetId={exposeTargetId}
+                  onSubmit={onSubmitExpose}
+                  onCancel={onCancelExpose}
+                />
               )}
               {roleAbilityOpen && !state.combat && !state.pendingThreaten && !state.winner && (
                 <RoleAbilityPanel state={state} viewerIndex={viewerIndex} onSubmit={onSubmitRoleAbility} onCancel={onCancelRoleAbility} />

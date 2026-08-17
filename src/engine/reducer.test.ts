@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { GameState, Player, RoleIdentity } from '../types/game.js';
-import type { ActionCard, MarketCard, Team } from '../types/cards.js';
+import type { ActionCard, EvidenceCategory, MarketCard, Team } from '../types/cards.js';
 import { gameReducer, emptyGameState } from './reducer.js';
 
 function role(id: string, team: Team, powerlevel = 3): RoleIdentity {
@@ -35,10 +35,10 @@ const evidence = (id: string, cats: ActionCard['evidenceCategories']): ActionCar
 });
 
 const fullGrid = () => ({
-  TIME: { isFilled: true, cardName: 'x' },
-  MEANS: { isFilled: true, cardName: 'x' },
-  LOCATION: { isFilled: true, cardName: 'x' },
-  MOTIVE: { isFilled: true, cardName: 'x' },
+  TIME: { cards: [evidence('g-time', ['TIME'])] },
+  MEANS: { cards: [evidence('g-means', ['MEANS'])] },
+  LOCATION: { cards: [evidence('g-location', ['LOCATION'])] },
+  MOTIVE: { cards: [evidence('g-motive', ['MOTIVE'])] },
 });
 
 describe('gameReducer — DRAW_CARD', () => {
@@ -73,21 +73,37 @@ describe('gameReducer — PLAY_EVIDENCE', () => {
     ]);
 
     const next = gameReducer(s, { type: 'PLAY_EVIDENCE', cardId: 'e1', category: 'MEANS' });
-    expect(next.evidenceGrid.MEANS.isFilled).toBe(true);
+    expect(next.evidenceGrid.MEANS.cards.map((c) => c.id)).toEqual(['e1']);
     expect(next.players[0].hand).toHaveLength(0);
     expect(next.players[0].actionsRemaining).toBe(2);
     expect(next.players[1].money).toBe(3); // Attorney collected $1
   });
 
+  it('leaves the card sitting in the grid rather than discarding it on play', () => {
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('sheriff', 'CIVILIAN'), hand: [evidence('e1', ['MEANS'])] })]);
+    const next = gameReducer(s, { type: 'PLAY_EVIDENCE', cardId: 'e1', category: 'MEANS' });
+    expect(next.discardPile).toHaveLength(0); // only an Expose moves it to the discard
+    expect(next.evidenceGrid.MEANS.cards.map((c) => c.id)).toEqual(['e1']);
+  });
+
+  it('lets multiple Evidence cards pile up in the same category', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('sheriff', 'CIVILIAN'), hand: [evidence('e1', ['MEANS']), evidence('e2', ['MEANS'])] }),
+    ]);
+    let next = gameReducer(s, { type: 'PLAY_EVIDENCE', cardId: 'e1', category: 'MEANS' });
+    next = gameReducer(next, { type: 'PLAY_EVIDENCE', cardId: 'e2', category: 'MEANS' });
+    expect(next.evidenceGrid.MEANS.cards.map((c) => c.id)).toEqual(['e1', 'e2']);
+  });
+
   it('refuses when the current player is a Criminal', () => {
     const s = stateWith([mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL'), hand: [evidence('e1', ['MEANS'])] })]);
     const next = gameReducer(s, { type: 'PLAY_EVIDENCE', cardId: 'e1', category: 'MEANS' });
-    expect(next.evidenceGrid.MEANS.isFilled).toBe(false);
+    expect(next.evidenceGrid.MEANS.cards).toHaveLength(0);
   });
 });
 
 describe('gameReducer — EXPOSE', () => {
-  it('exposes a Criminal, drops their PL, resets the grid, and scores a VP', () => {
+  it('exposes a Criminal, drops their PL, discards 1 card per category, and scores a VP', () => {
     const s = stateWith(
       [
         mkPlayer({ id: 'p0', role: role('sheriff', 'CIVILIAN') }),
@@ -100,7 +116,8 @@ describe('gameReducer — EXPOSE', () => {
     expect(next.players[1].isExposed).toBe(true);
     expect(next.players[1].powerLevel).toBe(2);
     expect(next.teamScores.CIVILIAN).toBe(1);
-    expect(next.evidenceGrid.TIME.isFilled).toBe(false);
+    expect(next.evidenceGrid.TIME.cards).toHaveLength(0);
+    expect(next.discardPile.map((c) => c.id).sort()).toEqual(['g-location', 'g-means', 'g-motive', 'g-time']);
   });
 
   it('refuses when the grid is incomplete', () => {
@@ -110,6 +127,55 @@ describe('gameReducer — EXPOSE', () => {
     ]);
     const next = gameReducer(s, { type: 'EXPOSE', targetId: 'p1' });
     expect(next.players[1].isExposed).toBe(false);
+  });
+
+  it('when a category holds more than one card, spends only the exposer’s chosen one and keeps the rest', () => {
+    const kept = evidence('e-kept', ['TIME']);
+    const grid = { ...fullGrid(), TIME: { cards: [evidence('e-spent', ['TIME']), kept] } };
+    const s = stateWith(
+      [
+        mkPlayer({ id: 'p0', role: role('sheriff', 'CIVILIAN') }),
+        mkPlayer({ id: 'p1', role: role('hitman', 'CRIMINAL', 3) }),
+      ],
+      { evidenceGrid: grid },
+    );
+
+    const next = gameReducer(s, { type: 'EXPOSE', targetId: 'p1', evidenceChoices: { TIME: 'e-spent' } });
+    expect(next.evidenceGrid.TIME.cards.map((c) => c.id)).toEqual(['e-kept']); // untouched, still in the grid
+    expect(next.discardPile.map((c) => c.id)).toContain('e-spent');
+    expect(next.discardPile.map((c) => c.id)).not.toContain('e-kept');
+  });
+
+  it('defaults to the oldest card in a category when no choice is given', () => {
+    const grid = { ...fullGrid(), TIME: { cards: [evidence('e-oldest', ['TIME']), evidence('e-newest', ['TIME'])] } };
+    const s = stateWith(
+      [
+        mkPlayer({ id: 'p0', role: role('sheriff', 'CIVILIAN') }),
+        mkPlayer({ id: 'p1', role: role('hitman', 'CRIMINAL', 3) }),
+      ],
+      { evidenceGrid: grid },
+    );
+
+    const next = gameReducer(s, { type: 'EXPOSE', targetId: 'p1' });
+    expect(next.evidenceGrid.TIME.cards.map((c) => c.id)).toEqual(['e-newest']);
+    expect(next.discardPile.map((c) => c.id)).toContain('e-oldest');
+  });
+
+  it('leaves the grid still complete (still Exposable) when every category had a spare card', () => {
+    const doubled = (cat: EvidenceCategory) => ({ cards: [evidence(`${cat}-a`, [cat]), evidence(`${cat}-b`, [cat])] });
+    const grid = { TIME: doubled('TIME'), MEANS: doubled('MEANS'), LOCATION: doubled('LOCATION'), MOTIVE: doubled('MOTIVE') };
+    const s = stateWith(
+      [
+        mkPlayer({ id: 'p0', role: role('sheriff', 'CIVILIAN') }),
+        mkPlayer({ id: 'p1', role: role('hitman', 'CRIMINAL', 3) }),
+        mkPlayer({ id: 'p2', role: role('mayor', 'CRIMINAL', 3) }),
+      ],
+      { evidenceGrid: grid },
+    );
+
+    const next = gameReducer(s, { type: 'EXPOSE', targetId: 'p1' });
+    const second = gameReducer(next, { type: 'EXPOSE', targetId: 'p2' });
+    expect(second.players[2].isExposed).toBe(true); // exposed again without needing to refill the grid
   });
 });
 
@@ -263,7 +329,7 @@ describe('gameReducer — PLAY_CARD', () => {
     expect(next.players[0].actionsRemaining).toBe(2); // costs 1 action
     expect(next.discardPile.map((c) => c.id)).toContain('e1');
     expect(next.drawPile).toHaveLength(0);
-    expect(next.evidenceGrid.MEANS.isFilled).toBe(false); // never touches the grid
+    expect(next.evidenceGrid.MEANS.cards).toHaveLength(0); // never touches the grid
   });
 });
 
@@ -346,7 +412,7 @@ describe('gameReducer — USE_ROLE_ABILITY (Civilians)', () => {
       mkPlayer({ id: 'p1', role: role('hitman', 'CRIMINAL'), hand: [evidence('e1', ['MEANS'])] }),
     ]);
     const next = gameReducer(s, { type: 'USE_ROLE_ABILITY', payload: { targetId: 'p1', cardId: 'e1', category: 'MEANS' } });
-    expect(next.evidenceGrid.MEANS.isFilled).toBe(true);
+    expect(next.evidenceGrid.MEANS.cards.map((c) => c.id)).toEqual(['e1']);
     expect(next.players[1].hand).toHaveLength(0);
     expect(next.players[0].actionsRemaining).toBe(2);
   });
@@ -486,11 +552,26 @@ describe('gameReducer — USE_ROLE_ABILITY (Criminals)', () => {
 
   it('Forger discards hand Evidence to clear a matching grid slot', () => {
     const s = stateWith([mkPlayer({ id: 'p0', role: role('forger', 'CRIMINAL'), hand: [evidence('e1', ['MEANS'])] })], {
-      evidenceGrid: { ...fullGrid(), TIME: { isFilled: false, cardName: null } },
+      evidenceGrid: { ...fullGrid(), TIME: { cards: [] } },
     });
     const next = gameReducer(s, { type: 'USE_ROLE_ABILITY', payload: { cardId: 'e1', category: 'MEANS' } });
-    expect(next.evidenceGrid.MEANS.isFilled).toBe(false);
+    expect(next.evidenceGrid.MEANS.cards).toHaveLength(0);
     expect(next.players[0].hand).toHaveLength(0);
+    // Both the hand card played and the grid card it cleared land in the discard.
+    expect(next.discardPile.map((c) => c.id).sort()).toEqual(['e1', 'g-means']);
+  });
+
+  it('Forger removes a specific grid card when more than one has piled up in that category', () => {
+    const kept = evidence('g-kept', ['MEANS']);
+    const s = stateWith(
+      [mkPlayer({ id: 'p0', role: role('forger', 'CRIMINAL'), hand: [evidence('e1', ['MEANS'])] })],
+      { evidenceGrid: { ...fullGrid(), MEANS: { cards: [evidence('g-remove', ['MEANS']), kept] } } },
+    );
+    const next = gameReducer(s, {
+      type: 'USE_ROLE_ABILITY', payload: { cardId: 'e1', category: 'MEANS', gridCardId: 'g-remove' },
+    });
+    expect(next.evidenceGrid.MEANS.cards.map((c) => c.id)).toEqual(['g-kept']);
+    expect(next.discardPile.map((c) => c.id)).toContain('g-remove');
   });
 });
 

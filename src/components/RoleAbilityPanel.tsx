@@ -34,6 +34,7 @@ export function RoleAbilityPanel({
   const [targetId, setTargetId] = useState<string | undefined>();
   const [cardId, setCardId] = useState<string | undefined>();
   const [category, setCategory] = useState<EvidenceCategory | undefined>();
+  const [gridCardId, setGridCardId] = useState<string | undefined>();
   const [mode, setMode] = useState<Mode | undefined>();
 
   if (!viewer) return null;
@@ -179,16 +180,29 @@ export function RoleAbilityPanel({
       canSubmit = !!targetId;
       break;
     case 'forger': {
-      const filled = EVIDENCE_ORDER.filter((c) => state.evidenceGrid[c].isFilled);
+      const filled = EVIDENCE_ORDER.filter((c) => state.evidenceGrid[c].cards.length > 0);
+      const slotCards = category ? state.evidenceGrid[category].cards : [];
       body = (
         <>
           <p>Discard an Evidence card to clear a matching grid slot:</p>
           {cardRow(ownEvidence)}
           <p className="cr-role__sub">Clear which filled category?</p>
-          {categoryRow(filled)}
+          <div className="cr-role__chips">
+            {filled.map((c) =>
+              chip(CATEGORY_META[c].label, category === c, () => { setCategory(c); setGridCardId(undefined); }, c),
+            )}
+          </div>
+          {category && slotCards.length > 1 && (
+            <>
+              <p className="cr-role__sub">Which {CATEGORY_META[category].label} card?</p>
+              <div className="cr-role__chips">
+                {slotCards.map((c) => chip(c.name, gridCardId === c.id, () => setGridCardId(c.id), c.id))}
+              </div>
+            </>
+          )}
         </>
       );
-      canSubmit = !!cardId && !!category;
+      canSubmit = !!cardId && !!category && (slotCards.length <= 1 || !!gridCardId);
       break;
     }
     default:
@@ -196,7 +210,7 @@ export function RoleAbilityPanel({
       canSubmit = false;
   }
 
-  const submit = () => onSubmit?.({ targetId, cardId, category, mode });
+  const submit = () => onSubmit?.({ targetId, cardId, category, gridCardId, mode });
 
   return (
     <section className="cr-role" aria-label="Role ability">

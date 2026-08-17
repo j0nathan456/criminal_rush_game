@@ -1,21 +1,25 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import type { EvidenceSlot } from '../types/game';
-import type { EvidenceCategory } from '../types/cards';
+import type { ActionCard, EvidenceCategory } from '../types/cards';
 import { EvidenceGrid } from './EvidenceGrid';
 
+const card = (id: string, name: string): ActionCard => ({
+  id, name, description: '', type: 'EVIDENCE', evidenceCategories: ['TIME', 'MEANS', 'LOCATION', 'MOTIVE'],
+});
+
 const partialGrid: Record<EvidenceCategory, EvidenceSlot> = {
-  TIME: { isFilled: true, cardName: 'Forensic Files' },
-  MEANS: { isFilled: false, cardName: null },
-  LOCATION: { isFilled: false, cardName: null },
-  MOTIVE: { isFilled: false, cardName: null },
+  TIME: { cards: [card('c1', 'Forensic Files')] },
+  MEANS: { cards: [] },
+  LOCATION: { cards: [] },
+  MOTIVE: { cards: [] },
 };
 
 const fullGrid: Record<EvidenceCategory, EvidenceSlot> = {
-  TIME: { isFilled: true, cardName: 'Forensic Files' },
-  MEANS: { isFilled: true, cardName: 'Metal Chain' },
-  LOCATION: { isFilled: true, cardName: 'Bricks' },
-  MOTIVE: { isFilled: true, cardName: 'Power' },
+  TIME: { cards: [card('c1', 'Forensic Files')] },
+  MEANS: { cards: [card('c2', 'Metal Chain')] },
+  LOCATION: { cards: [card('c3', 'Bricks')] },
+  MOTIVE: { cards: [card('c4', 'Power')] },
 };
 
 describe('<EvidenceGrid />', () => {
@@ -24,7 +28,18 @@ describe('<EvidenceGrid />', () => {
     expect(screen.getByText('Forensic Files')).toBeInTheDocument();
   });
 
-  it('flags the grid as ready to expose only when all four slots are filled', () => {
+  it('lists every card that has piled up in the same category', () => {
+    const stacked: Record<EvidenceCategory, EvidenceSlot> = {
+      ...partialGrid,
+      TIME: { cards: [card('c1', 'Forensic Files'), card('c5', 'Security Footage')] },
+    };
+    render(<EvidenceGrid grid={stacked} />);
+    expect(screen.getByText('Forensic Files')).toBeInTheDocument();
+    expect(screen.getByText('Security Footage')).toBeInTheDocument();
+    expect(screen.getByText(/×2/)).toBeInTheDocument();
+  });
+
+  it('flags the grid as ready to expose only when all four categories hold a card', () => {
     const { rerender } = render(<EvidenceGrid grid={partialGrid} />);
     expect(screen.queryByText('Ready to Expose')).not.toBeInTheDocument();
 
@@ -32,16 +47,15 @@ describe('<EvidenceGrid />', () => {
     expect(screen.getByText('Ready to Expose')).toBeInTheDocument();
   });
 
-  it('fires onSlotClick for an empty slot but not a filled one', () => {
+  it('fires onSlotClick for any category, including an already-filled one — stacking is always allowed', () => {
     const onSlotClick = vi.fn();
     render(<EvidenceGrid grid={partialGrid} onSlotClick={onSlotClick} />);
 
     fireEvent.click(screen.getByText('Means').closest('button')!);
     expect(onSlotClick).toHaveBeenCalledWith('MEANS');
 
-    // A filled slot's button is disabled, so clicking it does nothing.
     onSlotClick.mockClear();
     fireEvent.click(screen.getByText('Time').closest('button')!);
-    expect(onSlotClick).not.toHaveBeenCalled();
+    expect(onSlotClick).toHaveBeenCalledWith('TIME');
   });
 });

@@ -5,18 +5,19 @@ import { EVIDENCE_ORDER, CATEGORY_META } from '../constants/theme';
 
 interface EvidenceGridProps {
   grid: Record<EvidenceCategory, EvidenceSlot>;
-  /** Fired when a civilian clicks an empty slot to play evidence into it. */
+  /** Fired when a civilian clicks a category to play evidence into it (any category, even an already-filled one). */
   onSlotClick?: (category: EvidenceCategory) => void;
 }
 
 /**
  * The central Evidence Grid: four category slots and the engine of the Civilian
  * win condition, so it is styled to be the most prominent shared zone. A filled
- * slot shows the card that satisfied it; when all four are filled a Criminal can
- * be Exposed. The header tracks progress toward that (`X/4 collected`).
+ * slot lists every card played into it — more than one may pile up, since only
+ * an Expose (or the Forger) removes one — and when all four hold at least one
+ * card a Criminal can be Exposed. The header tracks progress (`X/4 collected`).
  */
 export function EvidenceGrid({ grid, onSlotClick }: EvidenceGridProps) {
-  const filledCount = EVIDENCE_ORDER.filter((cat) => grid[cat].isFilled).length;
+  const filledCount = EVIDENCE_ORDER.filter((cat) => grid[cat].cards.length > 0).length;
   const complete = filledCount === EVIDENCE_ORDER.length;
   // The grid is the Civilian win engine, so it carries the Civilian (blue)
   // accent — intensifying as they get close — and flips to amber once it's a
@@ -53,8 +54,12 @@ export function EvidenceGrid({ grid, onSlotClick }: EvidenceGridProps) {
       <div className="grid grid-cols-2 gap-3">
         {EVIDENCE_ORDER.map((cat) => {
           const slot = grid[cat];
+          const filled = slot.cards.length > 0;
           const meta = CATEGORY_META[cat];
-          const clickable = Boolean(onSlotClick) && !slot.isFilled;
+          // Always clickable (when a handler is given): more Evidence can pile
+          // onto an already-filled category — only an Expose or the Forger
+          // removes cards from the grid.
+          const clickable = Boolean(onSlotClick);
           return (
             <button
               key={cat}
@@ -64,25 +69,31 @@ export function EvidenceGrid({ grid, onSlotClick }: EvidenceGridProps) {
               style={{
                 borderColor: meta.color,
                 color: meta.color,
-                background: slot.isFilled ? `${meta.color}22` : undefined,
+                background: filled ? `${meta.color}22` : undefined,
               }}
               className={`flex min-h-[104px] flex-col gap-1 rounded-xl border-2 p-3 text-left transition
-                ${slot.isFilled ? 'border-solid' : 'border-dashed'}
+                ${filled ? 'border-solid' : 'border-dashed'}
                 ${clickable ? 'cursor-pointer hover:bg-white/5' : 'cursor-default'}`}
             >
               <span className="flex items-center justify-between text-[13px] font-bold">
                 <span>
                   <span aria-hidden="true">{meta.icon}</span> {meta.label}
                 </span>
-                {slot.isFilled ? (
-                  <span aria-hidden="true">✓</span>
+                {filled ? (
+                  <span aria-hidden="true">✓{slot.cards.length > 1 ? ` ×${slot.cards.length}` : ''}</span>
                 ) : (
                   <span className="text-fog/40" aria-hidden="true">○</span>
                 )}
               </span>
-              <span className={`mt-auto text-sm ${slot.isFilled ? 'font-semibold text-chalk' : 'italic text-fog/60'}`}>
-                {slot.isFilled ? slot.cardName : 'Empty — needs evidence'}
-              </span>
+              {filled ? (
+                <ul className="mt-auto space-y-0.5 text-sm font-semibold text-chalk">
+                  {slot.cards.map((c) => (
+                    <li key={c.id} className="truncate">{c.name}</li>
+                  ))}
+                </ul>
+              ) : (
+                <span className="mt-auto text-sm italic text-fog/60">Empty — needs evidence</span>
+              )}
             </button>
           );
         })}

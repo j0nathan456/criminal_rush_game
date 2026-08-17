@@ -11,9 +11,10 @@ export interface CombatChoicePanelProps {
 
 /**
  * Renders the active pre/post-combat choice (PRE or AFTER phase): Portal
- * (draw / swap), Drones (exchange), Mutants (copy), or Leaving Evidence. This
- * is always one specific player's decision (`head.playerId` — often the
- * defender, not whoever's turn it nominally is, e.g. Leaving Evidence belongs
+ * (draw / swap), Drones (exchange), Mutants (copy), Pistol (choose a card to
+ * discard), or Leaving Evidence. This is always one specific player's
+ * decision (`head.playerId` — often the defender, not whoever's turn it
+ * nominally is, e.g. Leaving Evidence belongs
  * to the injured Civilian even when the Criminal attacker is the current
  * player). Every other viewer sees a read-only "waiting on" notice instead —
  * online play is per-player devices, not a shared pass-and-play screen.
@@ -144,6 +145,21 @@ export function CombatChoicePanel({ state, viewerIndex, onCombatChoice }: Combat
             </button>
           </div>
         )}
+      </>
+    );
+  } else if (head.kind === 'PISTOL') {
+    body = (
+      <>
+        <p className="cr-role__sub">Choose a card from your hand to discard:</p>
+        <div className="cr-role__chips">{holder.hand.map((c) => chip(c.name, myCardId === c.id, () => setMyCardId(c.id), c.id))}</div>
+        <button
+          type="button"
+          className="cr-role__use"
+          disabled={!myCardId}
+          onClick={() => onCombatChoice?.({ kind: 'PISTOL', cardId: myCardId! })}
+        >
+          Discard
+        </button>
       </>
     );
   } else {

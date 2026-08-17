@@ -31,11 +31,12 @@ function stateWith(players: Player[], over: Partial<GameState> = {}): GameState 
   return { ...emptyGameState(), players, currentPlayerIndex: 0, vpTargets: { CIVILIAN: 9, CRIMINAL: 9 }, ...over };
 }
 
+const evidenceCard: ActionCard = { id: 'x', name: 'x', description: '', type: 'EVIDENCE' };
 const fullGrid = () => ({
-  TIME: { isFilled: true, cardName: 'x' },
-  MEANS: { isFilled: true, cardName: 'x' },
-  LOCATION: { isFilled: true, cardName: 'x' },
-  MOTIVE: { isFilled: true, cardName: 'x' },
+  TIME: { cards: [evidenceCard] },
+  MEANS: { cards: [evidenceCard] },
+  LOCATION: { cards: [evidenceCard] },
+  MOTIVE: { cards: [evidenceCard] },
 });
 
 const perk = (name: string): MarketCard => ({ id: name, name, description: '', type: 'PERK', cost: 2, source: 'PUBLIC' });

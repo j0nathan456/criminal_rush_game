@@ -418,6 +418,37 @@ describe('interactive combat — pre-combat choices', () => {
     expect(next.players[0].hand.map((c) => c.id)).toEqual(['theirs']);
     expect(next.players[2].hand.map((c) => c.id)).toEqual(['mine']);
   });
+
+  it('Pistol lets the holder choose which card to discard, not a random/first one', () => {
+    const atk = mkPlayer({
+      id: 'a', role: role('hitman', 'CRIMINAL', 3),
+      inventory: [wpn('pis', 'Pistol', 'RANGED', 4)],
+      hand: [junk('keep'), junk('toss')],
+    });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2) });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    expect(next.combat!.phase).toBe('PRE');
+    expect(next.combat!.pending[0].kind).toBe('PISTOL');
+    expect(next.players[0].hand.map((c) => c.id)).toEqual(['keep', 'toss']); // untouched until chosen
+
+    // Choosing the second card (not hand[0]) proves it's a real choice, not
+    // a stand-in for "discard the first/a random card".
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'PISTOL', cardId: 'toss' } });
+    expect(next.combat!.phase).toBe('POWER'); // PRE queue drained
+    expect(next.players[0].hand.map((c) => c.id)).toEqual(['keep']);
+    expect(next.discardPile.map((c) => c.id)).toContain('toss');
+  });
+
+  it('Pistol is skipped ("if possible") when the holder has no cards to discard', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('pis', 'Pistol', 'RANGED', 4)], hand: [] });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2) });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+
+    const next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    expect(next.combat!.phase).toBe('POWER'); // no PRE choice queued — nothing to discard
+  });
 });
 
 describe('interactive combat — Leaving Evidence (AFTER phase)', () => {

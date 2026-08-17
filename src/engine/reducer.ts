@@ -38,7 +38,7 @@ export type GameAction =
   | { type: 'PLAY_EVIDENCE'; cardId: string; category: EvidenceCategory }
   | { type: 'PURCHASE'; cardId: string }
   | { type: 'SELL'; cardId: string }
-  | { type: 'EXPOSE'; targetId: string }
+  | { type: 'EXPOSE'; targetId: string; evidenceChoices?: Partial<Record<EvidenceCategory, string>> }
   | { type: 'ATTACK'; targetId: string }
   | { type: 'PLAY_POWER'; cardId: string; side: CombatSide; byPlayerId?: string; mirrorTargetCardId?: string }
   | { type: 'COMBAT_DISCARD_MONEY'; side: CombatSide; cardIds: string[] }
@@ -93,6 +93,8 @@ export interface TradeItem {
  *                a discard-pile card (Witness evidence).
  *  - targetId  — the affected player (Sheriff/Robber/Arsonist/Bodyguard/Nurse/Witness).
  *  - category  — the Evidence grid slot to fill/clear (Sheriff/Forger).
+ *  - gridCardId — Forger: which specific card to clear from `category`, when
+ *                 more than one has piled up there (defaults to the oldest).
  *  - mode      — a sub-choice: Robber 'MONEY'|'CARD'. (Arsonist's Threaten is
  *                the target's choice, not the actor's — see pendingThreaten.)
  */
@@ -100,6 +102,7 @@ export interface RoleAbilityPayload {
   cardId?: string;
   targetId?: string;
   category?: EvidenceCategory;
+  gridCardId?: string;
   mode?: 'MONEY' | 'CARD' | 'DISCARD';
 }
 
@@ -142,10 +145,10 @@ export function emptyGameState(): GameState {
     publicMarket: [],
     blackMarket: [],
     evidenceGrid: {
-      TIME: { isFilled: false, cardName: null },
-      MEANS: { isFilled: false, cardName: null },
-      LOCATION: { isFilled: false, cardName: null },
-      MOTIVE: { isFilled: false, cardName: null },
+      TIME: { cards: [] },
+      MEANS: { cards: [] },
+      LOCATION: { cards: [] },
+      MOTIVE: { cards: [] },
     },
     teamScores: { CIVILIAN: 0, CRIMINAL: 0 },
     vpTargets: { CIVILIAN: 0, CRIMINAL: 0 },
@@ -244,7 +247,7 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
     case 'SELL':
       return sellItem(state, idx, player, action.cardId);
     case 'EXPOSE':
-      return expose(state, idx, player, action.targetId);
+      return expose(state, idx, player, action.targetId, action.evidenceChoices);
     case 'ATTACK':
       return attack(state, idx, player, action.targetId);
     case 'PLAY_POWER':
@@ -588,7 +591,6 @@ function playEvidence(
   if (!card.evidenceCategories?.includes(category)) {
     return log(state, `${card.name} cannot satisfy ${category}.`);
   }
-  if (state.evidenceGrid[category].isFilled) return log(state, `${category} is already filled.`);
 
   let s = updatePlayer(state, idx, (p) => ({
     ...p,
@@ -600,11 +602,12 @@ function playEvidence(
 }
 
 /**
- * Fill a grid category with an Evidence card (moving it to the discard) and pay
- * the Attorney's Retainer to any teammate Attorney other than `playedBy`.
- * The caller is responsible for removing the card from whoever's hand it came
- * from and for validating the play — this only mutates the grid, discard, and
- * Attorney money.
+ * Add an Evidence card to a grid category (it stays there — cards only leave
+ * the grid via an Expose or the Forger, see resolveExpose / the 'forger' role
+ * Action) and pay the Attorney's Retainer to any teammate Attorney other than
+ * `playedBy`. More than one card may pile up in the same category; the caller
+ * is responsible for removing the card from whoever's hand it came from and
+ * for validating the play — this only mutates the grid and Attorney money.
  */
 function placeEvidence(
   state: GameState,
@@ -614,8 +617,10 @@ function placeEvidence(
 ): GameState {
   let s: GameState = {
     ...state,
-    discardPile: [...state.discardPile, card],
-    evidenceGrid: { ...state.evidenceGrid, [category]: { isFilled: true, cardName: card.name } },
+    evidenceGrid: {
+      ...state.evidenceGrid,
+      [category]: { cards: [...state.evidenceGrid[category].cards, card] },
+    },
   };
   // Attorney's Retainer: teammate Attorneys collect $1.
   s = s.players.reduce((acc, p, i) => {
@@ -793,7 +798,13 @@ function doPurchase(
   return { state: s, ok: true };
 }
 
-function expose(state: GameState, idx: number, player: Player, targetId: string): GameState {
+function expose(
+  state: GameState,
+  idx: number,
+  player: Player,
+  targetId: string,
+  evidenceChoices: Partial<Record<EvidenceCategory, string>> = {},
+): GameState {
   if (player.team !== 'CIVILIAN') return log(state, 'Only Civilians can Expose.');
   if (player.actionsRemaining < 1) return log(state, `${player.name} has no actions left.`);
   if (!isGridComplete(state.evidenceGrid)) return log(state, 'The Evidence grid is not complete.');
@@ -807,16 +818,20 @@ function expose(state: GameState, idx: number, player: Player, targetId: string)
     return log(state, `${target.name} is disguised and cannot be Exposed.`);
   }
 
-  // Spend the whole grid.
-  let s: GameState = {
-    ...state,
-    evidenceGrid: {
-      TIME: { isFilled: false, cardName: null },
-      MEANS: { isFilled: false, cardName: null },
-      LOCATION: { isFilled: false, cardName: null },
-      MOTIVE: { isFilled: false, cardName: null },
-    },
-  };
+  // Spend exactly 1 card from each category — the exposer's choice when a
+  // category holds more than one; any others stay in the grid for next time.
+  const categories = Object.keys(state.evidenceGrid) as EvidenceCategory[];
+  let grid = state.evidenceGrid;
+  const spent: ActionCard[] = [];
+  for (const cat of categories) {
+    const slot = grid[cat];
+    const chosenId = evidenceChoices[cat];
+    const card = slot.cards.find((c) => c.id === chosenId) ?? slot.cards[0];
+    spent.push(card);
+    grid = { ...grid, [cat]: { cards: slot.cards.filter((c) => c.id !== card.id) } };
+  }
+
+  let s: GameState = { ...state, evidenceGrid: grid, discardPile: [...state.discardPile, ...spent] };
   s = updatePlayer(s, idx, (p) => ({ ...p, actionsRemaining: p.actionsRemaining - 1 }));
   s = updatePlayer(s, targetIndex, (p) => ({ ...p, isExposed: true, powerLevel: p.powerLevel - 1 }));
   return applyScore(s, 'CIVILIAN', 1, `${player.name} exposed ${target.name}! Civilians score a VP.`);
@@ -862,7 +877,7 @@ function attack(state: GameState, idx: number, player: Player, targetId: string)
   const def = s.players[playerIndexById(s, target.id)];
   const playerCount = s.players.length;
 
-  // Interactive pre-combat choices (Portal / Drones / Mutants) are resolved in
+  // Interactive pre-combat choices (Portal / Drones / Mutants / Pistol) are resolved in
   // the PRE phase before base powers are known; otherwise open the Power phase.
   const pending = buildPendingChoices(s, atk.id, def.id);
   const combat: CombatState = {
@@ -1042,7 +1057,7 @@ function applyRoleAbility(
     }
   }
 
-  const { cardId, targetId, category, mode } = payload;
+  const { cardId, targetId, category, gridCardId, mode } = payload;
   const targetIndex = targetId != null ? playerIndexById(state, targetId) : -1;
   const target = targetIndex >= 0 ? state.players[targetIndex] : undefined;
 
@@ -1075,7 +1090,6 @@ function applyRoleAbility(
       const card = target.hand.find((c) => c.id === cardId);
       if (!card || card.type !== 'EVIDENCE') return log(state, "That is not an Evidence card in the target's hand.");
       if (!category || !card.evidenceCategories?.includes(category)) return log(state, `${card.name} cannot satisfy ${category}.`);
-      if (state.evidenceGrid[category].isFilled) return log(state, `${category} is already filled.`);
       let s = updatePlayer(state, targetIndex, (p) => ({ ...p, hand: p.hand.filter((c) => c.id !== cardId) }));
       s = placeEvidence(s, card, category, player);
       return log(spend(s), `${player.name} (Sheriff) subpoenas ${target.name} and plays ${card.name} into ${category}.`);
@@ -1186,18 +1200,21 @@ function applyRoleAbility(
     }
 
     case 'forger': {
-      // Fabricate: discard a hand Evidence to remove same-category grid Evidence.
+      // Fabricate: discard a hand Evidence to remove same-category grid Evidence
+      // — the Forger's choice of which, when more than one has piled up there.
       const card = player.hand.find((c) => c.id === cardId);
       if (!card || card.type !== 'EVIDENCE') return log(state, 'Forger must discard an Evidence card from hand.');
       if (!category || !card.evidenceCategories?.includes(category)) return log(state, `${card.name} is not ${category} evidence.`);
-      if (!state.evidenceGrid[category].isFilled) return log(state, `${category} has no evidence to discard.`);
+      const slot = state.evidenceGrid[category];
+      if (slot.cards.length === 0) return log(state, `${category} has no evidence to discard.`);
+      const removed = slot.cards.find((c) => c.id === gridCardId) ?? slot.cards[0];
       let s = updatePlayer(state, idx, (p) => ({ ...p, hand: p.hand.filter((c) => c.id !== cardId) }));
       s = {
         ...s,
-        discardPile: [...s.discardPile, card],
-        evidenceGrid: { ...s.evidenceGrid, [category]: { isFilled: false, cardName: null } },
+        discardPile: [...s.discardPile, card, removed],
+        evidenceGrid: { ...s.evidenceGrid, [category]: { cards: slot.cards.filter((c) => c.id !== removed.id) } },
       };
-      return log(spend(s), `${player.name} (Forger) fabricates away the ${category} evidence.`);
+      return log(spend(s), `${player.name} (Forger) fabricates away ${removed.name} from ${category}.`);
     }
 
     default:

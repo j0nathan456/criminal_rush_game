@@ -17,9 +17,9 @@ export function actionsForTurn(player: Player): number {
   return ACTIONS_PER_TURN + (player.role.id === 'mayor' ? 1 : 0);
 }
 
-/** True when every evidence category is filled — required to Expose. */
+/** True when every evidence category holds at least one card — required to Expose. */
 export function isGridComplete(grid: GameState['evidenceGrid']): boolean {
-  return (Object.keys(grid) as EvidenceCategory[]).every((c) => grid[c].isFilled);
+  return (Object.keys(grid) as EvidenceCategory[]).every((c) => grid[c].cards.length > 0);
 }
 
 /** Append a message to the game log (returns a new state). */

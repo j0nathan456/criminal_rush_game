@@ -38,16 +38,40 @@ describe('<RoleAbilityPanel />', () => {
 
   it('Forger: needs an Evidence card and a filled category', () => {
     const onSubmit = vi.fn();
+    const gridCard: ActionCard = { id: 'x', name: 'x', description: '', type: 'EVIDENCE', evidenceCategories: ['MEANS'] };
     const s = stateWith(
       [mkPlayer({ id: 'p0', name: 'Faker', role: role('forger', 'Forger', 'CRIMINAL'), hand: [evidence('e1')] })],
-      { evidenceGrid: { ...emptyGameState().evidenceGrid, MEANS: { isFilled: true, cardName: 'x' } } },
+      { evidenceGrid: { ...emptyGameState().evidenceGrid, MEANS: { cards: [gridCard] } } },
     );
     render(<RoleAbilityPanel state={s} viewerIndex={0} onSubmit={onSubmit} onCancel={() => {}} />);
 
     fireEvent.click(screen.getByText('Ev-e1'));
     fireEvent.click(screen.getByText('Means'));
     fireEvent.click(screen.getByText('Use ability'));
-    expect(onSubmit).toHaveBeenCalledWith({ targetId: undefined, cardId: 'e1', category: 'MEANS', mode: undefined });
+    expect(onSubmit).toHaveBeenCalledWith({
+      targetId: undefined, cardId: 'e1', category: 'MEANS', gridCardId: undefined, mode: undefined,
+    });
+  });
+
+  it('Forger: with more than one card piled up, picks which specific one to clear', () => {
+    const onSubmit = vi.fn();
+    const first: ActionCard = { id: 'g1', name: 'Metal Chain', description: '', type: 'EVIDENCE', evidenceCategories: ['MEANS'] };
+    const second: ActionCard = { id: 'g2', name: 'Bloody Glove', description: '', type: 'EVIDENCE', evidenceCategories: ['MEANS'] };
+    const s = stateWith(
+      [mkPlayer({ id: 'p0', name: 'Faker', role: role('forger', 'Forger', 'CRIMINAL'), hand: [evidence('e1')] })],
+      { evidenceGrid: { ...emptyGameState().evidenceGrid, MEANS: { cards: [first, second] } } },
+    );
+    render(<RoleAbilityPanel state={s} viewerIndex={0} onSubmit={onSubmit} onCancel={() => {}} />);
+
+    fireEvent.click(screen.getByText('Ev-e1'));
+    fireEvent.click(screen.getByText('Means'));
+    expect(screen.getByText('Use ability').closest('button')).toBeDisabled(); // must pick which grid card
+
+    fireEvent.click(screen.getByText('Bloody Glove'));
+    fireEvent.click(screen.getByText('Use ability'));
+    expect(onSubmit).toHaveBeenCalledWith({
+      targetId: undefined, cardId: 'e1', category: 'MEANS', gridCardId: 'g2', mode: undefined,
+    });
   });
 
   it('shows a passive message and no Use button for passive roles', () => {
