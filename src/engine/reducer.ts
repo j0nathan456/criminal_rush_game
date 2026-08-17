@@ -56,16 +56,23 @@ export type GameAction =
 /**
  * Parameters for an "Action:" perk (see applyPerk). Which fields matter depends
  * on the perk:
- *  - cardId       — a hand card (Bank Money, Recycling Bin discard, Alarm Clock Event).
+ *  - cardId       — a hand card (Bank Money, Recycling Bin discard, Alarm Clock Event),
+ *                   or the opponent's Event card chosen to force-play (Shady Press).
  *  - marketCardId — a Market card to buy (Credit Card).
- *  - targetId     — the affected player (Hacked Passwords, Alarm Clock event target).
+ *  - targetId     — the affected player (Hacked Passwords, Alarm Clock event target),
+ *                   or the opponent being pressed (Shady Press).
  *  - discardForBonus — Credit Card: discard the card for a $2 discount instead of $1.
+ *  - eventTargetId, eventOptions — Shady Press: the forced Event card's own
+ *    target/options (e.g. who Tax Collection taxes), gathered from the
+ *    Criminal using Shady Press, distinct from `targetId` above.
  */
 export interface PerkPayload {
   cardId?: string;
   marketCardId?: string;
   targetId?: string;
   discardForBonus?: boolean;
+  eventTargetId?: string;
+  eventOptions?: EventOptions;
 }
 
 /**
@@ -192,6 +199,23 @@ function refillMarkets(state: GameState): GameState {
 const COMBAT_ACTIONS = new Set(['PLAY_POWER', 'COMBAT_DISCARD_MONEY', 'PASS_COMBAT', 'COMBAT_CHOICE']);
 
 export function gameReducer(state: GameState, action: GameAction, rng: Rng = Math.random): GameState {
+  return withSpyPeek(gameReducerCore(state, action, rng));
+}
+
+/**
+ * The Spy's Recon: at all times, the top card of the deck — visible only to
+ * the Spy, and only during their own turn. Recomputed after every action
+ * (rather than snapshotted at turn start) so it's always the true current
+ * top card, even after the Spy or a teammate's effect draws into it.
+ * `redactState` in online/room.ts strips this for every other viewer.
+ */
+function withSpyPeek(state: GameState): GameState {
+  const current = state.players[state.currentPlayerIndex];
+  const canPeek = current && current.role.id === 'spy' && !current.isCaptured && state.drawPile.length > 0;
+  return { ...state, lastPeek: canPeek ? { playerId: current.id, cards: [state.drawPile[0]] } : null };
+}
+
+function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameState {
   if (state.winner) return state; // game over — ignore further actions
   const idx = state.currentPlayerIndex;
   const player = state.players[idx];
@@ -1415,9 +1439,11 @@ function applyPerk(
       return log(spend(s), `${player.name} uses Manipulate on the top of the deck.`);
     }
     case 'Shady Press': {
-      // Choose an opponent, see all their Event cards, and play one of them
-      // immediately (as if they had played it). If they hold none, the action
-      // is still spent — "nothing happens" (rulebook), not a free retry.
+      // Choose an opponent, see all their Event cards, and force one to be
+      // played immediately — for the Criminal's benefit, same as Sheriff's
+      // Subpoena forces an opponent's Evidence card into play for the Sheriff.
+      // If the victim holds none, the action is still spent — "nothing
+      // happens" (rulebook), not a free retry.
       const ti = payload.targetId ? playerIndexById(state, payload.targetId) : -1;
       const victim = state.players[ti];
       if (!victim || victim.team === player.team) return log(state, 'Shady Press must target an opponent.');
@@ -1429,7 +1455,7 @@ function applyPerk(
       if (!evt) return log(state, `Choose one of ${victim.name}'s Event cards to play.`);
       let s = updatePlayer(state, ti, (p) => ({ ...p, hand: p.hand.filter((c) => c.id !== evt.id) }));
       s = { ...s, discardPile: [...s.discardPile, evt] };
-      s = resolveEvent(s, ti, evt.name, undefined, {});
+      s = resolveEvent(s, idx, evt.name, payload.eventTargetId, payload.eventOptions ?? {});
       return log(spend(s), `${player.name}'s Shady Press plays ${victim.name}'s ${evt.name}.`);
     }
     default:
@@ -1478,19 +1504,17 @@ function endTurn(state: GameState, idx: number): GameState {
 
 /**
  * Resolve passive start-of-turn effects for the player whose turn begins: virus
- * tokens (−1 action), the Spy's Recon peek, Computer / Laboratory (draw),
- * Investment / Ironworks (gain $1), Corrupt Connections (+1 action), the Vitamin
- * tracker, and shedding a Disguise. The Coffee token is follow-up work.
+ * tokens (−1 action), Computer / Laboratory (draw), Investment / Ironworks
+ * (gain $1), Corrupt Connections (+1 action), the Vitamin tracker, and
+ * shedding a Disguise. The Coffee token is follow-up work. (The Spy's Recon
+ * isn't turn-start — it's live for the whole turn; see withSpyPeek.)
  */
 function applyStartOfTurn(state: GameState, index: number): GameState {
   const player = state.players[index];
   if (!player) return state;
   const has = (name: string) => player.inventory.some((c) => c.name === name);
 
-  // Spy's Recon: privately record the top 2 cards of the deck for a per-player
-  // view layer. Card identities are never written to the shared log; other
-  // turns clear the peek so it never leaks stale information.
-  let s: GameState = { ...state, lastPeek: null };
+  let s: GameState = state;
 
   // Virus tokens (from the Viruses weapon) cost 1 action each, then clear.
   if ((player.virusTokens ?? 0) > 0) {
@@ -1503,13 +1527,6 @@ function applyStartOfTurn(state: GameState, index: number): GameState {
     s = log(s, `${player.name} loses ${tokens} action(s) to Virus token(s).`);
   }
 
-  if (player.role.id === 'spy' && !player.isCaptured) {
-    const cards = s.drawPile.slice(0, 2);
-    if (cards.length > 0) {
-      s = { ...s, lastPeek: { playerId: player.id, cards } };
-      s = log(s, `${player.name} (Spy) uses Recon to look at the top ${cards.length} card(s) of the deck.`);
-    }
-  }
   if (has('Computer')) {
     s = gameReducerDraw(s);
     s = log(s, `${player.name}'s Computer draws a card.`);

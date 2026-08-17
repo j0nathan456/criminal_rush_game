@@ -241,7 +241,11 @@ export function GameBoard({
         <div className="min-w-0">
           <Markets state={state} viewer={viewer} isViewersTurn={isViewersTurn} onBuy={onBuy} />
         </div>
-        <Piles drawPile={state.drawPile} discardPile={state.discardPile} />
+        <Piles
+          drawPile={state.drawPile}
+          discardPile={state.discardPile}
+          peekedTopCard={state.lastPeek?.playerId === viewer?.id ? state.lastPeek.cards[0] : undefined}
+        />
 
         {/* Row 3 */}
         {viewer && (

@@ -205,9 +205,11 @@ export interface GameState {
   combat?: CombatState | null;
 
   /**
-   * The Spy's Recon peek. At the start of a Spy's turn the top cards of the
-   * deck are recorded here so a per-player view layer can show them privately.
-   * The engine never writes card identities into the shared `gameLog`.
+   * The Spy's Recon: at all times, the true top card of the deck — recomputed
+   * after every action (see withSpyPeek in reducer.ts), so it's never stale,
+   * and only present while it's that Spy's own turn. A per-player view layer
+   * (see redactState in online/room.ts) shows it privately to just that Spy;
+   * the engine never writes card identities into the shared `gameLog`.
    */
   lastPeek?: { playerId: string; cards: ActionCard[] } | null;
 

@@ -539,7 +539,7 @@ describe('gameReducer — passive role hooks', () => {
     expect(next.players[1].isInjured).toBe(false);
   });
 
-  it('Spy peeks at the top of the deck at the start of their turn', () => {
+  it('Spy can always see the true top card of the deck during their own turn', () => {
     const cards: ActionCard[] = [1, 2, 3].map((n) => ({ id: `c${n}`, name: `c${n}`, description: '', type: 'MONEY', value: 1 }));
     const s = stateWith(
       [
@@ -548,10 +548,31 @@ describe('gameReducer — passive role hooks', () => {
       ],
       { drawPile: cards },
     );
+    let next = gameReducer(s, { type: 'END_TURN' });
+    expect(next.currentPlayerIndex).toBe(1);
+    expect(next.lastPeek).toEqual({ playerId: 'p1', cards: [cards[0]] });
+
+    // It's live, not a turn-start snapshot: drawing updates what's on top.
+    next = gameReducer(next, { type: 'DRAW_CARD' });
+    expect(next.lastPeek).toEqual({ playerId: 'p1', cards: [cards[1]] });
+
+    // Once it's no longer the Spy's turn, the peek disappears.
+    next = gameReducer(next, { type: 'END_TURN' });
+    expect(next.lastPeek).toBeNull();
+  });
+
+  it('A captured Spy loses Recon', () => {
+    const cards: ActionCard[] = [{ id: 'c1', name: 'c1', description: '', type: 'MONEY', value: 1 }];
+    const s = stateWith(
+      [
+        mkPlayer({ id: 'p0', role: role('sheriff', 'CIVILIAN') }),
+        mkPlayer({ id: 'p1', role: role('spy', 'CRIMINAL'), isCaptured: true }),
+      ],
+      { drawPile: cards },
+    );
     const next = gameReducer(s, { type: 'END_TURN' });
     expect(next.currentPlayerIndex).toBe(1);
-    expect(next.lastPeek?.playerId).toBe('p1');
-    expect(next.lastPeek?.cards).toHaveLength(2);
+    expect(next.lastPeek).toBeNull();
   });
 });
 
@@ -1005,18 +1026,37 @@ describe('gameReducer — remaining perks & events', () => {
     expect(next.drawPile.map((x) => x.id)).toEqual(['cc', 'd']); // third kept on top
   });
 
-  it('Shady Press plays the chosen opponent Event card, not just the first one', () => {
+  it('Shady Press plays the chosen opponent Event card, not just the first one — for the presser', () => {
     const press = perk('pk', 'Shady Press', { source: 'BLACK_MARKET' });
     const decoy: ActionCard = { id: 'd', name: 'Lottery', description: '', type: 'EVENT' };
     const chosen: ActionCard = { id: 'v', name: 'Generational Wealth', description: '', type: 'EVENT' };
     const s = stateWith([
-      mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL'), inventory: [press] }),
+      mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL'), money: 0, inventory: [press] }),
       mkPlayer({ id: 'p1', role: role('mayor', 'CIVILIAN'), money: 0, hand: [decoy, chosen] }),
     ]);
     const next = gameReducer(s, { type: 'USE_PERK', perkId: 'pk', payload: { targetId: 'p1', cardId: 'v' } });
     expect(next.players[1].hand.map((c) => c.id)).toEqual(['d']); // only the chosen card left their hand
-    expect(next.players[1].money).toBe(1); // Generational Wealth resolved for p1's team
+    // Forced-play benefits the Criminal who used Shady Press, not the Civilian
+    // who was forced to reveal it — same as Sheriff's Subpoena benefits the Sheriff.
+    expect(next.players[0].money).toBe(1);
+    expect(next.players[1].money).toBe(0);
     expect(next.players[0].actionsRemaining).toBe(2);
+  });
+
+  it("Shady Press gathers the forced Event's own target from the presser (Tax Collection)", () => {
+    const press = perk('pk', 'Shady Press', { source: 'BLACK_MARKET' });
+    const evt: ActionCard = { id: 'v', name: 'Tax Collection', description: '', type: 'EVENT' };
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL'), money: 0, inventory: [press] }),
+      mkPlayer({ id: 'p1', role: role('mayor', 'CIVILIAN'), hand: [evt] }), // supplies the card
+      mkPlayer({ id: 'p2', role: role('sheriff', 'CIVILIAN'), money: 3 }), // p0's chosen tax target
+    ]);
+    const next = gameReducer(s, {
+      type: 'USE_PERK', perkId: 'pk', payload: { targetId: 'p1', cardId: 'v', eventTargetId: 'p2' },
+    });
+    expect(next.players[1].hand).toHaveLength(0); // p1's card was spent
+    expect(next.players[0].money).toBe(1); // p0 (the presser) collects the tax
+    expect(next.players[2].money).toBe(2); // taxed from p2, the chosen target — not p1
   });
 
   it('Shady Press refuses to target a teammate', () => {

@@ -3,6 +3,8 @@ import type { GameState } from '../types/game';
 import type { ActionCard, MarketCard } from '../types/cards';
 import type { PerkPayload } from '../engine';
 import { TEAM_META } from '../constants/theme';
+import { EventPanel } from './EventPanel';
+import { CONFIGURABLE_EVENTS } from './panelConstants';
 
 export interface PerkActionPanelProps {
   state: GameState;
@@ -38,6 +40,27 @@ export function PerkActionPanel({ state, viewerIndex, perkId, onSubmit, onCancel
   const opponents = state.players.filter((p) => p.team !== viewer.team);
   const target = targetId ? state.players.find((p) => p.id === targetId) : undefined;
   const market: MarketCard[] = viewer.team === 'CRIMINAL' ? [...state.publicMarket, ...state.blackMarket] : state.publicMarket;
+
+  // Shady Press, once a configurable Event card is chosen: gather that
+  // card's own target/options from the presser (the actor who'll benefit),
+  // exactly like Alarm Clock/normal play would — mirrors AllySupportPanel's
+  // step 3 of composing another panel rather than duplicating its logic.
+  if (perk.name === 'Shady Press' && target) {
+    const forcedEvent = target.hand.find((c) => c.type === 'EVENT' && c.id === cardId);
+    if (forcedEvent && CONFIGURABLE_EVENTS.has(forcedEvent.name)) {
+      return (
+        <EventPanel
+          state={state}
+          viewerIndex={viewerIndex}
+          card={forcedEvent}
+          onSubmit={(eventTargetId, eventOptions) =>
+            onSubmit?.(perkId, { targetId: target.id, cardId: forcedEvent.id, eventTargetId, eventOptions })
+          }
+          onCancel={() => setCardId(undefined)}
+        />
+      );
+    }
+  }
 
   const chip = (label: string, selected: boolean, onClick: () => void, key?: string) => (
     <button key={key ?? label} type="button" className={`cr-role__chip${selected ? ' is-selected' : ''}`} onClick={onClick}>

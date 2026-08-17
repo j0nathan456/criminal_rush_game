@@ -65,7 +65,7 @@ export const ROLES: RoleIdentity[] = [
   {
     id: 'spy', name: 'Spy', team: 'CRIMINAL', powerlevel: 4,
     abilityName: 'Recon',
-    abilityDescription: 'At the beginning of your turn, look at the top 2 cards of the deck.',
+    abilityDescription: 'At all times, you may look at the top card of the deck.',
   },
   {
     id: 'evil-scientist', name: 'Evil Scientist', team: 'CRIMINAL', powerlevel: 3,

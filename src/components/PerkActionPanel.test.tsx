@@ -51,9 +51,9 @@ describe('<PerkActionPanel />', () => {
     expect(onSubmit).toHaveBeenCalledWith('cc', expect.objectContaining({ marketCardId: 'shop', discardForBonus: false }));
   });
 
-  it('Shady Press: pick an opponent, then one of their Event cards', () => {
+  it('Shady Press: pick an opponent, then one of their (no-input) Event cards', () => {
     const onSubmit = vi.fn();
-    const evt: ActionCard = { id: 'e1', name: 'Tax Collection', description: '', type: 'EVENT' };
+    const evt: ActionCard = { id: 'e1', name: 'Generational Wealth', description: '', type: 'EVENT' };
     const viewer = mkPlayer({ id: 'p0', name: 'Ana', team: 'CRIMINAL', inventory: [perk('sp', 'Shady Press')] });
     const opponent = mkPlayer({ id: 'p1', name: 'Ben', team: 'CIVILIAN', hand: [evt] });
     render(<PerkActionPanel state={stateWith([viewer, opponent])} viewerIndex={0} perkId="sp" onSubmit={onSubmit} onCancel={() => {}} />);
@@ -61,9 +61,33 @@ describe('<PerkActionPanel />', () => {
     expect(screen.getByText('Use').closest('button')).toBeDisabled();
     fireEvent.click(screen.getByText('Ben'));
     expect(screen.getByText('Use').closest('button')).toBeDisabled(); // still need a card choice
-    fireEvent.click(screen.getByText('Tax Collection'));
+    fireEvent.click(screen.getByText('Generational Wealth'));
     fireEvent.click(screen.getByText('Use'));
     expect(onSubmit).toHaveBeenCalledWith('sp', expect.objectContaining({ targetId: 'p1', cardId: 'e1' }));
+  });
+
+  it('Shady Press: a configurable Event opens its own follow-up, gathered from the presser', () => {
+    const onSubmit = vi.fn();
+    const evt: ActionCard = { id: 'e1', name: 'Tax Collection', description: '', type: 'EVENT' };
+    const viewer = mkPlayer({ id: 'p0', name: 'Ana', team: 'CRIMINAL', inventory: [perk('sp', 'Shady Press')] });
+    const victim = mkPlayer({ id: 'p1', name: 'Ben', team: 'CIVILIAN', hand: [evt] });
+    const taxable = mkPlayer({ id: 'p2', name: 'Cara', team: 'CIVILIAN', money: 3 });
+    render(
+      <PerkActionPanel state={stateWith([viewer, victim, taxable])} viewerIndex={0} perkId="sp" onSubmit={onSubmit} onCancel={() => {}} />,
+    );
+
+    fireEvent.click(screen.getByText('Ben'));
+    fireEvent.click(screen.getByText('Tax Collection'));
+
+    // Now Tax Collection's own follow-up appears, asking Ana (the presser) to
+    // choose who it taxes — not Ben, who merely supplied the card.
+    expect(screen.getByText('Play Tax Collection').closest('button')).toBeDisabled();
+    fireEvent.click(screen.getByText('Cara'));
+    fireEvent.click(screen.getByText('Play Tax Collection'));
+    expect(onSubmit).toHaveBeenCalledWith(
+      'sp',
+      expect.objectContaining({ targetId: 'p1', cardId: 'e1', eventTargetId: 'p2' }),
+    );
   });
 
   it('Shady Press: an opponent with no Event cards can still be confirmed (wastes the action)', () => {
