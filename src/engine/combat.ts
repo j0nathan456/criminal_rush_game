@@ -90,6 +90,40 @@ export function weaponPower(
 }
 
 /**
+ * A case-log line for a weapon's conditional or computed power this combat
+ * (Harpoon's +2 vs Melee, Parasites matching a role's PL, a Laboratory buff,
+ * …) — undefined when the weapon just contributes its flat printed value with
+ * nothing situational to explain. Mirrors weaponPower's own conditionals;
+ * kept separate so weaponPower itself stays a plain number for its other
+ * callers (computeBasePower, Mutants' copy) and their tests.
+ */
+function weaponPowerNote(weapon: MarketCard, self: Player, opponent: Player, playerCount: number): string | undefined {
+  switch (weapon.name) {
+    case 'Parasites':
+      return `${weapon.name} matches ${opponent.name}'s Base PL (${opponent.role.powerlevel}).`;
+    case 'Pocket Knife':
+      return `${weapon.name} scales with ${self.name}'s perks/weapons (+${perksAndWeaponsCount(self)} PL).`;
+    case 'Robot Soldier':
+      return `${weapon.name} scales with ${self.name}'s hand size (+${Math.min(self.hand.length, 5)} PL).`;
+    case 'Cannon':
+      return `${weapon.name} scales with ${opponent.name}'s hand size (+${Math.min(opponent.hand.length, 4)} PL).`;
+    case 'Catapult':
+      return `${weapon.name} grants +${playerCount === 4 ? 3 : 2} PL in a ${playerCount}-player game.`;
+    default: {
+      const bonuses: string[] = [];
+      if (weapon.name === 'Switch Blade' && hasWeaponType(opponent, 'CHEMICAL')) bonuses.push('+2 PL against a Chemical weapon');
+      if (weapon.name === 'Harpoon' && hasWeaponType(opponent, 'MELEE')) bonuses.push('+2 PL against a Melee weapon');
+      if (weapon.name === 'Magnetic Deflector' && hasWeaponType(opponent, 'RANGED')) bonuses.push('+2 PL against a Ranged weapon');
+      if (weapon.name === 'Corrosion Cannisters' && hasWeaponType(opponent, 'TECH')) bonuses.push('+2 PL against a Tech weapon');
+      const t = weapon.weaponType;
+      if ((t === 'TECH' || t === 'CHEMICAL') && hasItem(self, 'Laboratory')) bonuses.push('+1 PL from Laboratory');
+      if ((t === 'MELEE' || t === 'RANGED') && hasItem(self, 'Ironworks')) bonuses.push('+1 PL from Ironworks');
+      return bonuses.length > 0 ? `${weapon.name} gets ${bonuses.join(' and ')}.` : undefined;
+    }
+  }
+}
+
+/**
  * A combatant's base power before any Power cards: current PL (role base minus
  * expose, plus permanent gains already folded into powerLevel) + weapons +
  * Hitman's attack bonus + Bodyguard's defensive bonus.
@@ -174,39 +208,46 @@ function discardFirstCard(state: GameState, playerId: string, why: string): Game
 
 // --- Pre-combat weapon effects ----------------------------------------------
 
+/**
+ * One weapon's deterministic before-combat effect, `self` (the holder)
+ * against `opp`. Portal (draw/swap), Drones (exchange), Mutants (copy), and
+ * Pistol (choose which card to discard) are interactive choices resolved in
+ * the PRE phase instead — see buildPendingChoices / applyCombatChoice — so
+ * they're a no-op here. Shared by preCombatFor (a player's own weapons) and
+ * applyMutants (a copied weapon's effect fires too, not just its power —
+ * against this fight's actual opponent, whoever the weapon was copied from).
+ */
+function applyPreCombatWeaponEffect(state: GameState, weapon: MarketCard, selfId: string, oppId: string, isAttacker: boolean): GameState {
+  const self = state.players[playerIndexById(state, selfId)];
+  switch (weapon.name) {
+    case 'Hammer': {
+      const s = log(state, `${self.name}'s Hammer draws a card before combat.`);
+      return drawForPlayer(s, selfId);
+    }
+    case 'Barbed Wire':
+      return discardFirstCard(state, oppId, 'Barbed Wire');
+    case 'Mosquitos':
+      return discardFirstCard(state, oppId, 'Mosquitos');
+    case 'Brass Knuckles': {
+      if (!isAttacker) return state;
+      const oppIdx = playerIndexById(state, oppId);
+      const opp = state.players[oppIdx];
+      if (!opp || opp.money <= 0) return state;
+      let s = updatePlayer(state, oppIdx, (p) => ({ ...p, money: p.money - 1 }));
+      s = updatePlayer(s, playerIndexById(s, selfId), (p) => ({ ...p, money: p.money + 1 }));
+      return log(s, `${self.name}'s Brass Knuckles steal $1 from ${opp.name}.`);
+    }
+    default:
+      return state;
+  }
+}
+
 /** Apply one player's before-combat weapon effects against their opponent. */
 function preCombatFor(state: GameState, selfId: string, oppId: string, isAttacker: boolean): GameState {
   const self = state.players[playerIndexById(state, selfId)];
   let s = state;
   for (const weapon of weaponsOf(self)) {
-    switch (weapon.name) {
-      case 'Hammer':
-        s = log(s, `${self.name}'s Hammer draws a card before combat.`);
-        s = drawForPlayer(s, selfId);
-        break;
-      case 'Barbed Wire':
-        s = discardFirstCard(s, oppId, 'Barbed Wire');
-        break;
-      case 'Mosquitos':
-        s = discardFirstCard(s, oppId, 'Mosquitos');
-        break;
-      case 'Brass Knuckles': {
-        if (!isAttacker) break;
-        const oppIdx = playerIndexById(s, oppId);
-        const opp = s.players[oppIdx];
-        if (opp && opp.money > 0) {
-          s = updatePlayer(s, oppIdx, (p) => ({ ...p, money: p.money - 1 }));
-          s = updatePlayer(s, playerIndexById(s, selfId), (p) => ({ ...p, money: p.money + 1 }));
-          s = log(s, `${self.name}'s Brass Knuckles steal $1 from ${opp.name}.`);
-        }
-        break;
-      }
-      // Portal (draw/swap), Drones (exchange), Mutants (copy), and Pistol
-      // (choose which card to discard) are interactive choices resolved in the
-      // PRE phase — see buildPendingChoices / applyCombatChoice.
-      default:
-        break;
-    }
+    s = applyPreCombatWeaponEffect(s, weapon, selfId, oppId, isAttacker);
   }
   return s;
 }
@@ -263,9 +304,22 @@ export function enterPowerPhase(state: GameState): GameState {
   const pc = combat.playerCount;
   const atkBase = computeBasePower(atk, def, { isAttacker: true, playerCount: pc }) + (combat.attacker.copiedWeaponPower ?? 0);
   const defBase = computeBasePower(def, atk, { isAttacker: false, playerCount: pc }) + (combat.defender.copiedWeaponPower ?? 0);
+
+  // Record any conditional/computed weapon bonuses that just applied, so a
+  // non-obvious base-power number is explained in the case log.
+  let s = state;
+  for (const w of weaponsOf(atk)) {
+    const note = weaponPowerNote(w, atk, def, pc);
+    if (note) s = log(s, note);
+  }
+  for (const w of weaponsOf(def)) {
+    const note = weaponPowerNote(w, def, atk, pc);
+    if (note) s = log(s, note);
+  }
+
   return log(
     {
-      ...state,
+      ...s,
       combat: {
         ...combat,
         phase: 'POWER',
@@ -317,6 +371,13 @@ function applyDrones(state: GameState, head: Extract<CombatChoice, { kind: 'DRON
   return log(s, `${holder.name} exchanges a card with ${teammate.name} via Drones.`);
 }
 
+/**
+ * Mutants: copy one weapon belonging to this fight's actual opponent — never
+ * any other player — gaining both its power (weaponPower, capped/scaled the
+ * same as if the holder truly held it) and, if it has one, its before-combat
+ * effect (Hammer draws, Barbed Wire/Mosquitos force a discard, Brass Knuckles
+ * steals), fired against that same opponent.
+ */
 function applyMutants(state: GameState, head: Extract<CombatChoice, { kind: 'MUTANTS' }>, input: CombatChoiceInput): GameState {
   const combat = state.combat!;
   const holder = state.players[playerIndexById(state, head.playerId)];
@@ -331,7 +392,8 @@ function applyMutants(state: GameState, head: Extract<CombatChoice, { kind: 'MUT
   const part = head.side === 'ATTACKER' ? combat.attacker : combat.defender;
   const newPart = { ...part, copiedWeaponPower: (part.copiedWeaponPower ?? 0) + copied };
   const newCombat = head.side === 'ATTACKER' ? { ...combat, attacker: newPart } : { ...combat, defender: newPart };
-  return log({ ...state, combat: newCombat }, `${holder.name}'s Mutants copy ${weapon.name} (+${copied} power).`);
+  const s = log({ ...state, combat: newCombat }, `${holder.name}'s Mutants copy ${weapon.name} (+${copied} power).`);
+  return applyPreCombatWeaponEffect(s, weapon, holder.id, opp.id, head.side === 'ATTACKER');
 }
 
 /** Pistol: the holder chooses which of their own cards to discard before combat. */

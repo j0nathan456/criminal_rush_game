@@ -131,6 +131,57 @@ describe('computeBasePower', () => {
   });
 });
 
+describe('enterPowerPhase — weapon effect case-log entries', () => {
+  it('logs Harpoon’s conditional bonus and Parasites’ PL match', () => {
+    const hitman = mkPlayer({
+      id: 'a', role: role('hitman', 'CRIMINAL', 3),
+      inventory: [wpn('ham', 'Hammer', 'MELEE', 2), wpn('bw', 'Barbed Wire', 'MELEE', 1)],
+    });
+    const mayor = mkPlayer({
+      id: 'b', role: role('mayor', 'CIVILIAN', 2),
+      inventory: [wpn('harp', 'Harpoon', 'RANGED', 2), wpn('par', 'Parasites', 'CHEMICAL', 0)],
+    });
+    const s = stateWith([hitman, mayor], { currentPlayerIndex: 0, drawPile: [junk('x')] });
+
+    const next = gameReducer(s, { type: 'ATTACK', targetId: 'b' });
+    expect(next.gameLog).toContain('Harpoon gets +2 PL against a Melee weapon.');
+    expect(next.gameLog).toContain("Parasites matches a's Base PL (3).");
+  });
+
+  it('logs Laboratory/Ironworks weapon buffs only when they actually apply', () => {
+    const lab = mkPlayer({
+      id: 'a', role: role('hitman', 'CRIMINAL', 3),
+      inventory: [wpn('tg', 'Toxic Gas', 'CHEMICAL', 2), perk('l', 'Laboratory')],
+    });
+    const foe = mkPlayer({ id: 'b', role: role('mayor', 'CIVILIAN', 2) });
+    const s = stateWith([lab, foe], { currentPlayerIndex: 0 });
+
+    const next = gameReducer(s, { type: 'ATTACK', targetId: 'b' });
+    expect(next.gameLog).toContain('Toxic Gas gets +1 PL from Laboratory.');
+  });
+
+  it('does not log a weapon with only its flat printed power and no conditional', () => {
+    const plain = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('bt', 'Bat', 'MELEE', 2)] });
+    const foe = mkPlayer({ id: 'b', role: role('mayor', 'CIVILIAN', 2) });
+    const s = stateWith([plain, foe], { currentPlayerIndex: 0 });
+
+    const next = gameReducer(s, { type: 'ATTACK', targetId: 'b' });
+    expect(next.gameLog.some((line) => line.includes('Bat'))).toBe(false);
+  });
+
+  it('logs the scaling weapons’ computed value every time (Pocket Knife, Robot Soldier, Cannon, Catapult)', () => {
+    const self = mkPlayer({
+      id: 'a', role: role('hitman', 'CRIMINAL', 3),
+      inventory: [wpn('pk', 'Pocket Knife', 'MELEE', 0)],
+    });
+    const foe = mkPlayer({ id: 'b', role: role('mayor', 'CIVILIAN', 2) });
+    const s = stateWith([self, foe], { currentPlayerIndex: 0 });
+
+    const next = gameReducer(s, { type: 'ATTACK', targetId: 'b' });
+    expect(next.gameLog).toContain("Pocket Knife scales with a's perks/weapons (+1 PL).");
+  });
+});
+
 describe('attackActionCost', () => {
   it('is 2 normally, 1 with Getaway Car, and +1 vs Nerve Agents', () => {
     const plain = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3) });
@@ -405,6 +456,71 @@ describe('interactive combat — pre-combat choices', () => {
     next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'COPY', opponentWeaponId: 'axe' } });
     // 3 (Hitman) + Mutants own 1 + Hitman marksman (+1 weapon) + copied Axe 5 = 10.
     expect(next.combat!.attacker.basePower).toBe(10);
+  });
+
+  it('Mutants copying Mosquitos also forces this fight’s opponent to discard — not just its power', () => {
+    const atk = mkPlayer({
+      id: 'a', role: role('hitman', 'CRIMINAL', 3),
+      inventory: [wpn('mut', 'Mutants', 'CHEMICAL', 1)], hand: [junk('atk-card')],
+    });
+    const def = mkPlayer({
+      id: 'd', role: role('mayor', 'CIVILIAN', 2),
+      inventory: [wpn('mos', 'Mosquitos', 'CHEMICAL', 3)], hand: [junk('def-card')],
+    });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    // The defender's own Mosquitos already fired automatically pre-combat,
+    // discarding the attacker's card — unrelated to the Mutants copy below.
+    expect(next.players[0].hand).toHaveLength(0);
+    expect(next.discardPile.map((c) => c.id)).toContain('atk-card');
+    expect(next.players[1].hand).toHaveLength(1); // defender's own card untouched so far
+
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'COPY', opponentWeaponId: 'mos' } });
+    // The copied Mosquitos now forces the opponent it was copied from — the
+    // defender — to discard too. Never anyone else.
+    expect(next.players[1].hand).toHaveLength(0);
+    expect(next.discardPile.map((c) => c.id)).toContain('def-card');
+  });
+
+  it('Mutants copying Hammer draws the holder a card, not the opponent', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mut', 'Mutants', 'CHEMICAL', 1)] });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2), inventory: [wpn('ham', 'Hammer', 'MELEE', 2)] });
+    // Two cards: the defender's own Hammer draws the first before the PRE
+    // phase even opens; the Mutants-copied Hammer should draw the second.
+    const s = stateWith([atk, def], { currentPlayerIndex: 0, drawPile: [junk('def-drawn'), junk('atk-drawn')] });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    expect(next.players[1].hand.map((c) => c.id)).toEqual(['def-drawn']); // defender's own Hammer already fired
+
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'COPY', opponentWeaponId: 'ham' } });
+    expect(next.players[0].hand.map((c) => c.id)).toContain('atk-drawn'); // the copy draws for the holder
+    expect(next.players[1].hand.map((c) => c.id)).toEqual(['def-drawn']); // defender's hand unaffected by the copy
+  });
+
+  it('Mutants copying Brass Knuckles steals $1 from the copied-from opponent while the holder is attacking', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mut', 'Mutants', 'CHEMICAL', 1)], money: 0 });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2), inventory: [wpn('bk', 'Brass Knuckles', 'MELEE', 1)], money: 3 });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'COPY', opponentWeaponId: 'bk' } });
+    expect(next.players[0].money).toBe(1);
+    expect(next.players[1].money).toBe(2);
+  });
+
+  it('Mutants only affects the direct combat opponent — a third player is untouched', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mut', 'Mutants', 'CHEMICAL', 1)] });
+    const def = mkPlayer({
+      id: 'd', role: role('mayor', 'CIVILIAN', 2),
+      inventory: [wpn('mos', 'Mosquitos', 'CHEMICAL', 3)], hand: [junk('def-card')],
+    });
+    const bystander = mkPlayer({ id: 'x', role: role('sheriff', 'CIVILIAN', 3), hand: [junk('bystander-card')] });
+    const s = stateWith([atk, def, bystander], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'COPY', opponentWeaponId: 'mos' } });
+    expect(next.players[2].hand.map((c) => c.id)).toEqual(['bystander-card']); // never touched
   });
 
   it('Drones exchanges a card with a teammate', () => {
