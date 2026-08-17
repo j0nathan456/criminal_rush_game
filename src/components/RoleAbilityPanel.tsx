@@ -172,13 +172,11 @@ export function RoleAbilityPanel({
     case 'arsonist':
       body = (
         <>
-          <p>Threaten an opponent:</p>
+          <p>Threaten an opponent — they'll choose to lose $1 or discard a card:</p>
           {playerRow(opponents)}
-          <p className="cr-role__sub">They lose…</p>
-          {modeRow([{ value: 'MONEY', label: 'Lose $1' }, { value: 'DISCARD', label: 'Discard a card' }])}
         </>
       );
-      canSubmit = !!targetId && !!mode;
+      canSubmit = !!targetId;
       break;
     case 'forger': {
       const filled = EVIDENCE_ORDER.filter((c) => state.evidenceGrid[c].isFilled);

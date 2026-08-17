@@ -50,6 +50,7 @@ export type GameAction =
   | { type: 'CLEAR_TRAFFIC' }
   | { type: 'USE_MARKET_DISCOUNT'; cardId: string }
   | { type: 'SKIP_MARKET_DISCOUNT' }
+  | { type: 'RESOLVE_THREATEN'; mode: 'MONEY' | 'DISCARD' }
   | { type: 'END_TURN' };
 
 /**
@@ -85,7 +86,8 @@ export interface TradeItem {
  *                a discard-pile card (Witness evidence).
  *  - targetId  — the affected player (Sheriff/Robber/Arsonist/Bodyguard/Nurse/Witness).
  *  - category  — the Evidence grid slot to fill/clear (Sheriff/Forger).
- *  - mode      — a sub-choice: Robber 'MONEY'|'CARD', Arsonist 'MONEY'|'DISCARD'.
+ *  - mode      — a sub-choice: Robber 'MONEY'|'CARD'. (Arsonist's Threaten is
+ *                the target's choice, not the actor's — see pendingThreaten.)
  */
 export interface RoleAbilityPayload {
   cardId?: string;
@@ -149,6 +151,7 @@ export function emptyGameState(): GameState {
     expandNetworkPile: [],
     trashPile: [],
     pendingMarketDiscount: null,
+    pendingThreaten: null,
   };
 }
 
@@ -199,6 +202,12 @@ export function gameReducer(state: GameState, action: GameAction, rng: Rng = Mat
     return log(state, 'Resolve the current combat before taking other actions.');
   }
 
+  // A pending Threaten choice is the target's decision, not the current
+  // player's — block everything else until they resolve it.
+  if (state.pendingThreaten && action.type !== 'RESOLVE_THREATEN') {
+    return log(state, 'Resolve the Threaten choice before taking other actions.');
+  }
+
   switch (action.type) {
     case 'DRAW_CARD':
       return drawCard(state, idx, player);
@@ -234,6 +243,8 @@ export function gameReducer(state: GameState, action: GameAction, rng: Rng = Mat
       return redeemMarketDiscount(state, idx, player, action.cardId);
     case 'SKIP_MARKET_DISCOUNT':
       return skipMarketDiscount(state, player);
+    case 'RESOLVE_THREATEN':
+      return resolveThreaten(state, action.mode);
     case 'END_TURN':
       return endTurn(state, idx);
     default:
@@ -643,6 +654,36 @@ function skipMarketDiscount(state: GameState, player: Player): GameState {
   const pending = state.pendingMarketDiscount;
   if (!pending || pending.playerId !== player.id) return state;
   return { ...state, pendingMarketDiscount: null };
+}
+
+/**
+ * Resolve the Arsonist's Threaten choice (see pendingThreaten). This is the
+ * targeted Civilian's own decision, so — like COMBAT_CHOICE — it isn't gated
+ * by `state.currentPlayerIndex`; the target is identified from the pending
+ * state itself, not from whoever's turn it nominally is.
+ */
+function resolveThreaten(state: GameState, mode: 'MONEY' | 'DISCARD'): GameState {
+  const pending = state.pendingThreaten;
+  if (!pending) return state;
+  const targetIndex = playerIndexById(state, pending.targetId);
+  const target = state.players[targetIndex];
+  if (!target) return { ...state, pendingThreaten: null };
+
+  const canMoney = target.money > 0;
+  const canDiscard = target.hand.length > 0;
+  const choice: 'MONEY' | 'DISCARD' =
+    mode === 'DISCARD' && canDiscard ? 'DISCARD'
+    : mode === 'MONEY' && canMoney ? 'MONEY'
+    : canMoney ? 'MONEY' : 'DISCARD';
+
+  if (choice === 'MONEY') {
+    const s = updatePlayer(state, targetIndex, (p) => ({ ...p, money: p.money - 1 }));
+    return log({ ...s, pendingThreaten: null }, `${target.name} loses $1.`);
+  }
+  const discarded = target.hand[0];
+  let s = updatePlayer(state, targetIndex, (p) => ({ ...p, hand: p.hand.slice(1) }));
+  s = { ...s, discardPile: [...s.discardPile, discarded], pendingThreaten: null };
+  return log(s, `${target.name} discards a card.`);
 }
 
 interface PurchaseOptions {
@@ -1095,23 +1136,14 @@ function applyRoleAbility(
     }
 
     case 'arsonist': {
-      // Threaten: an opponent discards 1 card or loses $1 (their choice).
+      // Threaten: an opponent discards 1 card or loses $1 — their choice, made
+      // via RESOLVE_THREATEN once this sets pendingThreaten (see resolveThreaten).
       if (!target || target.team === player.team) return log(state, 'Arsonist must target an opponent.');
       const canMoney = target.money > 0;
       const canDiscard = target.hand.length > 0;
       if (!canMoney && !canDiscard) return log(state, `${target.name} has nothing to lose.`);
-      const choice: 'MONEY' | 'DISCARD' =
-        mode === 'DISCARD' && canDiscard ? 'DISCARD'
-        : mode === 'MONEY' && canMoney ? 'MONEY'
-        : canMoney ? 'MONEY' : 'DISCARD';
-      if (choice === 'MONEY') {
-        const s = updatePlayer(state, targetIndex, (p) => ({ ...p, money: p.money - 1 }));
-        return log(spend(s), `${player.name} (Arsonist) threatens ${target.name}, who loses $1.`);
-      }
-      const discarded = target.hand[0];
-      let s = updatePlayer(state, targetIndex, (p) => ({ ...p, hand: p.hand.slice(1) }));
-      s = { ...s, discardPile: [...s.discardPile, discarded] };
-      return log(spend(s), `${player.name} (Arsonist) threatens ${target.name}, who discards a card.`);
+      const s = { ...spend(state), pendingThreaten: { targetId: target.id } };
+      return log(s, `${player.name} (Arsonist) threatens ${target.name}, who must lose $1 or discard a card.`);
     }
 
     case 'smuggler': {

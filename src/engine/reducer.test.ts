@@ -437,13 +437,39 @@ describe('gameReducer — USE_ROLE_ABILITY (Criminals)', () => {
     expect(next.players[1].money).toBe(2);
   });
 
-  it('Arsonist makes an opponent lose $1 by default', () => {
+  it('Arsonist threatens an opponent, who then chooses how they lose out', () => {
     const s = stateWith([
       mkPlayer({ id: 'p0', role: role('arsonist', 'CRIMINAL') }),
-      mkPlayer({ id: 'p1', role: role('mayor', 'CIVILIAN'), money: 2 }),
+      mkPlayer({ id: 'p1', role: role('mayor', 'CIVILIAN'), money: 2, hand: [evidence('e1', ['MEANS'])] }),
     ]);
-    const next = gameReducer(s, { type: 'USE_ROLE_ABILITY', payload: { targetId: 'p1' } });
-    expect(next.players[1].money).toBe(1);
+    const threatened = gameReducer(s, { type: 'USE_ROLE_ABILITY', payload: { targetId: 'p1' } });
+    // The target hasn't lost anything yet — it's their choice, still pending.
+    expect(threatened.pendingThreaten).toEqual({ targetId: 'p1' });
+    expect(threatened.players[1].money).toBe(2);
+    expect(threatened.players[0].hasUsedRoleAbility).toBe(true);
+
+    // Other actions are blocked until the target resolves the choice.
+    const blocked = gameReducer(threatened, { type: 'DRAW_CARD' });
+    expect(blocked.pendingThreaten).toEqual({ targetId: 'p1' });
+
+    // The target — not the Arsonist — picks discarding over losing money.
+    const resolved = gameReducer(threatened, { type: 'RESOLVE_THREATEN', mode: 'DISCARD' });
+    expect(resolved.pendingThreaten).toBeNull();
+    expect(resolved.players[1].money).toBe(2);
+    expect(resolved.players[1].hand).toHaveLength(0);
+    expect(resolved.discardPile).toContainEqual(expect.objectContaining({ id: 'e1' }));
+  });
+
+  it('Arsonist Threaten falls back to the only option the target can afford', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('arsonist', 'CRIMINAL') }),
+      mkPlayer({ id: 'p1', role: role('mayor', 'CIVILIAN'), money: 0, hand: [evidence('e1', ['MEANS'])] }),
+    ]);
+    const threatened = gameReducer(s, { type: 'USE_ROLE_ABILITY', payload: { targetId: 'p1' } });
+    // Target tries to choose MONEY, but has none — forced to discard instead.
+    const resolved = gameReducer(threatened, { type: 'RESOLVE_THREATEN', mode: 'MONEY' });
+    expect(resolved.players[1].money).toBe(0);
+    expect(resolved.players[1].hand).toHaveLength(0);
   });
 
   it('Smuggler moves a Market card into the Black Market at $1 off', () => {

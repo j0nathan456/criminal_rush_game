@@ -220,4 +220,12 @@ export interface GameState {
    * end of turn if unused.
    */
   pendingMarketDiscount?: { playerId: string; amount: number } | null;
+
+  /**
+   * Arsonist's Threaten: the targeted Civilian owes a choice between losing $1
+   * or discarding a card — their choice, not the Arsonist's. This blocks other
+   * actions (like `combat`) until resolved via RESOLVE_THREATEN, since it's a
+   * different player's decision than whoever's turn it nominally is.
+   */
+  pendingThreaten?: { targetId: string } | null;
 }

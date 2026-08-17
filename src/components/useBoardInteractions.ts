@@ -206,6 +206,7 @@ export function useBoardInteractions(
     onCancelEvent: () => setEventCardId(null),
     onUseMarketDiscount: (cardId: string) => dispatch({ type: 'USE_MARKET_DISCOUNT', cardId }),
     onSkipMarketDiscount: () => dispatch({ type: 'SKIP_MARKET_DISCOUNT' }),
+    onResolveThreaten: (mode: 'MONEY' | 'DISCARD') => dispatch({ type: 'RESOLVE_THREATEN', mode }),
   };
 
   return {

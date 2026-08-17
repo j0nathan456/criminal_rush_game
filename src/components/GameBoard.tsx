@@ -24,6 +24,7 @@ import { PerkActionPanel } from './PerkActionPanel';
 import { AllySupportPanel } from './AllySupportPanel';
 import { EventPanel } from './EventPanel';
 import { MarketDiscountPanel } from './MarketDiscountPanel';
+import { ThreatenPanel } from './ThreatenPanel';
 import { TargetPicker } from './TargetPicker';
 
 /** Which target the board is currently asking the player to pick. */
@@ -55,6 +56,7 @@ export interface GameBoardHandlers {
   onCancelEvent?: () => void;
   onUseMarketDiscount?: (cardId: string) => void;
   onSkipMarketDiscount?: () => void;
+  onResolveThreaten?: (mode: 'MONEY' | 'DISCARD') => void;
 }
 
 interface GameBoardProps extends GameBoardHandlers {
@@ -115,6 +117,7 @@ export function GameBoard({
   onCancelEvent,
   onUseMarketDiscount,
   onSkipMarketDiscount,
+  onResolveThreaten,
 }: GameBoardProps) {
   const viewer = state.players[viewerIndex];
   const isViewersTurn = viewerIndex === state.currentPlayerIndex;
@@ -205,6 +208,10 @@ export function GameBoard({
         />
       )}
 
+      {state.pendingThreaten && !state.combat && !state.winner && (
+        <ThreatenPanel state={state} viewerIndex={viewerIndex} onResolveThreaten={onResolveThreaten} />
+      )}
+
       {/* Board grid — columns 1:3:1, three rows:
           row 1  Score Board · Evidence Grid · Case Log
           row 2  Players     · Markets       · Deck/Discard
@@ -275,25 +282,25 @@ export function GameBoard({
                   right under the viewer's own hand, rather than up at the top of
                   the page — this is their own decision, so it belongs next to the
                   hand they're making it from. */}
-              {targeting && !state.combat && !state.winner && (
+              {targeting && !state.combat && !state.pendingThreaten && !state.winner && (
                 <TargetPicker state={state} viewerIndex={viewerIndex} mode={targeting} onSelectTarget={onSelectTarget} onCancel={onCancelTargeting} />
               )}
-              {roleAbilityOpen && !state.combat && !state.winner && (
+              {roleAbilityOpen && !state.combat && !state.pendingThreaten && !state.winner && (
                 <RoleAbilityPanel state={state} viewerIndex={viewerIndex} onSubmit={onSubmitRoleAbility} onCancel={onCancelRoleAbility} />
               )}
-              {activePerkId && !state.combat && !state.winner && (
+              {activePerkId && !state.combat && !state.pendingThreaten && !state.winner && (
                 <PerkActionPanel state={state} viewerIndex={viewerIndex} perkId={activePerkId} onSubmit={onSubmitPerk} onCancel={onCancelPerk} />
               )}
-              {allySupportCardId && !state.combat && !state.winner && (
+              {allySupportCardId && !state.combat && !state.pendingThreaten && !state.winner && (
                 <AllySupportPanel state={state} viewerIndex={viewerIndex} onSubmit={onSubmitAllySupport} onCancel={onCancelAllySupport} />
               )}
-              {eventCardId && !state.combat && !state.winner && (() => {
+              {eventCardId && !state.combat && !state.pendingThreaten && !state.winner && (() => {
                 const eventCard = viewer.hand.find((c) => c.id === eventCardId);
                 return eventCard ? (
                   <EventPanel state={state} viewerIndex={viewerIndex} card={eventCard} onSubmit={onSubmitEvent} onCancel={onCancelEvent} />
                 ) : null;
               })()}
-              {state.pendingMarketDiscount?.playerId === viewer.id && !state.combat && !state.winner && (
+              {state.pendingMarketDiscount?.playerId === viewer.id && !state.combat && !state.pendingThreaten && !state.winner && (
                 <MarketDiscountPanel
                   state={state}
                   viewerIndex={viewerIndex}
