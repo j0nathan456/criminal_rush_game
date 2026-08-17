@@ -281,7 +281,7 @@ export function GameBoard({
                   style={{ background: 'linear-gradient(90deg,#10b981,#3fd0c9)' }}
                   onClick={onPlaySelected}
                 >
-                  Play {selectedCard!.name}
+                  {selectedCard!.type === 'EVIDENCE' && viewer.team === 'CRIMINAL' ? 'Burn' : 'Play'} {selectedCard!.name}
                 </button>
               )}
               {isViewersTurn && viewer.trafficToken && onClearTraffic && (

@@ -83,7 +83,7 @@ export const TURN_ACTIONS: ActionMeta[] = [
   { type: 'ROLE_ABILITY', label: 'Role Action', icon: '✨', cost: 1, oncePerTurn: true, hint: 'Use your role or perk action. Once per turn.' },
   { type: 'TRADE', label: 'Trade', icon: '🤝', cost: 1, hint: 'Trade a card, weapon, or $1 with a teammate.' },
   { type: 'SPECIAL_GOAL', label: 'Expose', icon: '🚨', cost: 1, team: 'CIVILIAN', hint: 'Spend a full Evidence grid to Expose a Criminal.' },
-  { type: 'SPECIAL_GOAL', label: 'Expand Network', icon: '🌐', cost: 1, team: 'CRIMINAL', hint: 'Buy an Expand Network card to gain 1 VP.' },
+  { type: 'SPECIAL_GOAL', label: 'Expand Network', icon: '🌐', cost: 1, team: 'CRIMINAL', hint: 'Buy an Expand Network card to gain 1 VP. Costs $1 more once captured.' },
   { type: 'COMBAT', label: 'Combat', icon: '⚔️', cost: 2, oncePerTurn: true, hint: 'Attack a neighbor. Costs 2 actions.' },
 ];
 

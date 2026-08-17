@@ -75,11 +75,18 @@ export function ActionBar({ player, maxActions = BASE_ACTIONS_PER_TURN, availabi
           const label = isRole ? player.role.abilityName || action.label : action.label;
           const description = isRole ? player.role.abilityDescription : undefined;
 
-          const title = !legal.enabled && legal.reason
+          // Weakened Network (rulebook p.16): a captured Criminal pays $1 more
+          // for Expand Network — worth calling out on the button itself, not
+          // just in the hover tooltip, since it only applies once captured.
+          const isExpandNetwork = action.type === 'SPECIAL_GOAL' && action.team === 'CRIMINAL';
+          const surchargeNote = isExpandNetwork && player.isCaptured ? '+$1 more — captured (Weakened Network)' : undefined;
+
+          const baseTitle = !legal.enabled && legal.reason
             ? `${label} — ${legal.reason}`
             : description
               ? `${label} — ${description}`
               : action.hint;
+          const title = surchargeNote ? `${baseTitle} (${surchargeNote})` : baseTitle;
 
           return (
             <button
@@ -98,6 +105,9 @@ export function ActionBar({ player, maxActions = BASE_ACTIONS_PER_TURN, availabi
               <span className="text-[13px] font-bold text-chalk">{label}</span>
               {description ? (
                 <span className="line-clamp-2 text-[11px] leading-snug text-fog">{description}</span>
+              ) : null}
+              {surchargeNote ? (
+                <span className="text-[11px] font-bold text-amber">{surchargeNote}</span>
               ) : null}
               <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-fog">
                 <Pips total={action.cost} filled={action.cost} color={expensive ? 'var(--color-amber)' : teamColor} />

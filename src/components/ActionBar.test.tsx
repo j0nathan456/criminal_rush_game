@@ -29,6 +29,14 @@ describe('<ActionBar />', () => {
     expect(screen.queryByText('Expose')).not.toBeInTheDocument();
   });
 
+  it('flags the $1 Weakened Network surcharge on Expand Network only once captured', () => {
+    const { rerender } = render(<ActionBar player={makePlayer('CRIMINAL', 3)} onAction={() => {}} />);
+    expect(screen.queryByText(/\+\$1 more/)).not.toBeInTheDocument();
+
+    rerender(<ActionBar player={{ ...makePlayer('CRIMINAL', 3), isCaptured: true }} onAction={() => {}} />);
+    expect(screen.getByText(/\+\$1 more/)).toBeInTheDocument();
+  });
+
   it('disables Combat (2 AP) when the player has fewer than 2 actions left', () => {
     render(<ActionBar player={makePlayer('CIVILIAN', 1)} onAction={() => {}} />);
     expect(screen.getByText('Combat').closest('button')).toBeDisabled();
