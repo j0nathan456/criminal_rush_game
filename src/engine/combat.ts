@@ -13,7 +13,7 @@
  */
 
 import type {
-  GameState, Player, CombatSide, PlayedPowerCard, CombatChoice, CombatChoiceInput,
+  GameState, Player, CombatSide, CombatState, PlayedPowerCard, CombatChoice, CombatChoiceInput,
 } from '../types/game.js';
 import type { ActionCard, MarketCard, WeaponType } from '../types/cards.js';
 import { applyScore, log, neighborIds, playerIndexById, updatePlayer } from './rules.js';
@@ -344,6 +344,33 @@ function applyPistol(state: GameState, head: Extract<CombatChoice, { kind: 'PIST
   return log({ ...s, discardPile: [...s.discardPile, card] }, `${holder.name} discards ${card.name} (Pistol).`);
 }
 
+/**
+ * Nurse's Triage: heal (HEAL) discards the chosen card and prevents the
+ * injury outright; declining or skipping (SKIP, or an invalid/missing card)
+ * falls through to the normal injury — and, from there, Leaving Evidence.
+ * Unlike the other PRE/AFTER choices this doesn't just pop off the queue: it
+ * may replace it with a fresh LEAVING_EVIDENCE pending item, so the caller
+ * returns its result directly rather than running the generic pop-tail.
+ */
+function applyNurseHeal(state: GameState, head: Extract<CombatChoice, { kind: 'NURSE_HEAL' }>, input: CombatChoiceInput): GameState {
+  const combat = state.combat!;
+  const nurseIdx = playerIndexById(state, head.playerId);
+  const nurse = state.players[nurseIdx];
+  const defender = state.players[playerIndexById(state, head.injuredId)];
+
+  if (input.kind === 'NURSE_HEAL' && input.mode === 'HEAL') {
+    const card = nurse.hand.find((c) => c.id === input.cardId);
+    if (card) {
+      let s = updatePlayer(state, nurseIdx, (p) => ({ ...p, hand: p.hand.filter((c) => c.id !== card.id) }));
+      s = { ...s, discardPile: [...s.discardPile, card] };
+      s = log(s, `${nurse.name} discards ${card.name} — Triage keeps ${defender.name} from being injured.`);
+      return { ...s, combat: null };
+    }
+  }
+  const skipped = log(state, `${nurse.name} does not use Triage — ${defender.name} is injured.`);
+  return injureAndMaybeLeaveEvidence(skipped, combat, defender);
+}
+
 function applyLeavingEvidence(
   state: GameState,
   head: Extract<CombatChoice, { kind: 'LEAVING_EVIDENCE' }>,
@@ -373,6 +400,11 @@ export function applyCombatChoice(state: GameState, input: CombatChoiceInput, rn
   if (!combat || combat.pending.length === 0) return log(state, 'No pending combat choice.');
   const head = combat.pending[0];
   if (head.kind !== input.kind) return log(state, `Expected a ${head.kind} choice.`);
+
+  // NURSE_HEAL manages its own resulting `combat` (it may chain into a fresh
+  // LEAVING_EVIDENCE pending item instead of just popping the queue), so it
+  // returns directly rather than falling into the generic pop-tail below.
+  if (head.kind === 'NURSE_HEAL') return applyNurseHeal(state, head, input);
 
   let s = state;
   switch (head.kind) {
@@ -514,8 +546,48 @@ function applyVirusTokens(state: GameState, attacker: Player, defender: Player):
 }
 
 /**
+ * A non-injured, non-captured Nurse teammate of `injured` (excluding `injured`
+ * themselves — Triage heals a teammate, not yourself) who actually holds a
+ * card to discard. Undefined when Triage has no one available to offer it to.
+ */
+function findAvailableNurse(state: GameState, injured: Player): Player | undefined {
+  return state.players.find(
+    (p) =>
+      p.team === injured.team &&
+      p.id !== injured.id &&
+      p.role.id === 'nurse' &&
+      !p.isInjured &&
+      !p.isCaptured &&
+      p.hand.length > 0,
+  );
+}
+
+/**
+ * Injure the defender (Nurse declined or wasn't available) and, if there's
+ * discarded Evidence to reclaim, hand off to the Leaving Evidence AFTER-phase
+ * choice; otherwise close the fight.
+ */
+function injureAndMaybeLeaveEvidence(state: GameState, combat: CombatState, defender: Player): GameState {
+  const defIdx = playerIndexById(state, defender.id);
+  let s = updatePlayer(state, defIdx, (p) => ({ ...p, isInjured: true }));
+  s = log(s, `${defender.name} is injured until the end of their next turn.`);
+
+  const leavingEvidence = s.discardPile.some((c) => c.type === 'EVIDENCE');
+  if (leavingEvidence) {
+    s = log(s, `Leaving Evidence: ${defender.name} may shuffle up to 2 discarded Evidence cards into the deck.`);
+    return {
+      ...s,
+      combat: { ...combat, phase: 'AFTER', pending: [{ kind: 'LEAVING_EVIDENCE', playerId: defender.id, side: 'DEFENDER' }] },
+    };
+  }
+  return { ...s, combat: null };
+}
+
+/**
  * Resolve the pending combat: compare totals (defender wins ties), apply the
- * VP/injury/capture outcome and after-combat weapon effects, and clear combat.
+ * VP/injury/capture outcome and after-combat weapon effects, and clear combat
+ * — unless a Nurse teammate can offer Triage first (see findAvailableNurse),
+ * in which case the AFTER phase pauses on that choice before injury applies.
  */
 export function resolveCombat(state: GameState): GameState {
   const combat = state.combat;
@@ -527,8 +599,8 @@ export function resolveCombat(state: GameState): GameState {
   const defTotal = combat.defender.basePower + combat.defender.powerCardBonus;
   const attackerWins = atkTotal > defTotal; // defender wins ties
 
-  // Keep `combat` set through outcome application; close it (or hand off to the
-  // AFTER phase for Leaving Evidence) at the end.
+  // Keep `combat` set through outcome application; close it (or hand off to an
+  // AFTER-phase choice — Triage, then Leaving Evidence) at the end.
   let s: GameState = log(state, `Combat resolves — ${attacker.name}: ${atkTotal} vs ${defender.name}: ${defTotal}.`);
 
   if (!attackerWins) {
@@ -537,35 +609,34 @@ export function resolveCombat(state: GameState): GameState {
     return { ...s, combat: null };
   }
 
-  const defIdx = playerIndexById(s, defender.id);
-  let leavingEvidence = false;
-  if (attacker.team === 'CRIMINAL') {
-    s = applyScore(s, 'CRIMINAL', 1, `${attacker.name} defeats ${defender.name}! Criminals score a VP.`);
-    if (defender.role.id === 'vigilante') {
-      s = log(s, `${defender.name} is a Vigilante and cannot be injured.`);
-    } else {
-      s = updatePlayer(s, defIdx, (p) => ({ ...p, isInjured: true }));
-      s = log(s, `${defender.name} is injured until the end of their next turn.`);
-      // Leaving Evidence: the losing Civilian may reclaim discarded Evidence.
-      leavingEvidence = s.discardPile.some((c) => c.type === 'EVIDENCE');
-    }
-  } else {
+  if (attacker.team === 'CIVILIAN') {
     // Civilian beats an exposed Criminal → capture (loses ability permanently).
+    const defIdx = playerIndexById(s, defender.id);
     s = updatePlayer(s, defIdx, (p) => ({ ...p, isCaptured: true, isExposed: false }));
     s = applyScore(s, 'CIVILIAN', 1, `${attacker.name} captures ${defender.name}! Civilians score a VP.`);
+    s = applyWinnerWeapons(s, attacker, defender);
+    s = applyVirusTokens(s, attacker, defender);
+    return { ...s, combat: null };
   }
 
+  s = applyScore(s, 'CRIMINAL', 1, `${attacker.name} defeats ${defender.name}! Criminals score a VP.`);
   s = applyWinnerWeapons(s, attacker, defender);
   s = applyVirusTokens(s, attacker, defender);
 
-  if (leavingEvidence) {
-    s = log(s, `Leaving Evidence: ${defender.name} may shuffle up to 2 discarded Evidence cards into the deck.`);
+  if (defender.role.id === 'vigilante') {
+    return { ...log(s, `${defender.name} is a Vigilante and cannot be injured.`), combat: null };
+  }
+
+  const nurse = findAvailableNurse(s, defender);
+  if (nurse) {
+    s = log(s, `${defender.name} would be injured — ${nurse.name} may use Triage to prevent it.`);
     return {
       ...s,
-      combat: { ...combat, phase: 'AFTER', pending: [{ kind: 'LEAVING_EVIDENCE', playerId: defender.id, side: 'DEFENDER' }] },
+      combat: { ...combat, phase: 'AFTER', pending: [{ kind: 'NURSE_HEAL', playerId: nurse.id, injuredId: defender.id, side: 'DEFENDER' }] },
     };
   }
-  return { ...s, combat: null };
+
+  return injureAndMaybeLeaveEvidence(s, combat, defender);
 }
 
 /** Opposite side helper. */

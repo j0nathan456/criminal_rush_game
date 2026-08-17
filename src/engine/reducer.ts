@@ -89,9 +89,9 @@ export interface TradeItem {
  * Parameters for the current player's role Action. Which fields matter depends
  * on the player's role (see applyRoleAbility):
  *  - cardId    — a Market card (Collector/Crime Lord/Evil Scientist/Smuggler), a
- *                hand card (Sheriff evidence, Forger evidence, Nurse discard), or
- *                a discard-pile card (Witness evidence).
- *  - targetId  — the affected player (Sheriff/Robber/Arsonist/Bodyguard/Nurse/Witness).
+ *                hand card (Sheriff evidence, Forger evidence), or a
+ *                discard-pile card (Witness evidence).
+ *  - targetId  — the affected player (Sheriff/Robber/Arsonist/Bodyguard/Witness).
  *  - category  — the Evidence grid slot to fill/clear (Sheriff/Forger).
  *  - gridCardId — Forger: which specific card to clear from `category`, when
  *                 more than one has piled up there (defaults to the oldest).
@@ -1030,13 +1030,11 @@ function passCombat(state: GameState, side: CombatSide): GameState {
 /**
  * Resolve the current player's role Action (rulebook p.17). Every ability costs
  * 1 action, may be used once per turn, and is unavailable to injured/captured
- * players. Passive roles (Mayor, Attorney, Vigilante, Hitman, Spy) have no
- * Action and are handled elsewhere (turn/combat hooks); calling this on one is
- * a no-op with an explanatory log.
- *
- * Nurse's Triage (heal an injured teammate) is modeled as an on-turn Action
- * here rather than an out-of-turn reaction, since this reducer has no
- * interrupt/priority system.
+ * players. Passive roles (Mayor, Attorney, Vigilante, Hitman, Spy, Nurse) have
+ * no Action and are handled elsewhere (turn/combat hooks); calling this on one
+ * is a no-op with an explanatory log. Nurse's Triage in particular is a
+ * genuine out-of-turn reaction, resolved as a NURSE_HEAL combat choice (see
+ * findAvailableNurse in combat.ts) rather than through this function.
  */
 function applyRoleAbility(
   state: GameState,
@@ -1093,19 +1091,6 @@ function applyRoleAbility(
       let s = updatePlayer(state, targetIndex, (p) => ({ ...p, hand: p.hand.filter((c) => c.id !== cardId) }));
       s = placeEvidence(s, card, category, player);
       return log(spend(s), `${player.name} (Sheriff) subpoenas ${target.name} and plays ${card.name} into ${category}.`);
-    }
-
-    case 'nurse': {
-      // Triage: discard a card to heal an injured teammate.
-      if (!target || target.team !== 'CIVILIAN' || !target.isInjured) {
-        return log(state, 'Nurse can only heal an injured Civilian teammate.');
-      }
-      const card = player.hand.find((c) => c.id === cardId);
-      if (!card) return log(state, 'Nurse must discard a card to heal.');
-      let s = updatePlayer(state, idx, (p) => ({ ...p, hand: p.hand.filter((c) => c.id !== cardId) }));
-      s = { ...s, discardPile: [...s.discardPile, card] };
-      s = updatePlayer(s, targetIndex, (p) => ({ ...p, isInjured: false }));
-      return log(spend(s), `${player.name} (Nurse) heals ${target.name}.`);
     }
 
     case 'bodyguard': {

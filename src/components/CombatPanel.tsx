@@ -45,7 +45,7 @@ export function CombatPanel({ state, viewerIndex, onPlayPower, onPassCombat, onD
   const combat = state.combat;
   if (!combat) return null;
 
-  // PRE (Portal/Drones/Mutants/Pistol) and AFTER (Leaving Evidence) phases need a choice.
+  // PRE (Portal/Drones/Mutants/Pistol) and AFTER (Nurse's Triage, Leaving Evidence) phases need a choice.
   if (combat.phase !== 'POWER') {
     return <CombatChoicePanel state={state} viewerIndex={viewerIndex} onCombatChoice={onCombatChoice} />;
   }

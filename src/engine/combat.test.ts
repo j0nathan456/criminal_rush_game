@@ -451,6 +451,101 @@ describe('interactive combat — pre-combat choices', () => {
   });
 });
 
+describe("interactive combat — Nurse's Triage (AFTER phase)", () => {
+  it('offers Triage and prevents the injury when the Nurse heals', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('axe', 'Axe', 'MELEE', 5)] });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2) });
+    const nurse = mkPlayer({ id: 'n', role: role('nurse', 'CIVILIAN', 3), hand: [junk('bandage')] });
+    const s = stateWith([atk, def, nurse], { currentPlayerIndex: 0 });
+
+    // Attacker 3 + 5 + 1 (Marksman) = 9 beats Mayor 2.
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'ATTACKER' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'DEFENDER' });
+    expect(next.combat!.phase).toBe('AFTER');
+    expect(next.combat!.pending[0]).toEqual({ kind: 'NURSE_HEAL', playerId: 'n', injuredId: 'd', side: 'DEFENDER' });
+    expect(next.players[1].isInjured).toBe(false); // not injured yet — pending the Nurse's choice
+    expect(next.teamScores.CRIMINAL).toBe(1); // the VP still lands regardless of Triage
+
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'NURSE_HEAL', mode: 'HEAL', cardId: 'bandage' } });
+    expect(next.combat).toBeNull();
+    expect(next.players[1].isInjured).toBe(false); // prevented, not just healed after the fact
+    expect(next.players[2].hand).toHaveLength(0); // the Nurse's card was spent
+    expect(next.discardPile.map((c) => c.id)).toContain('bandage');
+    expect(next.players[2].actionsRemaining).toBe(3); // free — no action spent
+  });
+
+  it('injures the teammate as normal when the Nurse skips', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('axe', 'Axe', 'MELEE', 5)] });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2) });
+    const nurse = mkPlayer({ id: 'n', role: role('nurse', 'CIVILIAN', 3), hand: [junk('bandage')] });
+    const s = stateWith([atk, def, nurse], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'ATTACKER' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'DEFENDER' });
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'NURSE_HEAL', mode: 'SKIP' } });
+    expect(next.combat).toBeNull();
+    expect(next.players[1].isInjured).toBe(true);
+    expect(next.players[2].hand).toHaveLength(1); // untouched
+  });
+
+  it('chains into Leaving Evidence when the Nurse skips and Evidence is in the discard', () => {
+    const ev1: ActionCard = { id: 't1', name: 'Time Evidence', description: '', type: 'EVIDENCE', evidenceCategories: ['TIME'] };
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('axe', 'Axe', 'MELEE', 5)] });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2) });
+    const nurse = mkPlayer({ id: 'n', role: role('nurse', 'CIVILIAN', 3), hand: [junk('bandage')] });
+    const s = stateWith([atk, def, nurse], { currentPlayerIndex: 0, discardPile: [ev1] });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'ATTACKER' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'DEFENDER' });
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'NURSE_HEAL', mode: 'SKIP' } });
+    expect(next.combat!.phase).toBe('AFTER');
+    expect(next.combat!.pending[0]).toEqual({ kind: 'LEAVING_EVIDENCE', playerId: 'd', side: 'DEFENDER' });
+    expect(next.players[1].isInjured).toBe(true);
+  });
+
+  it('skips straight to injury when the only Nurse is herself injured', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('axe', 'Axe', 'MELEE', 5)] });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2) });
+    const nurse = mkPlayer({ id: 'n', role: role('nurse', 'CIVILIAN', 3), hand: [junk('bandage')], isInjured: true });
+    const s = stateWith([atk, def, nurse], { currentPlayerIndex: 0 });
+
+    const next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    let final = gameReducer(next, { type: 'PASS_COMBAT', side: 'ATTACKER' });
+    final = gameReducer(final, { type: 'PASS_COMBAT', side: 'DEFENDER' });
+    expect(final.combat).toBeNull(); // no NURSE_HEAL choice — the Nurse herself is unavailable
+    expect(final.players[1].isInjured).toBe(true);
+  });
+
+  it('skips straight to injury when the Nurse has no card to discard', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('axe', 'Axe', 'MELEE', 5)] });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2) });
+    const nurse = mkPlayer({ id: 'n', role: role('nurse', 'CIVILIAN', 3), hand: [] });
+    const s = stateWith([atk, def, nurse], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'ATTACKER' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'DEFENDER' });
+    expect(next.combat).toBeNull();
+    expect(next.players[1].isInjured).toBe(true);
+  });
+
+  it("does not offer Triage on the Nurse's own injury (she can't heal herself)", () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('axe', 'Axe', 'MELEE', 5)] });
+    const nurse = mkPlayer({ id: 'n', role: role('nurse', 'CIVILIAN', 2), hand: [junk('bandage')] });
+    const s = stateWith([atk, nurse], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'n' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'ATTACKER' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'DEFENDER' });
+    expect(next.combat).toBeNull();
+    expect(next.players[1].isInjured).toBe(true);
+    expect(next.players[1].hand).toHaveLength(1); // never touched
+  });
+});
+
 describe('interactive combat — Leaving Evidence (AFTER phase)', () => {
   it('lets the beaten Civilian shuffle discarded Evidence back into the deck', () => {
     const ev1: ActionCard = { id: 't1', name: 'Time Evidence', description: '', type: 'EVIDENCE', evidenceCategories: ['TIME'] };

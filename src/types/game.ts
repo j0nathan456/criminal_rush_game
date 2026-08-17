@@ -96,7 +96,7 @@ export interface CombatParticipant {
  * Combat phases:
  *  - PRE: interactive pre-combat weapon choices (Portal / Drones / Mutants / Pistol) are pending.
  *  - POWER: base powers set; both sides play/pass Power cards.
- *  - AFTER: post-combat choice pending (Leaving Evidence) before the fight closes.
+ *  - AFTER: post-combat choice pending (Nurse's Triage, then Leaving Evidence) before the fight closes.
  */
 export type CombatPhase = 'PRE' | 'POWER' | 'AFTER';
 
@@ -106,6 +106,7 @@ export type CombatChoice =
   | { kind: 'DRONES'; playerId: string; weaponId: string; side: CombatSide }
   | { kind: 'MUTANTS'; playerId: string; weaponId: string; side: CombatSide }
   | { kind: 'PISTOL'; playerId: string; weaponId: string; side: CombatSide }
+  | { kind: 'NURSE_HEAL'; playerId: string; injuredId: string; side: CombatSide }
   | { kind: 'LEAVING_EVIDENCE'; playerId: string; side: CombatSide };
 
 /** The decision a player submits for the current pending CombatChoice. */
@@ -117,6 +118,8 @@ export type CombatChoiceInput =
   | { kind: 'MUTANTS'; mode: 'SKIP' }
   | { kind: 'MUTANTS'; mode: 'COPY'; opponentWeaponId: string }
   | { kind: 'PISTOL'; cardId: string }
+  | { kind: 'NURSE_HEAL'; mode: 'SKIP' }
+  | { kind: 'NURSE_HEAL'; mode: 'HEAL'; cardId: string }
   | { kind: 'LEAVING_EVIDENCE'; evidenceIds: string[] };
 
 /** The interactive combat sub-state machine. Null when no fight is in progress. */

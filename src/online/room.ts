@@ -107,7 +107,7 @@ const COMBAT_PHASE_ACTIONS = new Set(['PLAY_POWER', 'COMBAT_DISCARD_MONEY']);
  * combat-phase actions are allowed from any room member (the reducer validates
  * them). Two combat actions are each one specific player's decision, not "any
  * room member" or "whoever's turn it nominally is":
- *  - COMBAT_CHOICE (Portal/Drones/Mutants/Pistol/Leaving Evidence) belongs to
+ *  - COMBAT_CHOICE (Portal/Drones/Mutants/Pistol/Nurse's Triage/Leaving Evidence) belongs to
  *    `combat.pending[0].playerId`, often the defender.
  *  - PASS_COMBAT belongs to whichever combatant `action.side` names — a
  *    player may only pass their own side, never their opponent's.

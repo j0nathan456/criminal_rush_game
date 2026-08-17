@@ -12,12 +12,13 @@ export interface CombatChoicePanelProps {
 /**
  * Renders the active pre/post-combat choice (PRE or AFTER phase): Portal
  * (draw / swap), Drones (exchange), Mutants (copy), Pistol (choose a card to
- * discard), or Leaving Evidence. This is always one specific player's
- * decision (`head.playerId` — often the defender, not whoever's turn it
- * nominally is, e.g. Leaving Evidence belongs
- * to the injured Civilian even when the Criminal attacker is the current
- * player). Every other viewer sees a read-only "waiting on" notice instead —
- * online play is per-player devices, not a shared pass-and-play screen.
+ * discard), Nurse's Triage (discard a card to prevent a teammate's injury),
+ * or Leaving Evidence. This is always one specific player's decision
+ * (`head.playerId` — often not whoever's turn it nominally is: Leaving
+ * Evidence belongs to the injured Civilian even when the Criminal attacker is
+ * the current player, and Triage belongs to their Nurse teammate, not either
+ * combatant). Every other viewer sees a read-only "waiting on" notice instead
+ * — online play is per-player devices, not a shared pass-and-play screen.
  */
 export function CombatChoicePanel({ state, viewerIndex, onCombatChoice }: CombatChoicePanelProps) {
   const [teammateId, setTeammateId] = useState<string>();
@@ -36,7 +37,10 @@ export function CombatChoicePanel({ state, viewerIndex, onCombatChoice }: Combat
   const teammates = state.players.filter((p) => p.team === holder.team && p.id !== holder.id);
   const teammate = teammateId ? byId(teammateId) : undefined;
 
-  const title = head.kind === 'LEAVING_EVIDENCE' ? 'Leaving Evidence' : `${holder.name}: ${head.kind[0]}${head.kind.slice(1).toLowerCase()}`;
+  const title =
+    head.kind === 'LEAVING_EVIDENCE' ? 'Leaving Evidence'
+    : head.kind === 'NURSE_HEAL' ? 'Triage'
+    : `${holder.name}: ${head.kind[0]}${head.kind.slice(1).toLowerCase()}`;
 
   if (viewer?.id !== holder.id) {
     return (
@@ -49,7 +53,9 @@ export function CombatChoicePanel({ state, viewerIndex, onCombatChoice }: Combat
           <p className="cr-role__desc">
             {head.kind === 'LEAVING_EVIDENCE'
               ? `Waiting for ${holder.name} to choose whether to shuffle any discarded Evidence back into the deck.`
-              : `Waiting for ${holder.name} to decide.`}
+              : head.kind === 'NURSE_HEAL'
+                ? `Waiting for ${holder.name} to decide whether to use Triage on ${byId(head.injuredId).name}.`
+                : `Waiting for ${holder.name} to decide.`}
           </p>
         </div>
       </section>
@@ -160,6 +166,30 @@ export function CombatChoicePanel({ state, viewerIndex, onCombatChoice }: Combat
         >
           Discard
         </button>
+      </>
+    );
+  } else if (head.kind === 'NURSE_HEAL') {
+    const injured = byId(head.injuredId);
+    body = (
+      <>
+        <p className="cr-role__sub">Use healing ability? Discard a card to keep {injured.name} from being injured:</p>
+        <div className="cr-role__chips">
+          {holder.hand.length === 0 && <span className="cr-role__empty">Your hand is empty.</span>}
+          {holder.hand.map((c) => chip(c.name, myCardId === c.id, () => setMyCardId(c.id), c.id))}
+        </div>
+        <div className="cr-role__actions">
+          <button
+            type="button"
+            className="cr-role__use"
+            disabled={!myCardId}
+            onClick={() => onCombatChoice?.({ kind: 'NURSE_HEAL', mode: 'HEAL', cardId: myCardId! })}
+          >
+            Use healing ability
+          </button>
+          <button type="button" className="cr-role__cancel" onClick={() => onCombatChoice?.({ kind: 'NURSE_HEAL', mode: 'SKIP' })}>
+            Skip
+          </button>
+        </div>
       </>
     );
   } else {

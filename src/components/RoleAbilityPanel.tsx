@@ -131,17 +131,6 @@ export function RoleAbilityPanel({
       );
       canSubmit = !!targetId && !!cardId && !!category;
       break;
-    case 'nurse':
-      body = (
-        <>
-          <p>Discard a card to heal an injured teammate:</p>
-          {playerRow(teammates.filter((p) => p.isInjured))}
-          <p className="cr-role__sub">Discard from your hand:</p>
-          {cardRow(viewer.hand, 'Your hand is empty.')}
-        </>
-      );
-      canSubmit = !!targetId && !!cardId;
-      break;
     case 'bodyguard':
       body = (<><p>Give the Bodyguard token to a teammate:</p>{playerRow(teammates)}</>);
       canSubmit = !!targetId;

@@ -417,18 +417,6 @@ describe('gameReducer — USE_ROLE_ABILITY (Civilians)', () => {
     expect(next.players[0].actionsRemaining).toBe(2);
   });
 
-  it('Nurse discards a card to heal an injured teammate', () => {
-    const card: ActionCard = { id: 'x', name: 'x', description: '', type: 'MONEY', value: 1 };
-    const s = stateWith([
-      mkPlayer({ id: 'p0', role: role('nurse', 'CIVILIAN'), hand: [card] }),
-      mkPlayer({ id: 'p1', role: role('mayor', 'CIVILIAN'), isInjured: true }),
-    ]);
-    const next = gameReducer(s, { type: 'USE_ROLE_ABILITY', payload: { targetId: 'p1', cardId: 'x' } });
-    expect(next.players[1].isInjured).toBe(false);
-    expect(next.players[0].hand).toHaveLength(0);
-    expect(next.discardPile).toHaveLength(1);
-  });
-
   it('Bodyguard moves the Protection token to a teammate', () => {
     const s = stateWith([
       mkPlayer({ id: 'p0', role: role('bodyguard', 'CIVILIAN'), hasBodyguardToken: true }),

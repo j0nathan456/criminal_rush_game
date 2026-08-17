@@ -5,8 +5,12 @@
  * so the panel files export only components (react-refresh friendly).
  */
 
-/** Roles whose ability is passive (no per-turn Action to trigger or copy). */
-export const PASSIVE_ROLES = new Set(['mayor', 'attorney', 'vigilante', 'hitman', 'spy']);
+/**
+ * Roles whose ability is passive (no per-turn Action to trigger or copy).
+ * Nurse's Triage is reactive rather than passive — it's a genuine choice —
+ * but it's offered as a NURSE_HEAL combat choice, not through this panel.
+ */
+export const PASSIVE_ROLES = new Set(['mayor', 'attorney', 'vigilante', 'hitman', 'spy', 'nurse']);
 
 /** Perks with an engine-backed "Action:" (see reducer.applyPerk). */
 export const ACTIONABLE_PERKS = new Set([
