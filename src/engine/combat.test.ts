@@ -523,16 +523,73 @@ describe('interactive combat — pre-combat choices', () => {
     expect(next.players[2].hand.map((c) => c.id)).toEqual(['bystander-card']); // never touched
   });
 
-  it('Drones exchanges a card with a teammate', () => {
+  it('Drones: the teammate picks their own card back — a two-step exchange, not the holder picking both sides', () => {
     const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('dr', 'Drones', 'TECH', 2)], hand: [junk('mine')] });
     const mate = mkPlayer({ id: 'm', role: role('spy', 'CRIMINAL', 4), hand: [junk('theirs')] });
     const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2) });
     const s = stateWith([atk, def, mate], { currentPlayerIndex: 0 });
 
     let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
-    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'DRONES', mode: 'EXCHANGE', cardId: 'mine', teammateId: 'm', teammateCardId: 'theirs' } });
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'DRONES', mode: 'EXCHANGE', cardId: 'mine', teammateId: 'm' } });
+    // Nothing has moved yet — it's now the teammate's own choice.
+    expect(next.combat!.pending[0]).toEqual({ kind: 'DRONES_RETURN', playerId: 'm', holderId: 'a', holderCardId: 'mine', side: 'ATTACKER' });
+    expect(next.players[0].hand.map((c) => c.id)).toEqual(['mine']);
+    expect(next.players[2].hand.map((c) => c.id)).toEqual(['theirs']);
+
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'DRONES_RETURN', cardId: 'theirs' } });
     expect(next.players[0].hand.map((c) => c.id)).toEqual(['theirs']);
     expect(next.players[2].hand.map((c) => c.id)).toEqual(['mine']);
+    expect(next.combat!.phase).toBe('POWER'); // PRE queue drained
+    // A single combined log line — never two directional ones.
+    expect(next.gameLog.filter((l) => l.includes('Drones'))).toEqual(['a exchanges a card with m via Drones.']);
+  });
+
+  it('Drones works when the defender holds it, not just the attacker', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3) });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2), inventory: [wpn('dr', 'Drones', 'TECH', 2)], hand: [junk('mine')] });
+    const mate = mkPlayer({ id: 'm', role: role('attorney', 'CIVILIAN', 3), hand: [junk('theirs')] });
+    const s = stateWith([atk, def, mate], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    expect(next.combat!.pending[0]).toMatchObject({ kind: 'DRONES', side: 'DEFENDER' });
+
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'DRONES', mode: 'EXCHANGE', cardId: 'mine', teammateId: 'm' } });
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'DRONES_RETURN', cardId: 'theirs' } });
+    expect(next.players[1].hand.map((c) => c.id)).toEqual(['theirs']); // defender received the teammate's card
+    expect(next.players[2].hand.map((c) => c.id)).toEqual(['mine']);
+    expect(next.combat!.phase).toBe('POWER');
+  });
+
+  it('DRONES_RETURN inserts ahead of the remaining PRE queue rather than replacing it', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('dr', 'Drones', 'TECH', 2)], hand: [junk('mine')] });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2), inventory: [wpn('por', 'Portal', 'TECH', 0)] });
+    const mate = mkPlayer({ id: 'm', role: role('spy', 'CRIMINAL', 4), hand: [junk('theirs')] });
+    const s = stateWith([atk, def, mate], { currentPlayerIndex: 0, drawPile: [junk('x'), junk('y')] });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    expect(next.combat!.pending.map((c) => c.kind)).toEqual(['DRONES', 'PORTAL']);
+
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'DRONES', mode: 'EXCHANGE', cardId: 'mine', teammateId: 'm' } });
+    expect(next.combat!.pending.map((c) => c.kind)).toEqual(['DRONES_RETURN', 'PORTAL']);
+
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'DRONES_RETURN', cardId: 'theirs' } });
+    expect(next.combat!.pending.map((c) => c.kind)).toEqual(['PORTAL']);
+    expect(next.combat!.phase).toBe('PRE'); // Portal still unresolved
+
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'PORTAL', mode: 'DRAW' } });
+    expect(next.combat!.phase).toBe('POWER');
+  });
+
+  it('Drones refuses an exchange with a teammate who has no cards to give', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('dr', 'Drones', 'TECH', 2)], hand: [junk('mine')] });
+    const mate = mkPlayer({ id: 'm', role: role('spy', 'CRIMINAL', 4), hand: [] });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2) });
+    const s = stateWith([atk, def, mate], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'DRONES', mode: 'EXCHANGE', cardId: 'mine', teammateId: 'm' } });
+    expect(next.players[0].hand.map((c) => c.id)).toEqual(['mine']); // untouched — wasted, not queued
+    expect(next.combat!.phase).toBe('POWER'); // PRE resolved with nothing pending
   });
 
   it('Pistol lets the holder choose which card to discard, not a random/first one', () => {

@@ -353,21 +353,46 @@ function applyPortal(state: GameState, head: Extract<CombatChoice, { kind: 'PORT
   return log(s, `${holder.name}'s Portal draws 2 cards.`);
 }
 
+/**
+ * Drones' first half: the holder picks a teammate and one of their own cards.
+ * The teammate's hand is never shown to the holder and no card moves yet —
+ * the teammate must separately choose their own card to give back (see
+ * applyDronesReturn), queued ahead of any other still-pending PRE choices.
+ * Unlike the simple choices below, this may chain a new pending item rather
+ * than just popping itself off, so it manages `combat.pending` (via
+ * advancePendingQueue) and returns directly.
+ */
 function applyDrones(state: GameState, head: Extract<CombatChoice, { kind: 'DRONES' }>, input: CombatChoiceInput): GameState {
+  const combat = state.combat!;
+  const holder = state.players[playerIndexById(state, head.playerId)];
   if (input.kind !== 'DRONES' || input.mode !== 'EXCHANGE') {
-    return log(state, `${state.players[playerIndexById(state, head.playerId)].name} skips the Drones exchange.`);
+    return advancePendingQueue(log(state, `${holder.name} skips the Drones exchange.`));
   }
-  const hi = playerIndexById(state, head.playerId);
-  const holder = state.players[hi];
-  const ti = playerIndexById(state, input.teammateId);
-  const teammate = state.players[ti];
+  const teammate = state.players[playerIndexById(state, input.teammateId)];
   const mine = holder.hand.find((c) => c.id === input.cardId);
-  const theirs = teammate?.hand.find((c) => c.id === input.teammateCardId);
-  if (!teammate || teammate.id === holder.id || teammate.team !== holder.team || !mine || !theirs) {
-    return log(state, 'Invalid Drones exchange.');
+  if (!teammate || teammate.id === holder.id || teammate.team !== holder.team || !mine || teammate.hand.length === 0) {
+    return advancePendingQueue(log(state, 'Invalid Drones exchange.'));
   }
-  let s = updatePlayer(state, hi, (p) => ({ ...p, hand: [...p.hand.filter((c) => c.id !== mine.id), theirs] }));
-  s = updatePlayer(s, ti, (p) => ({ ...p, hand: [...p.hand.filter((c) => c.id !== theirs.id), mine] }));
+  const rest = combat.pending.slice(1);
+  const returnChoice: CombatChoice = {
+    kind: 'DRONES_RETURN', playerId: teammate.id, holderId: holder.id, holderCardId: mine.id, side: head.side,
+  };
+  return { ...state, combat: { ...combat, pending: [returnChoice, ...rest] } };
+}
+
+/** Drones' second half: the teammate's own choice of what to give back, completing the swap with a single combined log line. */
+function applyDronesReturn(state: GameState, head: Extract<CombatChoice, { kind: 'DRONES_RETURN' }>, input: CombatChoiceInput): GameState {
+  const teammateIdx = playerIndexById(state, head.playerId);
+  const teammate = state.players[teammateIdx];
+  const holderIdx = playerIndexById(state, head.holderId);
+  const holder = state.players[holderIdx];
+  const mine = holder.hand.find((c) => c.id === head.holderCardId);
+  const theirs = input.kind === 'DRONES_RETURN' ? teammate.hand.find((c) => c.id === input.cardId) : undefined;
+  if (!mine || !theirs) {
+    return log(state, `${teammate.name} could not complete the Drones exchange.`);
+  }
+  let s = updatePlayer(state, holderIdx, (p) => ({ ...p, hand: [...p.hand.filter((c) => c.id !== mine.id), theirs] }));
+  s = updatePlayer(s, teammateIdx, (p) => ({ ...p, hand: [...p.hand.filter((c) => c.id !== theirs.id), mine] }));
   return log(s, `${holder.name} exchanges a card with ${teammate.name} via Drones.`);
 }
 
@@ -453,6 +478,24 @@ function applyLeavingEvidence(
 }
 
 /**
+ * Pop the resolved head off `combat.pending` and advance the phase once it's
+ * empty: PRE moves into the Power phase, AFTER closes the fight. Shared by
+ * the generic tail below and by choices (DRONES, NURSE_HEAL) that resolve
+ * outside it because they may chain a fresh pending item instead.
+ */
+function advancePendingQueue(state: GameState): GameState {
+  const combat = state.combat;
+  if (!combat) return state;
+  const rest = combat.pending.slice(1);
+  let s: GameState = { ...state, combat: { ...combat, pending: rest } };
+  if (rest.length === 0) {
+    if (combat.phase === 'PRE') s = enterPowerPhase(s);
+    else if (combat.phase === 'AFTER') s = { ...s, combat: null };
+  }
+  return s;
+}
+
+/**
  * Resolve the head pending choice with the player's `input`, pop it, and advance
  * the phase: when the PRE queue empties the Power phase begins; when the AFTER
  * queue empties the fight closes.
@@ -463,29 +506,23 @@ export function applyCombatChoice(state: GameState, input: CombatChoiceInput, rn
   const head = combat.pending[0];
   if (head.kind !== input.kind) return log(state, `Expected a ${head.kind} choice.`);
 
-  // NURSE_HEAL manages its own resulting `combat` (it may chain into a fresh
-  // LEAVING_EVIDENCE pending item instead of just popping the queue), so it
-  // returns directly rather than falling into the generic pop-tail below.
+  // NURSE_HEAL and DRONES each manage their own resulting `combat` (they may
+  // chain a fresh pending item — Leaving Evidence, or the teammate's own
+  // return card — instead of just popping the queue), so they return
+  // directly rather than falling into the generic pop-tail below.
   if (head.kind === 'NURSE_HEAL') return applyNurseHeal(state, head, input);
+  if (head.kind === 'DRONES') return applyDrones(state, head, input);
 
   let s = state;
   switch (head.kind) {
     case 'PORTAL': s = applyPortal(s, head, input); break;
-    case 'DRONES': s = applyDrones(s, head, input); break;
+    case 'DRONES_RETURN': s = applyDronesReturn(s, head, input); break;
     case 'MUTANTS': s = applyMutants(s, head, input); break;
     case 'PISTOL': s = applyPistol(s, head, input); break;
     case 'LEAVING_EVIDENCE': s = applyLeavingEvidence(s, head, input, rng); break;
   }
 
-  const current = s.combat;
-  if (!current) return s;
-  const rest = current.pending.slice(1);
-  s = { ...s, combat: { ...current, pending: rest } };
-  if (rest.length === 0) {
-    if (current.phase === 'PRE') s = enterPowerPhase(s);
-    else if (current.phase === 'AFTER') s = { ...s, combat: null };
-  }
-  return s;
+  return advancePendingQueue(s);
 }
 
 // --- Power phase -------------------------------------------------------------

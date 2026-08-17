@@ -11,20 +11,22 @@ export interface CombatChoicePanelProps {
 
 /**
  * Renders the active pre/post-combat choice (PRE or AFTER phase): Portal
- * (draw / swap), Drones (exchange), Mutants (copy), Pistol (choose a card to
- * discard), Nurse's Triage (discard a card to prevent a teammate's injury),
- * or Leaving Evidence. This is always one specific player's decision
- * (`head.playerId` — often not whoever's turn it nominally is: Leaving
- * Evidence belongs to the injured Civilian even when the Criminal attacker is
- * the current player, and Triage belongs to their Nurse teammate, not either
- * combatant). Every other viewer sees a read-only "waiting on" notice instead
- * — online play is per-player devices, not a shared pass-and-play screen.
+ * (draw / swap), Drones (exchange — DRONES then DRONES_RETURN, since the
+ * teammate picks their own card back rather than the holder picking it for
+ * them), Mutants (copy), Pistol (choose a card to discard), Nurse's Triage
+ * (discard a card to prevent a teammate's injury), or Leaving Evidence. This
+ * is always one specific player's decision (`head.playerId` — often not
+ * whoever's turn it nominally is: Leaving Evidence belongs to the injured
+ * Civilian even when the Criminal attacker is the current player, Triage
+ * belongs to their Nurse teammate, and DRONES_RETURN belongs to the teammate
+ * who was offered the exchange, not the Drones holder). Every other viewer
+ * sees a read-only "waiting on" notice instead — online play is per-player
+ * devices, not a shared pass-and-play screen.
  */
 export function CombatChoicePanel({ state, viewerIndex, onCombatChoice }: CombatChoicePanelProps) {
   const [teammateId, setTeammateId] = useState<string>();
   const [weaponId, setWeaponId] = useState<string>();
   const [myCardId, setMyCardId] = useState<string>();
-  const [theirCardId, setTheirCardId] = useState<string>();
   const [evidenceIds, setEvidenceIds] = useState<string[]>([]);
 
   const combat = state.combat;
@@ -40,6 +42,7 @@ export function CombatChoicePanel({ state, viewerIndex, onCombatChoice }: Combat
   const title =
     head.kind === 'LEAVING_EVIDENCE' ? 'Leaving Evidence'
     : head.kind === 'NURSE_HEAL' ? 'Triage'
+    : head.kind === 'DRONES_RETURN' ? 'Drones — your card back'
     : `${holder.name}: ${head.kind[0]}${head.kind.slice(1).toLowerCase()}`;
 
   if (viewer?.id !== holder.id) {
@@ -55,7 +58,9 @@ export function CombatChoicePanel({ state, viewerIndex, onCombatChoice }: Combat
               ? `Waiting for ${holder.name} to choose whether to shuffle any discarded Evidence back into the deck.`
               : head.kind === 'NURSE_HEAL'
                 ? `Waiting for ${holder.name} to decide whether to use Triage on ${byId(head.injuredId).name}.`
-                : `Waiting for ${holder.name} to decide.`}
+                : head.kind === 'DRONES_RETURN'
+                  ? `Waiting for ${holder.name} to choose a card to give back to ${byId(head.holderId).name} via Drones.`
+                  : `Waiting for ${holder.name} to decide.`}
           </p>
         </div>
       </section>
@@ -99,34 +104,47 @@ export function CombatChoicePanel({ state, viewerIndex, onCombatChoice }: Combat
       </>
     );
   } else if (head.kind === 'DRONES') {
+    // The teammate's hand is never shown here — they choose their own card
+    // back separately (DRONES_RETURN) once this is submitted.
+    const eligibleMates = teammates.filter((p) => p.hand.length > 0);
     body = (
       <>
         <button type="button" className="cr-role__cancel" onClick={() => onCombatChoice?.({ kind: 'DRONES', mode: 'SKIP' })}>
           Skip exchange
         </button>
-        {teammates.length > 0 && (
+        {eligibleMates.length > 0 && (
           <div className="cr-choice__block">
             <p className="cr-role__sub">Exchange a card with a teammate:</p>
             <p className="cr-role__sub">Your card:</p>
             <div className="cr-role__chips">{holder.hand.map((c) => chip(c.name, myCardId === c.id, () => setMyCardId(c.id), c.id))}</div>
             <p className="cr-role__sub">Teammate:</p>
-            <div className="cr-role__chips">{teammates.map((p) => chip(p.name, teammateId === p.id, () => { setTeammateId(p.id); setTheirCardId(undefined); }, p.id))}</div>
-            {teammate && (
-              <>
-                <p className="cr-role__sub">Their card:</p>
-                <div className="cr-role__chips">{teammate.hand.map((c) => chip(c.name, theirCardId === c.id, () => setTheirCardId(c.id), c.id))}</div>
-              </>
-            )}
+            <div className="cr-role__chips">{eligibleMates.map((p) => chip(p.name, teammateId === p.id, () => setTeammateId(p.id), p.id))}</div>
             <button
               type="button"
               className="cr-role__use"
-              disabled={!myCardId || !teammateId || !theirCardId}
-              onClick={() => onCombatChoice?.({ kind: 'DRONES', mode: 'EXCHANGE', cardId: myCardId!, teammateId: teammateId!, teammateCardId: theirCardId! })}
+              disabled={!myCardId || !teammateId}
+              onClick={() => onCombatChoice?.({ kind: 'DRONES', mode: 'EXCHANGE', cardId: myCardId!, teammateId: teammateId! })}
             >
               Exchange
             </button>
           </div>
         )}
+      </>
+    );
+  } else if (head.kind === 'DRONES_RETURN') {
+    const initiator = byId(head.holderId);
+    body = (
+      <>
+        <p className="cr-role__sub">Choose a card to give back to {initiator.name}:</p>
+        <div className="cr-role__chips">{holder.hand.map((c) => chip(c.name, myCardId === c.id, () => setMyCardId(c.id), c.id))}</div>
+        <button
+          type="button"
+          className="cr-role__use"
+          disabled={!myCardId}
+          onClick={() => onCombatChoice?.({ kind: 'DRONES_RETURN', cardId: myCardId! })}
+        >
+          Give card
+        </button>
       </>
     );
   } else if (head.kind === 'MUTANTS') {

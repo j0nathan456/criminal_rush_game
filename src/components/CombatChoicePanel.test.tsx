@@ -54,6 +54,55 @@ describe('<CombatChoicePanel />', () => {
     expect(onCombatChoice).toHaveBeenCalledWith({ kind: 'LEAVING_EVIDENCE', evidenceIds: ['t1'] });
   });
 
+  it('Drones: the holder never sees the teammate\'s hand — only their own card and a name to pick', () => {
+    const onCombatChoice = vi.fn();
+    const holder = mkPlayer({ id: 'a', name: 'Mona', role: role('hitman', 'CRIMINAL'), hand: [{ id: 'mine', name: 'MyCard', description: '', type: 'MONEY' }] });
+    const mate = mkPlayer({ id: 'm', name: 'Sal', role: role('spy', 'CRIMINAL'), hand: [{ id: 'theirs', name: 'TheirCard', description: '', type: 'MONEY' }] });
+    const def = mkPlayer({ id: 'd', name: 'Dee', role: role('mayor', 'CIVILIAN') });
+    const combat: CombatState = {
+      attacker: part('a'), defender: part('d'), turn: 'ATTACKER', played: [], actionCost: 2, playerCount: 3,
+      phase: 'PRE', pending: [{ kind: 'DRONES', playerId: 'a', weaponId: 'dr', side: 'ATTACKER' }],
+    };
+    render(<CombatChoicePanel state={stateWith([holder, def, mate], combat)} viewerIndex={0} onCombatChoice={onCombatChoice} />);
+
+    fireEvent.click(screen.getByText('MyCard'));
+    fireEvent.click(screen.getByText('Sal'));
+    expect(screen.queryByText('TheirCard')).not.toBeInTheDocument(); // never revealed to the holder
+
+    fireEvent.click(screen.getByText('Exchange'));
+    expect(onCombatChoice).toHaveBeenCalledWith({ kind: 'DRONES', mode: 'EXCHANGE', cardId: 'mine', teammateId: 'm' });
+  });
+
+  it('Drones: the responding teammate picks from their own hand for the return', () => {
+    const onCombatChoice = vi.fn();
+    const holder = mkPlayer({ id: 'a', name: 'Mona', role: role('hitman', 'CRIMINAL') });
+    const mate = mkPlayer({ id: 'm', name: 'Sal', role: role('spy', 'CRIMINAL'), hand: [{ id: 'theirs', name: 'TheirCard', description: '', type: 'MONEY' }] });
+    const def = mkPlayer({ id: 'd', name: 'Dee', role: role('mayor', 'CIVILIAN') });
+    const combat: CombatState = {
+      attacker: part('a'), defender: part('d'), turn: 'ATTACKER', played: [], actionCost: 2, playerCount: 3,
+      phase: 'PRE', pending: [{ kind: 'DRONES_RETURN', playerId: 'm', holderId: 'a', holderCardId: 'mine', side: 'ATTACKER' }],
+    };
+    render(<CombatChoicePanel state={stateWith([holder, def, mate], combat)} viewerIndex={2} onCombatChoice={onCombatChoice} />);
+
+    expect(screen.getByText(/Mona/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText('TheirCard'));
+    fireEvent.click(screen.getByText('Give card'));
+    expect(onCombatChoice).toHaveBeenCalledWith({ kind: 'DRONES_RETURN', cardId: 'theirs' });
+  });
+
+  it('Drones: everyone else sees a read-only waiting notice during the return step', () => {
+    const holder = mkPlayer({ id: 'a', name: 'Mona', role: role('hitman', 'CRIMINAL') });
+    const mate = mkPlayer({ id: 'm', name: 'Sal', role: role('spy', 'CRIMINAL'), hand: [{ id: 'theirs', name: 'TheirCard', description: '', type: 'MONEY' }] });
+    const def = mkPlayer({ id: 'd', name: 'Dee', role: role('mayor', 'CIVILIAN') });
+    const combat: CombatState = {
+      attacker: part('a'), defender: part('d'), turn: 'ATTACKER', played: [], actionCost: 2, playerCount: 3,
+      phase: 'PRE', pending: [{ kind: 'DRONES_RETURN', playerId: 'm', holderId: 'a', holderCardId: 'mine', side: 'ATTACKER' }],
+    };
+    render(<CombatChoicePanel state={stateWith([holder, def, mate], combat)} viewerIndex={0} />);
+    expect(screen.getByText(/Waiting for Sal to choose a card to give back to Mona/)).toBeInTheDocument();
+    expect(screen.queryByText('TheirCard')).not.toBeInTheDocument();
+  });
+
   it("Leaving Evidence: everyone but the injured defender sees a read-only waiting notice, not the picker", () => {
     const onCombatChoice = vi.fn();
     const ev: ActionCard = { id: 't1', name: 'Time Evidence', description: '', type: 'EVIDENCE', evidenceCategories: ['TIME'] };
