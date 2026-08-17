@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { GameState, CombatChoiceInput } from '../types/game';
-import { TEAM_META } from '../constants/theme';
+import { TEAM_META, CATEGORY_META } from '../constants/theme';
 
 export interface CombatChoicePanelProps {
   state: GameState;
@@ -67,8 +67,8 @@ export function CombatChoicePanel({ state, viewerIndex, onCombatChoice }: Combat
     );
   }
 
-  const chip = (label: string, selected: boolean, onClick: () => void, key: string) => (
-    <button key={key} type="button" className={`cr-role__chip${selected ? ' is-selected' : ''}`} onClick={onClick}>
+  const chip = (label: string, selected: boolean, onClick: () => void, key: string, title?: string) => (
+    <button key={key} type="button" title={title} className={`cr-role__chip${selected ? ' is-selected' : ''}`} onClick={onClick}>
       {label}
     </button>
   );
@@ -220,7 +220,10 @@ export function CombatChoicePanel({ state, viewerIndex, onCombatChoice }: Combat
         <p className="cr-role__sub">Shuffle up to 2 discarded Evidence cards back into the deck:</p>
         <div className="cr-role__chips">
           {discardEvidence.length === 0 && <span className="cr-role__empty">No discarded Evidence.</span>}
-          {discardEvidence.map((c) => chip(c.name, evidenceIds.includes(c.id), () => toggle(c.id), c.id))}
+          {discardEvidence.map((c) => {
+            const categories = c.evidenceCategories?.map((cat) => CATEGORY_META[cat].label).join(', ');
+            return chip(c.name, evidenceIds.includes(c.id), () => toggle(c.id), c.id, categories);
+          })}
         </div>
         <div className="cr-role__actions">
           <button type="button" className="cr-role__use" onClick={() => onCombatChoice?.({ kind: 'LEAVING_EVIDENCE', evidenceIds })}>

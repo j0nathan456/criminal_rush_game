@@ -103,6 +103,21 @@ describe('<CombatChoicePanel />', () => {
     expect(screen.queryByText('TheirCard')).not.toBeInTheDocument();
   });
 
+  it('Leaving Evidence: hovering a card shows the categories it counts toward', () => {
+    const ev: ActionCard = {
+      id: 'ch1', name: 'Casino Heist', description: '', type: 'EVIDENCE', evidenceCategories: ['MOTIVE', 'LOCATION'],
+    };
+    const def = mkPlayer({ id: 'd', name: 'Dee', role: role('mayor', 'CIVILIAN') });
+    const combat: CombatState = {
+      attacker: part('a'), defender: part('d'), turn: 'ATTACKER', played: [], actionCost: 2, playerCount: 2,
+      phase: 'AFTER', pending: [{ kind: 'LEAVING_EVIDENCE', playerId: 'd', side: 'DEFENDER' }],
+    };
+    const state = stateWith([mkPlayer({ id: 'a', name: 'Mona', role: role('hitman', 'CRIMINAL') }), def], combat, { discardPile: [ev] });
+
+    render(<CombatChoicePanel state={state} viewerIndex={1} />);
+    expect(screen.getByText('Casino Heist').closest('button')).toHaveAttribute('title', 'Motive, Location');
+  });
+
   it("Leaving Evidence: everyone but the injured defender sees a read-only waiting notice, not the picker", () => {
     const onCombatChoice = vi.fn();
     const ev: ActionCard = { id: 't1', name: 'Time Evidence', description: '', type: 'EVIDENCE', evidenceCategories: ['TIME'] };
