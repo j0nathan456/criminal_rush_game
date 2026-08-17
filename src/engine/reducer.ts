@@ -878,11 +878,6 @@ function attack(state: GameState, idx: number, player: Player, targetId: string)
   const err = attackError(state, idx, target);
   if (err) return log(state, err);
 
-  // A Vigilante cannot be injured, so a Criminal gains nothing by attacking one.
-  if (player.team === 'CRIMINAL' && target.role.id === 'vigilante') {
-    return log(state, `${target.name} (Vigilante) cannot be injured.`);
-  }
-
   const cost = attackActionCost(player, target);
   if (player.actionsRemaining < cost) return log(state, `Combat costs ${cost} action(s).`);
 
@@ -1280,8 +1275,10 @@ function tradeGiftLabel(giver: Player, item: TradeItem): string {
 /**
  * Trade with a teammate (rulebook p.7): the initiator gives one money/card/
  * weapon; the teammate then must give one back — their own choice, not the
- * initiator's (see resolveTradeReturn). Costs 1 action, +1 if the teammate
- * holds a Traffic token, −1 (once per turn) if the trader has a Radio.
+ * initiator's (see resolveTradeReturn). Costs 1 action, +1 if either party
+ * holds a Traffic token ("trading with this player costs 2 actions" — the
+ * token snarls the holder regardless of whether they initiate or receive),
+ * −1 (once per turn) if the trader has a Radio.
  */
 function initiateTrade(
   state: GameState,
@@ -1296,7 +1293,8 @@ function initiateTrade(
   if (mate.team !== player.team) return log(state, 'You can only trade with a teammate.');
 
   const usesRadio = player.inventory.some((c) => c.name === 'Radio') && !player.hasUsedRadio;
-  const cost = Math.max(0, 1 + (mate.trafficToken ? 1 : 0) - (usesRadio ? 1 : 0));
+  const trafficSnarled = player.trafficToken || mate.trafficToken;
+  const cost = Math.max(0, 1 + (trafficSnarled ? 1 : 0) - (usesRadio ? 1 : 0));
   if (player.actionsRemaining < cost) return log(state, `Trading costs ${cost} action(s).`);
 
   const moved = applyTradeItem(player, mate, give);

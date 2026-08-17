@@ -128,6 +128,11 @@ export function TradePanel({ state, viewerIndex, onInitiate, onResolveReturn, on
   // --- Phase: initiate a fresh trade ------------------------------------------
   const teammates = state.players.filter((p) => p.team === viewer.team && p.id !== viewer.id);
   const target = targetId ? state.players.find((p) => p.id === targetId) : undefined;
+  // A Traffic token snarls its holder's trades by +1 action regardless of
+  // which side of the trade they're on (see initiateTrade) — the viewer's own
+  // token already shows on the action bar; a token on the chosen teammate
+  // only becomes knowable once picked, so it's called out here instead.
+  const trafficSnarled = Boolean(target && (viewer.trafficToken || target.trafficToken));
 
   return (
     <section className="cr-role" aria-label="Trade">
@@ -138,8 +143,15 @@ export function TradePanel({ state, viewerIndex, onInitiate, onResolveReturn, on
       <div className="cr-role__body">
         <div className="cr-role__chips">
           {teammates.length === 0 && <span className="cr-role__empty">No teammates to trade with.</span>}
-          {teammates.map((p) => chip(p.name, targetId === p.id, () => { setTargetId(p.id); setMode(undefined); setItemId(undefined); }, p.id))}
+          {teammates.map((p) =>
+            chip(p.trafficToken ? `${p.name} 🚧` : p.name, targetId === p.id, () => { setTargetId(p.id); setMode(undefined); setItemId(undefined); }, p.id),
+          )}
         </div>
+        {trafficSnarled && (
+          <p className="cr-role__sub" style={{ color: 'var(--color-amber)' }}>
+            🚧 +1 AP more — a Traffic token is involved.
+          </p>
+        )}
         {target && giftPicker(viewer, target, (item) => onInitiate?.(target.id, item))}
       </div>
       <div className="cr-role__actions">

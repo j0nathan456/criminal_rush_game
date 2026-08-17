@@ -127,6 +127,13 @@ describe('actionAvailability — once-per-turn and resource gates', () => {
     expect(actionAvailability(s, 0).ROLE_ABILITY?.enabled).toBe(false);
   });
 
+  it('disables Role Action for an injured player', () => {
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('detective', 'CIVILIAN'), isInjured: true })]);
+    const roleAbility = actionAvailability(s, 0).ROLE_ABILITY;
+    expect(roleAbility?.enabled).toBe(false);
+    expect(roleAbility?.reason).toMatch(/injured/i);
+  });
+
   it('disables Play Card with an empty hand and Sell with no sellable items', () => {
     const s = stateWith([
       mkPlayer({ id: 'p0', role: role('boss', 'CRIMINAL'), hand: [], inventory: [] }),

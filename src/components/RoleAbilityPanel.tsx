@@ -148,17 +148,34 @@ export function RoleAbilityPanel({
       canSubmit = !!cardId && !!targetId;
       break;
     }
-    case 'robber':
+    case 'robber': {
+      // Only Civilians who qualify for at least one option are offered, and
+      // only the options the chosen target actually has ($3+ money, 3+ cards)
+      // show up — no dead-end picks.
+      const eligibleTargets = opponents.filter((p) => p.money >= 3 || p.hand.length >= 3);
+      const canMoney = Boolean(target && target.money >= 3);
+      const canCard = Boolean(target && target.hand.length >= 3);
       body = (
         <>
           <p>Pickpocket a Civilian:</p>
-          {playerRow(opponents)}
-          <p className="cr-role__sub">Steal what?</p>
-          {modeRow([{ value: 'MONEY', label: 'Steal $1 (needs $3+)' }, { value: 'CARD', label: 'Steal a card (needs 3+)' }])}
+          <div className="cr-role__chips">
+            {eligibleTargets.length === 0 && <span className="cr-role__empty">No eligible players.</span>}
+            {eligibleTargets.map((p) => chip(p.name, targetId === p.id, () => { setTargetId(p.id); setMode(undefined); }, p.id))}
+          </div>
+          {target && (
+            <>
+              <p className="cr-role__sub">Steal what?</p>
+              {modeRow([
+                ...(canMoney ? [{ value: 'MONEY' as const, label: 'Steal $1' }] : []),
+                ...(canCard ? [{ value: 'CARD' as const, label: 'Steal a card' }] : []),
+              ])}
+            </>
+          )}
         </>
       );
       canSubmit = !!targetId && !!mode;
       break;
+    }
     case 'arsonist':
       body = (
         <>

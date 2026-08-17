@@ -74,6 +74,35 @@ describe('<RoleAbilityPanel />', () => {
     });
   });
 
+  it('Robber: only the steal option the target actually qualifies for shows up', () => {
+    const onSubmit = vi.fn();
+    const money2 = (id: string): ActionCard => ({ id, name: `M-${id}`, description: '', type: 'MONEY', value: 1 });
+    const s = stateWith([
+      mkPlayer({ id: 'p0', name: 'Rob', role: role('robber', 'Robber', 'CRIMINAL') }),
+      // Civilian 1: $5 and 2 cards — qualifies for steal-$1 (needs $3+) but not steal-a-card (needs 3+).
+      mkPlayer({ id: 'p1', name: 'Civ1', role: role('mayor', 'Mayor', 'CIVILIAN'), money: 5, hand: [money2('a'), money2('b')] }),
+    ]);
+    render(<RoleAbilityPanel state={s} viewerIndex={0} onSubmit={onSubmit} onCancel={() => {}} />);
+
+    fireEvent.click(screen.getByText('Civ1'));
+    expect(screen.getByText('Steal $1')).toBeInTheDocument();
+    expect(screen.queryByText('Steal a card')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Steal $1'));
+    fireEvent.click(screen.getByText('Use ability'));
+    expect(onSubmit).toHaveBeenCalledWith({ targetId: 'p1', cardId: undefined, category: undefined, gridCardId: undefined, mode: 'MONEY' });
+  });
+
+  it('Robber: excludes a Civilian who qualifies for neither option', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', name: 'Rob', role: role('robber', 'Robber', 'CRIMINAL') }),
+      mkPlayer({ id: 'p1', name: 'Broke', role: role('mayor', 'Mayor', 'CIVILIAN'), money: 1, hand: [] }),
+    ]);
+    render(<RoleAbilityPanel state={s} viewerIndex={0} onSubmit={() => {}} onCancel={() => {}} />);
+    expect(screen.queryByText('Broke')).not.toBeInTheDocument();
+    expect(screen.getByText('No eligible players.')).toBeInTheDocument();
+  });
+
   it('shows a passive message and no Use button for passive roles', () => {
     const s = stateWith([mkPlayer({ id: 'p0', name: 'Mona', role: role('spy', 'Spy', 'CRIMINAL') })]);
     render(<RoleAbilityPanel state={s} viewerIndex={0} onSubmit={() => {}} onCancel={() => {}} />);

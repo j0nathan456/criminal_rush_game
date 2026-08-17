@@ -564,15 +564,32 @@ describe('gameReducer — USE_ROLE_ABILITY (Criminals)', () => {
 });
 
 describe('gameReducer — passive role hooks', () => {
-  it('Vigilante cannot be attacked by a Criminal (cannot be injured)', () => {
+  it('a Criminal can attack and defeat a Vigilante, scoring a VP, but the Vigilante is never injured', () => {
     const s = stateWith([
       mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL', 3), inventory: [weapon('w1', 'MELEE')] }),
       mkPlayer({ id: 'p1', role: role('vigilante', 'CIVILIAN', 2) }),
     ]);
-    const next = gameReducer(s, { type: 'ATTACK', targetId: 'p1' });
-    expect(next.combat).toBeNull(); // attack refused, no fight started
+    // Hitman 3 + weapon 2 + Marksman (+1/weapon) = 6 vs Vigilante's bare 2 — the fight happens and Criminals win.
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'p1' });
+    expect(next.combat).not.toBeNull(); // no longer refused outright
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'ATTACKER' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'DEFENDER' });
+    expect(next.teamScores.CRIMINAL).toBe(1); // Criminals still score the VP
+    // "Cannot be injured" means exactly that — not that the fight can't happen.
     expect(next.players[1].isInjured).toBe(false);
-    expect(next.teamScores.CRIMINAL).toBe(0);
+    expect(next.players[1].isCaptured).toBe(false);
+  });
+
+  it("a Vigilante keeps their role ability and can still attack after losing a fight, since they were never injured", () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL', 3), inventory: [weapon('w1', 'MELEE')] }),
+      mkPlayer({ id: 'p1', role: role('vigilante', 'CIVILIAN', 2) }),
+    ]);
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'p1' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'ATTACKER' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'DEFENDER' });
+    expect(next.players[1].isInjured).toBe(false);
+    expect(next.players[1].actionsRemaining).toBeGreaterThan(0);
   });
 
   it('Vigilante draws and gains PL when the Criminals score in combat', () => {
@@ -897,6 +914,15 @@ describe('gameReducer — INITIATE_TRADE / RESOLVE_TRADE_RETURN', () => {
     ]);
     const next = gameReducer(s, { type: 'INITIATE_TRADE', targetId: 'p1', give: { kind: 'MONEY' } });
     expect(next.players[0].actionsRemaining).toBe(1); // 3 - 2
+  });
+
+  it('also costs 2 actions when the initiator (not the teammate) holds the Traffic token', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 2, trafficToken: true }),
+      mkPlayer({ id: 'p1', role: role('attorney', 'CIVILIAN'), money: 2 }),
+    ]);
+    const next = gameReducer(s, { type: 'INITIATE_TRADE', targetId: 'p1', give: { kind: 'MONEY' } });
+    expect(next.players[0].actionsRemaining).toBe(1); // 3 - 2 — the surcharge follows the token holder either way
   });
 
   it('costs 0 actions with a Radio, once per turn', () => {

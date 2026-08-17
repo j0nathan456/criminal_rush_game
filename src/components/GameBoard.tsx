@@ -233,17 +233,6 @@ export function GameBoard({
         <ThreatenPanel state={state} viewerIndex={viewerIndex} onResolveThreaten={onResolveThreaten} />
       )}
 
-      {(tradeOpen || state.pendingTrade) && !state.combat && !state.pendingThreaten && !state.winner && (
-        <TradePanel
-          key={state.pendingTrade ? `return-${state.pendingTrade.recipientId}` : 'initiate'}
-          state={state}
-          viewerIndex={viewerIndex}
-          onInitiate={onInitiateTrade}
-          onResolveReturn={onResolveTradeReturn}
-          onCancel={onCancelTrade}
-        />
-      )}
-
       {state.pendingExpressShipping && !state.combat && !state.winner && (
         <ExpressShippingPanel state={state} viewerIndex={viewerIndex} onResolve={onResolveExpressShipping} />
       )}
@@ -356,6 +345,16 @@ export function GameBoard({
                   amount={state.pendingMarketDiscount.amount}
                   onBuy={onUseMarketDiscount}
                   onSkip={onSkipMarketDiscount}
+                />
+              )}
+              {(tradeOpen || state.pendingTrade) && !state.combat && !state.pendingThreaten && !state.pendingExpressShipping && !state.winner && (
+                <TradePanel
+                  key={state.pendingTrade ? `return-${state.pendingTrade.recipientId}` : 'initiate'}
+                  state={state}
+                  viewerIndex={viewerIndex}
+                  onInitiate={onInitiateTrade}
+                  onResolveReturn={onResolveTradeReturn}
+                  onCancel={onCancelTrade}
                 />
               )}
             </div>

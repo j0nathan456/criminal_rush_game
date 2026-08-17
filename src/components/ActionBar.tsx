@@ -85,7 +85,16 @@ export function ActionBar({ player, maxActions = BASE_ACTIONS_PER_TURN, availabi
           // for Expand Network — worth calling out on the button itself, not
           // just in the hover tooltip, since it only applies once captured.
           const isExpandNetwork = action.type === 'SPECIAL_GOAL' && action.team === 'CRIMINAL';
-          const surchargeNote = isExpandNetwork && player.isCaptured ? '+$1 more — captured (Weakened Network)' : undefined;
+          // Traffic Jam: a Traffic token snarls its holder's own trades by +1
+          // action, whichever side of the trade they end up on. Only the
+          // player's own token is knowable before a teammate is even chosen,
+          // so a token on the *other* party shows up in the Trade panel itself
+          // once that teammate is picked, not here.
+          const isTrade = action.type === 'TRADE';
+          const surchargeNote =
+            isExpandNetwork && player.isCaptured ? '+$1 more — captured (Weakened Network)'
+            : isTrade && player.trafficToken ? '+1 AP more — Traffic token'
+            : undefined;
 
           const baseTitle = !legal.enabled && legal.reason
             ? `${label} — ${legal.reason}`

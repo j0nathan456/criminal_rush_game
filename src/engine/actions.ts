@@ -68,9 +68,11 @@ export function actionAvailability(
 
   availability.ROLE_ABILITY = player.isCaptured
     ? { enabled: false, reason: 'Captured — your role ability is gone.' }
-    : player.hasUsedRoleAbility
-      ? { enabled: false, reason: 'Role ability already used this turn.' }
-      : { enabled: true };
+    : player.isInjured
+      ? { enabled: false, reason: "You can't use a role ability while injured." }
+      : player.hasUsedRoleAbility
+        ? { enabled: false, reason: 'Role ability already used this turn.' }
+        : { enabled: true };
 
   if (player.hasAttacked) {
     availability.COMBAT = { enabled: false, reason: 'Already attacked this turn.' };

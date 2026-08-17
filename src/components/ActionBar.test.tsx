@@ -37,6 +37,14 @@ describe('<ActionBar />', () => {
     expect(screen.getByText(/\+\$1 more/)).toBeInTheDocument();
   });
 
+  it('flags the +1 AP Traffic token surcharge on Trade only while snarled', () => {
+    const { rerender } = render(<ActionBar player={makePlayer('CIVILIAN', 3)} onAction={() => {}} />);
+    expect(screen.queryByText(/\+1 AP more/)).not.toBeInTheDocument();
+
+    rerender(<ActionBar player={{ ...makePlayer('CIVILIAN', 3), trafficToken: true }} onAction={() => {}} />);
+    expect(screen.getByText(/\+1 AP more/)).toBeInTheDocument();
+  });
+
   it('shows Role Action for a role with a real Action (Crime Lord)', () => {
     render(<ActionBar player={makePlayer('CRIMINAL', 3, 'crime-lord')} onAction={() => {}} />);
     expect(screen.getByText('Ability Name')).toBeInTheDocument(); // the role's abilityName, not a generic label
