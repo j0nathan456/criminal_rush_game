@@ -28,6 +28,7 @@ import { MarketDiscountPanel } from './MarketDiscountPanel';
 import { ThreatenPanel } from './ThreatenPanel';
 import { SheriffPanel } from './SheriffPanel';
 import { ExposeEvidencePanel } from './ExposeEvidencePanel';
+import { EvidencePlayPanel } from './EvidencePlayPanel';
 import { TradePanel } from './TradePanel';
 import { ExpressShippingPanel } from './ExpressShippingPanel';
 import { TargetPicker } from './TargetPicker';
@@ -40,6 +41,7 @@ export interface GameBoardHandlers {
   onEndTurn?: () => void;
   onSelectCard?: (card: AnyCard) => void;
   onPlayEvidence?: (category: EvidenceCategory) => void;
+  onCancelEvidencePlay?: () => void;
   onPlaySelected?: () => void;
   onBuy?: (card: AnyCard) => void;
   onSell?: (card: MarketCard) => void;
@@ -114,6 +116,7 @@ export function GameBoard({
   onEndTurn,
   onSelectCard,
   onPlayEvidence,
+  onCancelEvidencePlay,
   onPlaySelected,
   onBuy,
   onSell,
@@ -312,6 +315,10 @@ export function GameBoard({
                 <button type="button" className="btn self-start" onClick={onClearTraffic}>
                   Clear Traffic token ($1)
                 </button>
+              )}
+              {selectedCard && selectedCard.type === 'EVIDENCE' && viewer.team === 'CIVILIAN' && isViewersTurn &&
+                !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.winner && (
+                  <EvidencePlayPanel card={selectedCard} team={viewer.team} onPlay={onPlayEvidence} onCancel={onCancelEvidencePlay} />
               )}
 
               {/* Ability/perk/event/target "gather more input" panels render here,

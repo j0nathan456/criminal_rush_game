@@ -151,6 +151,8 @@ export function useBoardInteractions(
     }
   };
 
+  const onCancelEvidencePlay = () => setSelectedCardId(null);
+
   const onPlaySelected = () => {
     if (selectedCard) playFromHand(selectedCard);
   };
@@ -176,6 +178,7 @@ export function useBoardInteractions(
     },
     onSelectCard,
     onPlayEvidence,
+    onCancelEvidencePlay,
     onPlaySelected,
     onBuy: (card) => {
       dispatch({ type: 'PURCHASE', cardId: card.id });
