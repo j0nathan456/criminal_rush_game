@@ -12,11 +12,7 @@
  */
 export const PASSIVE_ROLES = new Set(['mayor', 'attorney', 'vigilante', 'hitman', 'spy', 'nurse']);
 
-/** Perks with an engine-backed "Action:" (see reducer.applyPerk). */
-export const ACTIONABLE_PERKS = new Set([
-  'Water Bottle', 'Bank', 'Credit Card', 'Recycling Bin', 'Hacked Passwords', 'Alarm Clock', 'Coffee Machine',
-  'Trash Can', 'Manipulate', 'Shady Press',
-]);
+export { ACTIONABLE_PERKS } from '../engine';
 
 /**
  * Event cards that need a target/option gathered before they can be played

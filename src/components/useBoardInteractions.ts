@@ -10,6 +10,7 @@ import { useState } from 'react';
 import type { GameState } from '../types/game';
 import type { AnyCard, EvidenceCategory } from '../types/cards';
 import type { GameAction, RoleAbilityPayload, PerkPayload, EventOptions, TradeItem } from '../engine';
+import { ACTIONABLE_PERKS } from '../engine';
 import type { ActionMeta } from '../constants/theme';
 import type { GameBoardHandlers, TargetMode } from './GameBoard';
 import { CONFIGURABLE_EVENTS } from './panelConstants';
@@ -22,6 +23,8 @@ export interface BoardInteractions {
   roleAbilityOpen: boolean;
   /** The perk whose action panel is open, or null. */
   activePerkId: string | null;
+  /** Whether the "which perk?" picker is open (2+ usable actionable perks). */
+  perkPickerOpen: boolean;
   /** The Ally Support event card being played, or null. */
   allySupportCardId: string | null;
   /** The Event card (needing a target/option) being configured, or null. */
@@ -45,6 +48,7 @@ export function useBoardInteractions(
   const [notice, setNotice] = useState<string | null>(null);
   const [roleAbilityOpen, setRoleAbilityOpen] = useState(false);
   const [activePerkId, setActivePerkId] = useState<string | null>(null);
+  const [perkPickerOpen, setPerkPickerOpen] = useState(false);
   const [allySupportCardId, setAllySupportCardId] = useState<string | null>(null);
   const [eventCardId, setEventCardId] = useState<string | null>(null);
   const [exposeTargetId, setExposeTargetId] = useState<string | null>(null);
@@ -59,6 +63,7 @@ export function useBoardInteractions(
     setNotice(null);
     setRoleAbilityOpen(false);
     setActivePerkId(null);
+    setPerkPickerOpen(false);
     setAllySupportCardId(null);
     setEventCardId(null);
     setExposeTargetId(null);
@@ -76,6 +81,7 @@ export function useBoardInteractions(
       setSelectedCardId(null);
       setRoleAbilityOpen(false);
       setActivePerkId(null);
+      setPerkPickerOpen(false);
       setEventCardId(null);
       setAllySupportCardId(card.id);
       return;
@@ -84,6 +90,7 @@ export function useBoardInteractions(
       setSelectedCardId(null);
       setRoleAbilityOpen(false);
       setActivePerkId(null);
+      setPerkPickerOpen(false);
       setAllySupportCardId(null);
       setEventCardId(card.id);
       return;
@@ -119,6 +126,20 @@ export function useBoardInteractions(
         setTargeting(null);
         setRoleAbilityOpen(true);
         break;
+      case 'PERK_ACTION': {
+        setSelectedCardId(null);
+        setTargeting(null);
+        setRoleAbilityOpen(false);
+        const usable = viewer?.inventory.filter(
+          (c) => ACTIONABLE_PERKS.has(c.name) && !viewer.usedPerkIds?.includes(c.id),
+        ) ?? [];
+        if (usable.length === 1) {
+          setActivePerkId(usable[0].id);
+        } else {
+          setPerkPickerOpen(true);
+        }
+        break;
+      }
       case 'TRADE':
         setSelectedCardId(null);
         setTargeting(null);
@@ -197,11 +218,11 @@ export function useBoardInteractions(
       setRoleAbilityOpen(false);
     },
     onCancelRoleAbility: () => setRoleAbilityOpen(false),
-    onUsePerk: (perkId: string) => {
-      setRoleAbilityOpen(false);
-      setTargeting(null);
+    onSelectPerk: (perkId: string) => {
+      setPerkPickerOpen(false);
       setActivePerkId(perkId);
     },
+    onCancelPerkPicker: () => setPerkPickerOpen(false),
     onSubmitPerk: (perkId: string, payload: PerkPayload) => {
       dispatch({ type: 'USE_PERK', perkId, payload });
       setActivePerkId(null);
@@ -244,7 +265,7 @@ export function useBoardInteractions(
   };
 
   return {
-    selectedCardId, targeting, notice, roleAbilityOpen, activePerkId, allySupportCardId, eventCardId, exposeTargetId,
-    tradeOpen, handlers, reset,
+    selectedCardId, targeting, notice, roleAbilityOpen, activePerkId, perkPickerOpen, allySupportCardId, eventCardId,
+    exposeTargetId, tradeOpen, handlers, reset,
   };
 }

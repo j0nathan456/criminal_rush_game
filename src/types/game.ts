@@ -148,6 +148,7 @@ export type PlayerActionType =
   | 'PURCHASE_MARKET'   // Buy Perk/Weapon (1 AP, Once per turn)
   | 'SELL_ITEM'         // Sell Perk/Weapon for Money (1 AP)
   | 'ROLE_ABILITY'      // Unique character power (1 AP, Once per turn)
+  | 'PERK_ACTION'       // Use an actionable perk (Bank, Credit Card, etc.) (1 AP, Water Bottle free)
   | 'TRADE'             // Give card/money to teammate (1 AP)
   | 'SPECIAL_GOAL'      // Civilians: Expose | Criminals: Expand Net (1 AP)
   | 'COMBAT'            // Attack a neighbor (2 AP)

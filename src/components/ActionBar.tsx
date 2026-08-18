@@ -72,7 +72,11 @@ export function ActionBar({ player, maxActions = BASE_ACTIONS_PER_TURN, availabi
       <div className="grid grid-cols-2 gap-2">
         {actions.map((action) => {
           const legal = availability[action.type] ?? { enabled: true };
-          const tooExpensive = action.cost > player.actionsRemaining;
+          // Perk Action's real AP cost is per-perk (Water Bottle is free, the
+          // rest cost 1) — the engine enforces it; don't gate the button on a
+          // single flat cost or Water Bottle would be unreachable at 0 AP,
+          // exactly when it's most useful.
+          const tooExpensive = action.type !== 'PERK_ACTION' && action.cost > player.actionsRemaining;
           const disabled = tooExpensive || !legal.enabled || !onAction;
           const expensive = action.cost > 1;
 

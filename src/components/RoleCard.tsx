@@ -11,7 +11,6 @@ import {
 import { rolePortraitUrl } from '../constants/cardArt';
 import { playerTokens } from './playerTokens';
 import { TeamIcon } from './TeamIcon';
-import { ACTIONABLE_PERKS } from './panelConstants';
 
 interface RoleCardProps {
   player: Player;
@@ -19,9 +18,10 @@ interface RoleCardProps {
   active?: boolean;
   /** Actions granted this turn (role-adjusted); how many cubes to draw. */
   maxActions?: number;
-  /** True when the viewer may Use/Sell their items (their own turn). */
+  /** True when the viewer may Sell their items (their own turn). Actionable
+   * perks are used via the "Perk Action" box in the ActionBar instead — an
+   * inline button here used to crowd out the perk's own name. */
   canManageItems?: boolean;
-  onUsePerk?: (perkId: string) => void;
   onSell?: (card: MarketCard) => void;
 }
 
@@ -43,7 +43,6 @@ export function RoleCard({
   active,
   maxActions = BASE_ACTIONS_PER_TURN,
   canManageItems,
-  onUsePerk,
   onSell,
 }: RoleCardProps) {
   const meta = TEAM_META[player.team];
@@ -67,11 +66,6 @@ export function RoleCard({
           <span aria-hidden="true">{typeMeta.icon}</span> {item.name}
         </span>
         <span className="flex shrink-0 gap-1.5">
-          {canManageItems && onUsePerk && ACTIONABLE_PERKS.has(item.name) && (
-            <button type="button" className="btn px-2 py-0.5 text-[11px]" onClick={() => onUsePerk(item.id)}>
-              Use
-            </button>
-          )}
           {canManageItems && onSell && isSellable(item) && (
             <button type="button" className="btn px-2 py-0.5 text-[11px]" onClick={() => onSell(item)}>
               Sell $1

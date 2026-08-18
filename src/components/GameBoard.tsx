@@ -22,6 +22,7 @@ import { TurnPhases } from './TurnPhases';
 import { CombatPanel } from './CombatPanel';
 import { RoleAbilityPanel } from './RoleAbilityPanel';
 import { PerkActionPanel } from './PerkActionPanel';
+import { PerkPickerPanel } from './PerkPickerPanel';
 import { AllySupportPanel } from './AllySupportPanel';
 import { EventPanel } from './EventPanel';
 import { MarketDiscountPanel } from './MarketDiscountPanel';
@@ -53,7 +54,8 @@ export interface GameBoardHandlers {
   onCombatChoice?: (input: CombatChoiceInput) => void;
   onSubmitRoleAbility?: (payload: RoleAbilityPayload) => void;
   onCancelRoleAbility?: () => void;
-  onUsePerk?: (perkId: string) => void;
+  onSelectPerk?: (perkId: string) => void;
+  onCancelPerkPicker?: () => void;
   onSubmitPerk?: (perkId: string, payload: PerkPayload) => void;
   onCancelPerk?: () => void;
   onClearTraffic?: () => void;
@@ -85,6 +87,8 @@ interface GameBoardProps extends GameBoardHandlers {
   roleAbilityOpen?: boolean;
   /** The perk whose action panel is open, or null. */
   activePerkId?: string | null;
+  /** Whether the "which perk?" picker is open (2+ usable actionable perks). */
+  perkPickerOpen?: boolean;
   /** The Ally Support event card being played, or null. */
   allySupportCardId?: string | null;
   /** The Event card (needing a target/option) being configured, or null. */
@@ -108,6 +112,7 @@ export function GameBoard({
   notice,
   roleAbilityOpen = false,
   activePerkId = null,
+  perkPickerOpen = false,
   allySupportCardId = null,
   eventCardId = null,
   exposeTargetId = null,
@@ -128,7 +133,8 @@ export function GameBoard({
   onCombatChoice,
   onSubmitRoleAbility,
   onCancelRoleAbility,
-  onUsePerk,
+  onSelectPerk,
+  onCancelPerkPicker,
   onSubmitPerk,
   onCancelPerk,
   onClearTraffic,
@@ -289,7 +295,6 @@ export function GameBoard({
               active={isViewersTurn}
               maxActions={maxActions}
               canManageItems={isViewersTurn}
-              onUsePerk={onUsePerk}
               onSell={onSell}
             />
 
@@ -339,6 +344,9 @@ export function GameBoard({
               )}
               {roleAbilityOpen && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.winner && (
                 <RoleAbilityPanel state={state} viewerIndex={viewerIndex} onSubmit={onSubmitRoleAbility} onCancel={onCancelRoleAbility} />
+              )}
+              {perkPickerOpen && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.winner && (
+                <PerkPickerPanel viewer={viewer} onSelect={onSelectPerk} onCancel={onCancelPerkPicker} />
               )}
               {activePerkId && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.winner && (
                 <PerkActionPanel state={state} viewerIndex={viewerIndex} perkId={activePerkId} onSubmit={onSubmitPerk} onCancel={onCancelPerk} />

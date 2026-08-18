@@ -9,7 +9,7 @@
 
 import type { GameState, PlayerActionType } from '../types/game.js';
 import type { ActionCard } from '../types/cards.js';
-import { isGridComplete } from './rules.js';
+import { ACTIONABLE_PERKS, isGridComplete } from './rules.js';
 import { attackError } from './combat.js';
 
 export interface ActionAvailability {
@@ -26,6 +26,13 @@ function hasSellableItem(inventory: GameState['players'][number]['inventory']): 
 /** True when any player is a legal Combat target for the attacker at `index`. */
 function hasAttackTarget(state: GameState, index: number): boolean {
   return state.players.some((p) => attackError(state, index, p) === null);
+}
+
+/** True when the player owns at least one actionable perk not yet used this turn. */
+function hasUsablePerk(player: GameState['players'][number]): boolean {
+  return player.inventory.some(
+    (c) => ACTIONABLE_PERKS.has(c.name) && !player.usedPerkIds?.includes(c.id),
+  );
 }
 
 /** True when at least one Criminal can still be Exposed (not captured/exposed/disguised). */
@@ -73,6 +80,12 @@ export function actionAvailability(
       : player.hasUsedRoleAbility
         ? { enabled: false, reason: 'Role ability already used this turn.' }
         : { enabled: true };
+
+  // Unlike a role ability, injured/captured players may still use perk
+  // Actions (rulebook only strips the role ability and attacking).
+  availability.PERK_ACTION = hasUsablePerk(player)
+    ? { enabled: true }
+    : { enabled: false, reason: 'No actionable perk available right now.' };
 
   if (player.hasAttacked) {
     availability.COMBAT = { enabled: false, reason: 'Already attacked this turn.' };

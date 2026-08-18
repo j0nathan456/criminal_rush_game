@@ -15,6 +15,7 @@ export type { GameAction, RoleAbilityPayload, EventOptions, TradeItem, PerkPaylo
 export { determineWinner } from './scoring.js';
 export {
   ACTIONS_PER_TURN,
+  ACTIONABLE_PERKS,
   actionsForTurn,
   isGridComplete,
   neighborIds,

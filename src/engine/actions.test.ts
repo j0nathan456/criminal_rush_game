@@ -151,6 +151,34 @@ describe('actionAvailability — once-per-turn and resource gates', () => {
   });
 });
 
+describe('actionAvailability — Perk Action', () => {
+  it('is disabled when the player owns no actionable perk', () => {
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('boss', 'CRIMINAL'), inventory: [perk('Mafia Alliance')] })]);
+    const perkAction = actionAvailability(s, 0).PERK_ACTION;
+    expect(perkAction?.enabled).toBe(false);
+    expect(perkAction?.reason).toMatch(/no actionable perk/i);
+  });
+
+  it('is enabled when the player owns an actionable perk', () => {
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('boss', 'CRIMINAL'), inventory: [perk('Bank')] })]);
+    expect(actionAvailability(s, 0).PERK_ACTION).toEqual({ enabled: true });
+  });
+
+  it('is disabled once every actionable perk has already been used this turn', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('boss', 'CRIMINAL'), inventory: [perk('Bank')], usedPerkIds: ['Bank'] }),
+    ]);
+    expect(actionAvailability(s, 0).PERK_ACTION?.enabled).toBe(false);
+  });
+
+  it('stays enabled for an injured or captured player — only role abilities are stripped, not perk actions', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('boss', 'CRIMINAL'), inventory: [perk('Bank')], isInjured: true, isCaptured: true }),
+    ]);
+    expect(actionAvailability(s, 0).PERK_ACTION).toEqual({ enabled: true });
+  });
+});
+
 describe('handCardPlayable', () => {
   const card = (type: ActionCard['type']): ActionCard => ({ id: type, name: type, description: '', type });
 

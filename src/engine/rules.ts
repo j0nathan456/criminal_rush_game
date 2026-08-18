@@ -13,6 +13,16 @@ import { determineWinner } from './scoring.js';
 export const ACTIONS_PER_TURN = 3;
 
 /**
+ * Perks with an engine-backed "Action:" ability (see applyPerk in reducer.ts).
+ * Single source of truth for both the reducer's own switch and the UI's
+ * "is this perk something you can spend an action on" checks.
+ */
+export const ACTIONABLE_PERKS = new Set([
+  'Water Bottle', 'Bank', 'Credit Card', 'Recycling Bin', 'Hacked Passwords', 'Alarm Clock', 'Coffee Machine',
+  'Trash Can', 'Manipulate', 'Shady Press',
+]);
+
+/**
  * Actions a player receives at the start of their turn (Mayor gets +1). An
  * injured or captured Mayor loses the bonus that turn — it's a role ability,
  * and injured/captured players cannot use role abilities.
