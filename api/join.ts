@@ -1,9 +1,15 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { joinRoom, viewFor } from '../src/online/room.js';
+import { joinRoom, rejoinRoom, viewFor } from '../src/online/room.js';
 import { getRoom, saveRoom } from './_store.js';
 import { body, newToken, fail } from './_lib.js';
 
-/** POST /api/join { code, name } → { token, view }. Joins an existing room. */
+/**
+ * POST /api/join { code, name } → { token, view }.
+ * Joins an existing not-yet-started room, or — if the room has already
+ * started — rejoins by matching `name` against an existing seat and
+ * reissuing it a token (see rejoinRoom), so a player who lost their session
+ * (cleared storage, a new device, a stray "Leave") can get back in.
+ */
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
@@ -20,7 +26,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     }
 
     const token = newToken();
-    const updated = joinRoom(room, token, (name ?? '').trim());
+    const updated = room.started ? rejoinRoom(room, token, name ?? '') : joinRoom(room, token, (name ?? '').trim());
     await saveRoom(updated);
 
     res.status(200).json({ token, view: viewFor(updated, token) });

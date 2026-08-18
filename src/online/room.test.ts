@@ -4,6 +4,7 @@ import {
   joinRoom,
   leaveRoom,
   kickPlayer,
+  rejoinRoom,
   startRoom,
   applyAction,
   viewFor,
@@ -305,6 +306,50 @@ describe('kickPlayer', () => {
   it('refuses once the game has started', () => {
     const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev']), { token: 't0', newGame });
     expect(() => kickPlayer(started, { hostToken: 't0', targetSeat: 1 })).toThrow(/game has started/);
+  });
+});
+
+describe('rejoinRoom', () => {
+  it('reissues a token for the seat matching the given name', () => {
+    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev']), { token: 't0', newGame });
+    const after = rejoinRoom(started, 'new-token', 'Ben');
+
+    const ben = after.players.find((p) => p.name === 'Ben');
+    expect(ben?.token).toBe('new-token');
+    expect(ben?.seat).toBe(1); // unchanged — rejoin never re-seats anyone
+    expect(after.players).toHaveLength(4);
+  });
+
+  it('matches case-insensitively and trims whitespace', () => {
+    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev']), { token: 't0', newGame });
+    const after = rejoinRoom(started, 'new-token', '  ben  ');
+    expect(after.players.find((p) => p.name === 'Ben')?.token).toBe('new-token');
+  });
+
+  it("the old token stops working once someone rejoins Ben's seat", () => {
+    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev']), { token: 't0', newGame });
+    const after = rejoinRoom(started, 'new-token', 'Ben');
+    expect(after.players.some((p) => p.token === 't1')).toBe(false); // Ben's original token
+  });
+
+  it('refuses before the game has started', () => {
+    const room = roomWith(['Ava', 'Ben', 'Cara', 'Dev']);
+    expect(() => rejoinRoom(room, 'x', 'Ben')).toThrow(/has not started/);
+  });
+
+  it('refuses a blank name', () => {
+    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev']), { token: 't0', newGame });
+    expect(() => rejoinRoom(started, 'x', '   ')).toThrow(/enter the name/i);
+  });
+
+  it('refuses a name that matches no seat', () => {
+    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev']), { token: 't0', newGame });
+    expect(() => rejoinRoom(started, 'x', 'Zed')).toThrow(/no player/i);
+  });
+
+  it('refuses an ambiguous name shared by more than one seat', () => {
+    const started = startRoom(roomWith(['Ava', 'Ben', 'Ben', 'Dev']), { token: 't0', newGame });
+    expect(() => rejoinRoom(started, 'x', 'Ben')).toThrow(/more than one player/i);
   });
 });
 

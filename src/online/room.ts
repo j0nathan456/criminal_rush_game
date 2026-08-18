@@ -58,6 +58,33 @@ export function joinRoom(room: Room, token: string, name: string): Room {
 }
 
 /**
+ * Recover a lost session in an already-started room: match an existing seat
+ * by player name and hand it a fresh token, so a client that lost its
+ * original one (cleared storage, a new device, hit "Leave" by accident) can
+ * get back into the game it's already seated in. The old token simply stops
+ * working — whichever client presents a name match first reclaims the seat.
+ *
+ * Name matching is exact (trimmed, case-insensitive) and refuses rather than
+ * guesses when it's ambiguous. This is deliberately not real authentication —
+ * "know the right name" is the whole check, which is fine for a casual game
+ * among people who trust each other but not a defense against a stranger
+ * guessing another player's name.
+ */
+export function rejoinRoom(room: Room, token: string, name: string): Room {
+  if (!room.started) throw new RoomError('This game has not started yet — join it instead.');
+  const trimmed = name.trim();
+  if (!trimmed) throw new RoomError('Enter the name you originally joined with.');
+  const matches = room.players.filter((p) => p.name.toLowerCase() === trimmed.toLowerCase());
+  if (matches.length === 0) throw new RoomError('No player with that name in this game.');
+  if (matches.length > 1) throw new RoomError('More than one player has that name — ask the table to sort it out.');
+  const seat = matches[0].seat;
+  return {
+    ...room,
+    players: room.players.map((p) => (p.seat === seat ? { ...p, token } : p)),
+  };
+}
+
+/**
  * Remove a player from a not-yet-started room and re-seat everyone so seats and
  * ids stay contiguous (`p0..pN`). No-op once the game has started (mid-game
  * abandonment is out of scope — the seat is kept). Returns the updated room;

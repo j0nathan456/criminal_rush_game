@@ -97,6 +97,9 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
           {!name.trim() && code.trim().length >= 4 && (
             <p className="mt-2 text-xs text-amber">Enter your name above to join.</p>
           )}
+          <p className="mt-2 text-xs text-fog/70">
+            Already mid-game and lost your session? Enter the same name you joined with — this rejoins your seat.
+          </p>
 
           {game.error && <p className="mt-4 text-center text-sm text-crim">{game.error}</p>}
 
