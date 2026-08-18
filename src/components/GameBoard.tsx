@@ -15,6 +15,7 @@ import { GameLog } from './GameLog';
 import { Roster } from './Roster';
 import { EvidenceGrid } from './EvidenceGrid';
 import { Piles } from './Piles';
+import { SpyPeek } from './SpyPeek';
 import { Markets } from './Markets';
 import { TeamIcon } from './TeamIcon';
 import { TurnPhases } from './TurnPhases';
@@ -238,9 +239,11 @@ export function GameBoard({
       )}
 
       {/* Board grid — columns 1:3:1, three rows:
-          row 1  Score Board · Evidence Grid · Case Log
-          row 2  Players     · Markets       · Deck/Discard
-          row 3  Profile     · Hand          · Actions        */}
+          row 1  Score Board · Evidence Grid · Deck/Discard
+          row 2  Players     · Markets       · Case Log
+          row 3  Profile     · Hand          · Actions
+          Case Log sits closer to the action row than the deck does — it's
+          consulted far more often than the pile counts. */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,3fr)_minmax(0,1fr)]">
         {/* Row 1 */}
         <ScoreBoard scores={state.teamScores} targets={state.vpTargets} winner={state.winner} />
@@ -250,7 +253,7 @@ export function GameBoard({
             onSlotClick={isViewersTurn && viewer?.team === 'CIVILIAN' ? onPlayEvidence : undefined}
           />
         </main>
-        <GameLog entries={state.gameLog} />
+        <Piles drawPile={state.drawPile} discardPile={state.discardPile} />
 
         {/* Row 2 */}
         <Roster
@@ -266,11 +269,7 @@ export function GameBoard({
         <div className="min-w-0">
           <Markets state={state} viewer={viewer} isViewersTurn={isViewersTurn} onBuy={onBuy} />
         </div>
-        <Piles
-          drawPile={state.drawPile}
-          discardPile={state.discardPile}
-          peekedTopCard={state.lastPeek?.playerId === viewer?.id ? state.lastPeek.cards[0] : undefined}
-        />
+        <GameLog entries={state.gameLog} />
 
         {/* Row 3 */}
         {viewer && (
@@ -291,6 +290,7 @@ export function GameBoard({
                 availabilityOf={(card) => handCardPlayable(state, viewerIndex, card)}
                 onSelect={onSelectCard}
               />
+              {state.lastPeek?.playerId === viewer.id && <SpyPeek card={state.lastPeek.cards[0]} />}
               {canPlaySelected && (
                 <button
                   type="button"

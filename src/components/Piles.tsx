@@ -4,8 +4,6 @@ import { Card } from './Card';
 interface PilesProps {
   drawPile: ActionCard[];
   discardPile: ActionCard[];
-  /** The Spy's Recon: the true top card of the deck, visible only to the Spy on their own turn. */
-  peekedTopCard?: ActionCard | null;
 }
 
 /** Cards remaining at/below which the deck-out reshuffle is worth flagging. */
@@ -37,7 +35,7 @@ function DiscardTop({ top }: { top?: ActionCard }) {
 }
 
 /** The draw and discard piles, as a panel that sits parallel to the Evidence Grid. */
-export function Piles({ drawPile, discardPile, peekedTopCard }: PilesProps) {
+export function Piles({ drawPile, discardPile }: PilesProps) {
   const drawCount = drawPile.length;
   const discardTop = discardPile.at(-1);
 
@@ -51,12 +49,6 @@ export function Piles({ drawPile, discardPile, peekedTopCard }: PilesProps) {
         <Pile label={`Deck · ${drawCount}`} count={drawCount}>
           <Card faceDown />
         </Pile>
-        {peekedTopCard && (
-          <div className="flex flex-col items-center gap-1.5">
-            <Card card={peekedTopCard} preview />
-            <span className="text-[11px] uppercase tracking-wide text-amber">🔎 Recon (top card)</span>
-          </div>
-        )}
         <Pile label={`Discard · ${discardPile.length}`} count={discardPile.length}>
           <DiscardTop top={discardTop} />
         </Pile>
