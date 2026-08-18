@@ -50,8 +50,8 @@ export function TargetPicker({ state, viewerIndex, mode, onSelectTarget, onCance
         <div className="cr-role__chips">
           {targets.length === 0 && <span className="cr-role__empty">No valid target right now.</span>}
           {targets.map((p) => {
-            const yourPl = mode === 'attack' ? computeBasePower(viewer, p, { isAttacker: true, playerCount }) : undefined;
-            const theirPl = mode === 'attack' ? computeBasePower(p, viewer, { isAttacker: false, playerCount }) : undefined;
+            const yourPl = mode === 'attack' ? computeBasePower(viewer, p, { isAttacker: true, playerCount, allPlayers: state.players }) : undefined;
+            const theirPl = mode === 'attack' ? computeBasePower(p, viewer, { isAttacker: false, playerCount, allPlayers: state.players }) : undefined;
             return (
               <button
                 key={p.id}
@@ -71,8 +71,8 @@ export function TargetPicker({ state, viewerIndex, mode, onSelectTarget, onCance
         </div>
         {hovered && (
           <p className="cr-role__sub" aria-live="polite">
-            You: <strong>{computeBasePower(viewer, hovered, { isAttacker: true, playerCount })} PL</strong> vs{' '}
-            {hovered.name}: <strong>{computeBasePower(hovered, viewer, { isAttacker: false, playerCount })} PL</strong>
+            You: <strong>{computeBasePower(viewer, hovered, { isAttacker: true, playerCount, allPlayers: state.players })} PL</strong> vs{' '}
+            {hovered.name}: <strong>{computeBasePower(hovered, viewer, { isAttacker: false, playerCount, allPlayers: state.players })} PL</strong>
           </p>
         )}
       </div>

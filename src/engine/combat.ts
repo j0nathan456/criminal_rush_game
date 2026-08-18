@@ -124,6 +124,18 @@ function weaponPowerNote(weapon: MarketCard, self: Player, opponent: Player, pla
 }
 
 /**
+ * Whether the +2 PL Bodyguard token still pays out for `self`. It doesn't
+ * while the Bodyguard themselves is injured — the token is flipped and the
+ * bonus lapses until they heal (rulebook p.15 clarifications), even though
+ * the protected teammate keeps holding the token.
+ */
+function bodyguardBonusActive(self: Player, allPlayers: Player[]): boolean {
+  if (!self.hasBodyguardToken) return false;
+  const bodyguard = allPlayers.find((p) => p.role.id === 'bodyguard' && p.team === self.team);
+  return !bodyguard || !bodyguard.isInjured;
+}
+
+/**
  * A combatant's base power before any Power cards: current PL (role base minus
  * expose, plus permanent gains already folded into powerLevel) + weapons +
  * Hitman's attack bonus + Bodyguard's defensive bonus.
@@ -131,12 +143,12 @@ function weaponPowerNote(weapon: MarketCard, self: Player, opponent: Player, pla
 export function computeBasePower(
   self: Player,
   opponent: Player,
-  opts: { isAttacker: boolean; playerCount: number },
+  opts: { isAttacker: boolean; playerCount: number; allPlayers: Player[] },
 ): number {
   const weapons = weaponsOf(self);
   const weaponSum = weapons.reduce((sum, w) => sum + weaponPower(w, self, opponent, opts.playerCount), 0);
   const hitmanBonus = opts.isAttacker && self.role.id === 'hitman' ? weapons.length : 0;
-  const bodyguardBonus = !opts.isAttacker && self.hasBodyguardToken ? 2 : 0;
+  const bodyguardBonus = !opts.isAttacker && bodyguardBonusActive(self, opts.allPlayers) ? 2 : 0;
   return self.powerLevel + weaponSum + hitmanBonus + bodyguardBonus;
 }
 
@@ -302,8 +314,8 @@ export function enterPowerPhase(state: GameState): GameState {
   const atk = state.players[playerIndexById(state, combat.attacker.playerId)];
   const def = state.players[playerIndexById(state, combat.defender.playerId)];
   const pc = combat.playerCount;
-  const atkBase = computeBasePower(atk, def, { isAttacker: true, playerCount: pc }) + (combat.attacker.copiedWeaponPower ?? 0);
-  const defBase = computeBasePower(def, atk, { isAttacker: false, playerCount: pc }) + (combat.defender.copiedWeaponPower ?? 0);
+  const atkBase = computeBasePower(atk, def, { isAttacker: true, playerCount: pc, allPlayers: state.players }) + (combat.attacker.copiedWeaponPower ?? 0);
+  const defBase = computeBasePower(def, atk, { isAttacker: false, playerCount: pc, allPlayers: state.players }) + (combat.defender.copiedWeaponPower ?? 0);
 
   // Record any conditional/computed weapon bonuses that just applied, so a
   // non-obvious base-power number is explained in the case log.
@@ -555,6 +567,9 @@ export function powerCardEligible(
     const isBodyguard = by.role.id === 'bodyguard' && combatant.hasBodyguardToken && by.team === combatant.team;
     if (!isBodyguard) {
       return { enabled: false, reason: 'Only the combatant (or their Bodyguard) may play that Power card for this side.' };
+    }
+    if (by.isInjured) {
+      return { enabled: false, reason: 'The Bodyguard is injured and cannot play Power cards until they heal.' };
     }
   }
   if (card.name === 'Mirror' && !played.some((p) => p.byPlayerId !== by.id)) {

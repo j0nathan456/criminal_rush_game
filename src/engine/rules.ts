@@ -12,9 +12,14 @@ import { determineWinner } from './scoring.js';
 /** Base actions granted each turn before role/perk modifiers. */
 export const ACTIONS_PER_TURN = 3;
 
-/** Actions a player receives at the start of their turn (Mayor gets +1). */
+/**
+ * Actions a player receives at the start of their turn (Mayor gets +1). An
+ * injured or captured Mayor loses the bonus that turn — it's a role ability,
+ * and injured/captured players cannot use role abilities.
+ */
 export function actionsForTurn(player: Player): number {
-  return ACTIONS_PER_TURN + (player.role.id === 'mayor' ? 1 : 0);
+  const mayorBonus = player.role.id === 'mayor' && !player.isInjured && !player.isCaptured ? 1 : 0;
+  return ACTIONS_PER_TURN + mayorBonus;
 }
 
 /** True when every evidence category holds at least one card — required to Expose. */

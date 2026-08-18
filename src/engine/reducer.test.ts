@@ -793,6 +793,24 @@ describe('gameReducer — END_TURN', () => {
     const next = gameReducer(s, { type: 'END_TURN' });
     expect(next.players[0].isInjured).toBe(false);
   });
+
+  it('an injured Mayor loses their +1 action bonus for the turn (it is a role ability)', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('sheriff', 'CIVILIAN'), actionsRemaining: 0 }),
+      mkPlayer({ id: 'p1', role: role('mayor', 'CIVILIAN'), isInjured: true }),
+    ]);
+    const next = gameReducer(s, { type: 'END_TURN' });
+    expect(next.players[1].actionsRemaining).toBe(3); // no Mayor bonus while injured
+  });
+
+  it('a captured Mayor also loses the bonus (permanently, not just this turn)', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('sheriff', 'CIVILIAN'), actionsRemaining: 0 }),
+      mkPlayer({ id: 'p1', role: role('mayor', 'CIVILIAN'), isCaptured: true }),
+    ]);
+    const next = gameReducer(s, { type: 'END_TURN' });
+    expect(next.players[1].actionsRemaining).toBe(3);
+  });
 });
 
 describe('gameReducer — Event cards', () => {

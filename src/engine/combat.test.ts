@@ -118,16 +118,30 @@ describe('computeBasePower', () => {
       inventory: [wpn('harp', 'Harpoon', 'RANGED', 2), wpn('par', 'Parasites', 'CHEMICAL', 0)],
     });
     // Hitman: 3 + Hammer 2 + Barbed Wire 1 + Marksman (+1 per weapon × 2) = 8.
-    expect(computeBasePower(hitman, mayor, ATK)).toBe(8);
+    expect(computeBasePower(hitman, mayor, { ...ATK, allPlayers: [hitman, mayor] })).toBe(8);
     // Mayor: 2 + Harpoon (2 +2 vs melee) + Parasites (= Hitman base 3) = 9.
-    expect(computeBasePower(mayor, hitman, DEF)).toBe(9);
+    expect(computeBasePower(mayor, hitman, { ...DEF, allPlayers: [hitman, mayor] })).toBe(9);
   });
 
   it('applies the Bodyguard token only on defence', () => {
     const foe = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3) });
     const guarded = mkPlayer({ id: 'b', role: role('mayor', 'CIVILIAN', 2), hasBodyguardToken: true });
-    expect(computeBasePower(guarded, foe, DEF)).toBe(4); // 2 + 2 token
-    expect(computeBasePower(guarded, foe, ATK)).toBe(2); // no bonus on attack
+    const all = [foe, guarded];
+    expect(computeBasePower(guarded, foe, { ...DEF, allPlayers: all })).toBe(4); // 2 + 2 token
+    expect(computeBasePower(guarded, foe, { ...ATK, allPlayers: all })).toBe(2); // no bonus on attack
+  });
+
+  it('suspends the Bodyguard token bonus while the Bodyguard themselves is injured', () => {
+    const foe = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3) });
+    const guarded = mkPlayer({ id: 'b', role: role('mayor', 'CIVILIAN', 2), hasBodyguardToken: true });
+    const bodyguard = mkPlayer({ id: 'c', role: role('bodyguard', 'CIVILIAN', 3) });
+    const healthy = [foe, guarded, bodyguard];
+    expect(computeBasePower(guarded, foe, { ...DEF, allPlayers: healthy })).toBe(4); // 2 + 2 token
+
+    const injuredBodyguard = { ...bodyguard, isInjured: true };
+    const withInjuredBodyguard = [foe, guarded, injuredBodyguard];
+    // Token stays with `guarded`, but the bonus lapses until the Bodyguard heals.
+    expect(computeBasePower(guarded, foe, { ...DEF, allPlayers: withInjuredBodyguard })).toBe(2);
   });
 });
 
@@ -229,6 +243,12 @@ describe('powerCardEligible', () => {
     expect(powerCardEligible(pow('b', 'Boost', 1), bodyguard, protectedCombatant, 'ATTACKER', []).enabled).toBe(true);
     // Not protecting anyone right now — the token matters, not just the role.
     expect(powerCardEligible(pow('b', 'Boost', 1), bodyguard, combatant, 'ATTACKER', []).enabled).toBe(false);
+  });
+
+  it('refuses an injured Bodyguard from playing Power cards for their protected teammate', () => {
+    const protectedCombatant = { ...combatant, hasBodyguardToken: true };
+    const injuredBodyguard = { ...bodyguard, isInjured: true };
+    expect(powerCardEligible(pow('b', 'Boost', 1), injuredBodyguard, protectedCombatant, 'ATTACKER', []).enabled).toBe(false);
   });
 
   it('refuses Shield on offence', () => {
