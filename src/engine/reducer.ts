@@ -177,7 +177,10 @@ export function emptyGameState(): GameState {
  * Refill the face-up markets from their draw piles after a purchase removes a
  * card (rulebook p.6). Tops the public market up to 5, keeps an Expand Network
  * face-up while copies remain (its rising price is baked into the pile order),
- * and refills the rotating (non-SPECIAL) Black Market slots up to 3.
+ * and refills the rotating (non-SPECIAL, non-smuggled) Black Market slots up
+ * to 3. A Smuggler's moved card sits on top of that rotation as a one-time
+ * extra: it doesn't count toward the 3, and buying it never draws a
+ * replacement — only vacating one of the *regular* 3 slots does.
  */
 function refillMarkets(state: GameState): GameState {
   let publicMarket = state.publicMarket;
@@ -196,7 +199,7 @@ function refillMarkets(state: GameState): GameState {
     expandNetworkPile = expandNetworkPile.slice(1);
   }
 
-  let rotating = blackMarket.filter((c) => c.type !== 'SPECIAL').length;
+  let rotating = blackMarket.filter((c) => c.type !== 'SPECIAL' && !c.smuggled).length;
   while (rotating < BLACK_MARKET_ROTATING && blackMarketDeck.length > 0) {
     blackMarket = [...blackMarket, blackMarketDeck[0]];
     blackMarketDeck = blackMarketDeck.slice(1);
@@ -1235,7 +1238,7 @@ function applyRoleAbility(
       // Contraband: move a Market card into the Black Market, $1 cheaper.
       const card = state.publicMarket.find((c) => c.id === cardId);
       if (!card) return log(state, 'Smuggler must choose a card in the public Market.');
-      const moved: MarketCard = { ...card, source: 'BLACK_MARKET', cost: Math.max(0, card.cost - 1) };
+      const moved: MarketCard = { ...card, source: 'BLACK_MARKET', cost: Math.max(0, card.cost - 1), smuggled: true };
       let s: GameState = {
         ...state,
         publicMarket: state.publicMarket.filter((c) => c.id !== cardId),

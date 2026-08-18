@@ -566,6 +566,66 @@ describe('gameReducer — USE_ROLE_ABILITY (Criminals)', () => {
     expect(next.blackMarket[0].cost).toBe(2);
   });
 
+  it("Smuggler's vacated public slot refills, and the Black Market grows to hold the smuggled card on top of its usual 3", () => {
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('smuggler', 'CRIMINAL') })], {
+      publicMarket: [marketPerk('m1', 3), marketPerk('m2', 2), marketPerk('m3', 2), marketPerk('m4', 2), marketPerk('m5', 2)],
+      publicMarketDeck: [marketPerk('m6', 2)],
+      blackMarket: [marketPerk('b1', 2, 'BLACK_MARKET'), marketPerk('b2', 2, 'BLACK_MARKET'), marketPerk('b3', 2, 'BLACK_MARKET')],
+      blackMarketDeck: [marketPerk('b4', 2, 'BLACK_MARKET')],
+    });
+    const next = gameReducer(s, { type: 'USE_ROLE_ABILITY', payload: { cardId: 'm1' } });
+    // Public Market stays full — the smuggled card's slot is replaced from the deck.
+    expect(next.publicMarket.map((c) => c.id)).toEqual(['m2', 'm3', 'm4', 'm5', 'm6']);
+    expect(next.publicMarketDeck).toHaveLength(0);
+    // Black Market keeps its usual 3 plus the smuggled 4th — not topped up further,
+    // and not trimmed back down until a purchase actually clears a slot.
+    expect(next.blackMarket.map((c) => c.id).sort()).toEqual(['b1', 'b2', 'b3', 'm1']);
+    expect(next.blackMarketDeck).toHaveLength(1); // untouched — no room was drawn for
+  });
+
+  it("Buying one of the Black Market's regular 3 slots refills it, even with a smuggled extra still sitting there", () => {
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL') })], {
+      blackMarket: [
+        marketPerk('b1', 1, 'BLACK_MARKET'),
+        marketPerk('b2', 1, 'BLACK_MARKET'),
+        marketPerk('b3', 1, 'BLACK_MARKET'),
+        { ...marketPerk('m1', 1, 'BLACK_MARKET'), smuggled: true }, // a smuggled extra, not one of the 3
+      ],
+      blackMarketDeck: [marketPerk('b4', 1, 'BLACK_MARKET'), marketPerk('b5', 1, 'BLACK_MARKET')],
+    });
+    const resetTurn = (st: GameState): GameState => ({
+      ...st,
+      players: st.players.map((p) => ({ ...p, hasPurchasedFromMarket: false, actionsRemaining: 3 })),
+    });
+
+    // b3 sold: the smuggled m1 doesn't count toward the 3, so this still
+    // draws a replacement — b3 is replaced with b4, matching the smuggled
+    // card riding along untouched.
+    let next = gameReducer(s, { type: 'PURCHASE', cardId: 'b3' });
+    expect(next.blackMarket.map((c) => c.id).sort()).toEqual(['b1', 'b2', 'b4', 'm1']);
+    expect(next.blackMarketDeck).toHaveLength(1);
+
+    next = gameReducer(resetTurn(next), { type: 'PURCHASE', cardId: 'b1' });
+    expect(next.blackMarket.map((c) => c.id).sort()).toEqual(['b2', 'b4', 'b5', 'm1']);
+    expect(next.blackMarketDeck).toHaveLength(0);
+  });
+
+  it('Buying the smuggled card itself never draws a replacement', () => {
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL') })], {
+      blackMarket: [
+        marketPerk('b1', 1, 'BLACK_MARKET'),
+        marketPerk('b2', 1, 'BLACK_MARKET'),
+        marketPerk('b3', 1, 'BLACK_MARKET'),
+        { ...marketPerk('m1', 1, 'BLACK_MARKET'), smuggled: true },
+      ],
+      blackMarketDeck: [marketPerk('b4', 1, 'BLACK_MARKET')],
+    });
+    const next = gameReducer(s, { type: 'PURCHASE', cardId: 'm1' });
+    // The regular 3 are already full — buying the smuggled extra just removes it.
+    expect(next.blackMarket.map((c) => c.id).sort()).toEqual(['b1', 'b2', 'b3']);
+    expect(next.blackMarketDeck).toHaveLength(1); // untouched
+  });
+
   it('Forger discards hand Evidence to clear a matching grid slot', () => {
     const s = stateWith([mkPlayer({ id: 'p0', role: role('forger', 'CRIMINAL'), hand: [evidence('e1', ['MEANS'])] })], {
       evidenceGrid: { ...fullGrid(), TIME: { cards: [] } },

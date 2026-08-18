@@ -70,6 +70,15 @@ export interface MarketCard {
 
   /** Only for type 'WEAPON': base power level it contributes in combat. */
   power?: number;
+
+  /**
+   * Set when the Smuggler moved this card from the Market into the Black
+   * Market. It's an extra offer on top of the Black Market's usual 3-card
+   * rotation, not a member of it: buying it never triggers a replacement
+   * draw, and it doesn't count toward the threshold that decides whether the
+   * *other* Black Market cards need one (see refillMarkets in reducer.ts).
+   */
+  smuggled?: boolean;
 }
 
 /**
