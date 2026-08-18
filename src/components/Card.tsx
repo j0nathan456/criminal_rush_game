@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ActionCard, MarketCard, AnyCard } from '../types/cards';
-import { CARD_TYPE_META, MARKET_TYPE_META, CATEGORY_META } from '../constants/theme';
+import { CARD_TYPE_META, MARKET_TYPE_META, CATEGORY_META, TEAM_META } from '../constants/theme';
 import { cardArtUrl } from '../constants/cardArt';
 import { cardHover } from '../ui/motion';
 
@@ -58,6 +58,8 @@ export function Card({ card, faceDown, selected, disabled, dimmed, reason, previ
   }
 
   const market = isMarketCard(card);
+  const marketCard = market ? (card as MarketCard) : undefined;
+  const isSmuggled = Boolean(marketCard?.smuggled);
   const meta = typeMeta(card);
   const clickable = Boolean(onClick) && !disabled;
   const art = cardArtUrl(card);
@@ -79,9 +81,20 @@ export function Card({ card, faceDown, selected, disabled, dimmed, reason, previ
       className={`relative ${CARD_SIZE} overflow-hidden rounded-xl border-2 bg-white shadow-noir ${ring} ${dim}`}
     >
       <img src={art} alt={card.name} loading="lazy" className="block h-full w-full object-contain" />
+      {isSmuggled && (
+        <span
+          className="absolute left-1 top-1 rounded-md bg-ink/85 px-1.5 text-[9px] font-bold uppercase tracking-wide"
+          style={{ color: TEAM_META.CRIMINAL.color }}
+        >
+          Smuggled
+        </span>
+      )}
       {market && (
-        <span className="absolute right-1 top-1 rounded-md px-1.5 text-xs font-extrabold text-ink" style={{ background: meta.color }}>
-          ${(card as MarketCard).cost}
+        <span className="absolute right-1 top-1 flex items-center gap-1 rounded-md px-1.5 text-xs font-extrabold text-ink" style={{ background: meta.color }}>
+          {isSmuggled && marketCard!.originalCost !== undefined && (
+            <span className="text-[10px] font-semibold opacity-70 line-through">${marketCard!.originalCost}</span>
+          )}
+          ${marketCard!.cost}
         </span>
       )}
     </motion.button>
@@ -101,8 +114,11 @@ export function Card({ card, faceDown, selected, disabled, dimmed, reason, previ
           <span aria-hidden="true">{meta.icon}</span> {meta.label}
         </span>
         {market && (
-          <span className="rounded-md px-1.5 font-extrabold text-ink" style={{ background: meta.color }}>
-            ${(card as MarketCard).cost}
+          <span className="flex items-center gap-1 rounded-md px-1.5 font-extrabold text-ink" style={{ background: meta.color }}>
+            {isSmuggled && marketCard!.originalCost !== undefined && (
+              <span className="text-[10px] font-semibold opacity-70 line-through">${marketCard!.originalCost}</span>
+            )}
+            ${marketCard!.cost}
           </span>
         )}
       </header>
@@ -117,6 +133,11 @@ export function Card({ card, faceDown, selected, disabled, dimmed, reason, previ
               {CATEGORY_META[cat].icon} {CATEGORY_META[cat].label}
             </span>
           ))}
+        {isSmuggled && (
+          <span className="chip text-ink" style={{ background: TEAM_META.CRIMINAL.color }}>
+            Smuggled
+          </span>
+        )}
         {market && (card as MarketCard).vpValue ? (
           <span className="chip bg-amber text-ink">★ +{(card as MarketCard).vpValue} VP</span>
         ) : null}
@@ -147,6 +168,8 @@ function CardPreview({
   meta: { label: string; color: string; icon: string };
 }) {
   const market = isMarketCard(card);
+  const marketCard = market ? (card as MarketCard) : undefined;
+  const isSmuggled = Boolean(marketCard?.smuggled);
   return (
     <motion.div
       initial={{ opacity: 0, y: 6, scale: 0.96 }}
@@ -159,11 +182,23 @@ function CardPreview({
       style={{ borderColor: meta.color }}
     >
       {art && <img src={art} alt="" className="mb-2 max-h-56 w-full rounded-lg bg-white object-contain" />}
+      {isSmuggled && (
+        <span className="mb-1 inline-block rounded-md px-1.5 text-[10px] font-bold uppercase tracking-wide text-ink" style={{ background: TEAM_META.CRIMINAL.color }}>
+          Smuggled
+        </span>
+      )}
       <div className="flex items-center justify-between text-xs font-bold">
         <span style={{ color: meta.color }}>
           <span aria-hidden="true">{meta.icon}</span> {meta.label}
         </span>
-        {market && <span className="font-extrabold text-amber">${(card as MarketCard).cost}</span>}
+        {market && (
+          <span className="flex items-center gap-1 font-extrabold text-amber">
+            {isSmuggled && marketCard!.originalCost !== undefined && (
+              <span className="text-[10px] font-semibold text-fog line-through">${marketCard!.originalCost}</span>
+            )}
+            ${marketCard!.cost}
+          </span>
+        )}
       </div>
       <div className="mt-1 text-base font-extrabold leading-tight text-chalk">{card.name}</div>
       <p className="mt-1 text-[13px] leading-snug text-fog">{card.description}</p>

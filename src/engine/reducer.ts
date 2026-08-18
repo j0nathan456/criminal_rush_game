@@ -1238,7 +1238,13 @@ function applyRoleAbility(
       // Contraband: move a Market card into the Black Market, $1 cheaper.
       const card = state.publicMarket.find((c) => c.id === cardId);
       if (!card) return log(state, 'Smuggler must choose a card in the public Market.');
-      const moved: MarketCard = { ...card, source: 'BLACK_MARKET', cost: Math.max(0, card.cost - 1), smuggled: true };
+      const moved: MarketCard = {
+        ...card,
+        source: 'BLACK_MARKET',
+        cost: Math.max(0, card.cost - 1),
+        smuggled: true,
+        originalCost: card.cost,
+      };
       let s: GameState = {
         ...state,
         publicMarket: state.publicMarket.filter((c) => c.id !== cardId),

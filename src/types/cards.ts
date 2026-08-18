@@ -79,6 +79,9 @@ export interface MarketCard {
    * *other* Black Market cards need one (see refillMarkets in reducer.ts).
    */
   smuggled?: boolean;
+
+  /** Only set alongside `smuggled`: the card's cost before the $1 discount, shown crossed out next to `cost`. */
+  originalCost?: number;
 }
 
 /**

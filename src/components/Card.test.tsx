@@ -37,6 +37,30 @@ describe('<Card />', () => {
     expect(screen.getByText('$3')).toBeInTheDocument();
   });
 
+  it('renders a Smuggler-moved (smuggled) Black Market card with a "Smuggled" tag and the crossed-out original price', () => {
+    const smuggled: MarketCard = {
+      id: 'm2', name: 'Unmarked Gadget', description: 'Steal a card.',
+      cost: 2, source: 'BLACK_MARKET', type: 'PERK', smuggled: true, originalCost: 3,
+    };
+    render(<Card card={smuggled} />);
+    expect(screen.getByText('Unmarked Gadget')).toBeInTheDocument();
+    expect(screen.getByText('Smuggled')).toBeInTheDocument();
+    expect(screen.getByText('$2')).toBeInTheDocument();
+    expect(screen.getByText('$3')).toHaveClass('line-through');
+  });
+
+  it('renders a smuggled card with printed art with the tag and crossed-out price overlaid', () => {
+    const smuggledWithArt: MarketCard = {
+      id: 'm3', name: 'Hammer', description: '+2 power.',
+      cost: 3, source: 'BLACK_MARKET', type: 'WEAPON', smuggled: true, originalCost: 4,
+    };
+    render(<Card card={smuggledWithArt} />);
+    expect(screen.getByAltText('Hammer')).toBeInTheDocument();
+    expect(screen.getByText('Smuggled')).toBeInTheDocument();
+    expect(screen.getByText('$3')).toBeInTheDocument();
+    expect(screen.getByText('$4')).toHaveClass('line-through');
+  });
+
   it('renders a card with printed art full-face as an image', () => {
     render(<Card card={weapon} />);
     const img = screen.getByAltText('Hammer') as HTMLImageElement;
