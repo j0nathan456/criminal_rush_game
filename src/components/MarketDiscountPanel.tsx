@@ -11,24 +11,27 @@ export interface MarketDiscountPanelProps {
 
 /**
  * Spring Cleaning's follow-up: the Market has just been discarded-and-refilled
- * (see pendingMarketDiscount), and the player may buy one card from it at a
- * discount, or skip. Not blocking — the player can take other actions first
- * and come back, but it's forfeit at end of turn if left unused.
+ * (see pendingMarketDiscount), and the player may buy one *perk* from it at a
+ * discount (rulebook p.13 — weapons don't qualify), or skip. Not blocking —
+ * the player can take other actions first and come back, but it's forfeit at
+ * end of turn if left unused.
  */
 export function MarketDiscountPanel({ state, viewerIndex, amount, onBuy, onSkip }: MarketDiscountPanelProps) {
   const viewer = state.players[viewerIndex];
   if (!viewer) return null;
+
+  const perks = state.publicMarket.filter((c) => c.type === 'PERK');
 
   return (
     <section className="cr-role" aria-label="Market discount">
       <header className="cr-role__head" style={{ color: TEAM_META[viewer.team].color }}>
         <h2>🧹 Spring Cleaning discount</h2>
       </header>
-      <p className="cr-role__desc">You may buy one Market card for ${amount} off, or skip.</p>
+      <p className="cr-role__desc">You may buy one perk from the Market for ${amount} off, or skip.</p>
       <div className="cr-role__body">
         <div className="cr-role__chips">
-          {state.publicMarket.length === 0 && <span className="cr-role__empty">The Market is empty.</span>}
-          {state.publicMarket.map((c) => (
+          {perks.length === 0 && <span className="cr-role__empty">No perks in the Market right now.</span>}
+          {perks.map((c) => (
             <button
               key={c.id}
               type="button"

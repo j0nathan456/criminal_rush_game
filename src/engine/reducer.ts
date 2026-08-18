@@ -702,6 +702,7 @@ function purchase(state: GameState, idx: number, player: Player, cardId: string)
  * Spring Cleaning's follow-up purchase: spends no action and doesn't count
  * against the once-per-turn Market limit, since the discount was already
  * earned by playing the Event. Only the player it was offered to may use it.
+ * Perks only, per the rulebook (p.13) — not weapons.
  */
 function redeemMarketDiscount(state: GameState, idx: number, player: Player, cardId: string): GameState {
   const pending = state.pendingMarketDiscount;
@@ -710,6 +711,7 @@ function redeemMarketDiscount(state: GameState, idx: number, player: Player, car
     spendAction: false,
     setPurchaseFlag: false,
     costDelta: -pending.amount,
+    requireType: ['PERK'],
   });
   if (!ok) return next;
   return { ...next, pendingMarketDiscount: null };
@@ -791,6 +793,8 @@ interface PurchaseOptions {
   costDelta?: number;
   /** If set, the card's weaponType must be one of these (Evil Scientist). */
   requireWeaponType?: WeaponType[];
+  /** If set, the card's type must be one of these (Spring Cleaning: perks only). */
+  requireType?: MarketCard['type'][];
 }
 
 /**
@@ -817,6 +821,9 @@ function doPurchase(
   if (inBlack && player.team !== 'CRIMINAL') return fail('Only Criminals may buy from the Black Market.');
   if (opts.requireWeaponType && (card.type !== 'WEAPON' || !card.weaponType || !opts.requireWeaponType.includes(card.weaponType))) {
     return fail(`${card.name} is not a ${opts.requireWeaponType.join('/')} weapon.`);
+  }
+  if (opts.requireType && !opts.requireType.includes(card.type)) {
+    return fail(`${card.name} is not a ${opts.requireType.join('/')}.`);
   }
 
   // Expand Network costs $1 more for captured Criminals (rulebook p.16).

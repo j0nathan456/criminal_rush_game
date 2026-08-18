@@ -952,6 +952,18 @@ describe('gameReducer — USE_MARKET_DISCOUNT / SKIP_MARKET_DISCOUNT', () => {
     expect(next.pendingMarketDiscount).toBeNull();
   });
 
+  it('refuses to spend the discount on a weapon — Spring Cleaning only discounts perks', () => {
+    const wpn: MarketCard = { id: 'm1', name: 'Bat', description: '', cost: 3, source: 'PUBLIC', type: 'WEAPON' };
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 5 })], {
+      publicMarket: [wpn],
+      pendingMarketDiscount: { playerId: 'p0', amount: 1 },
+    });
+    const next = gameReducer(s, { type: 'USE_MARKET_DISCOUNT', cardId: 'm1' });
+    expect(next.players[0].inventory).toHaveLength(0);
+    expect(next.players[0].money).toBe(5); // untouched
+    expect(next.pendingMarketDiscount).toEqual({ playerId: 'p0', amount: 1 }); // still pending
+  });
+
   it('refuses when no discount is pending for this player', () => {
     const perk: MarketCard = { id: 'm1', name: 'Computer', description: '', cost: 3, source: 'PUBLIC', type: 'PERK' };
     const s = stateWith([mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 5 })], { publicMarket: [perk] });
