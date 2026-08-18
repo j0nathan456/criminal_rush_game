@@ -61,7 +61,7 @@ export interface GameBoardHandlers {
   onCancelEvent?: () => void;
   onUseMarketDiscount?: (cardId: string) => void;
   onSkipMarketDiscount?: () => void;
-  onResolveThreaten?: (mode: 'MONEY' | 'DISCARD') => void;
+  onResolveThreaten?: (mode: 'MONEY' | 'DISCARD', cardId?: string) => void;
   onResolveSheriff?: (cardId: string, category?: EvidenceCategory) => void;
   onSubmitExpose?: (targetId: string, evidenceChoices: Partial<Record<EvidenceCategory, string>>) => void;
   onCancelExpose?: () => void;

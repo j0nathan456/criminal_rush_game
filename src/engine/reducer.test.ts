@@ -534,12 +534,33 @@ describe('gameReducer — USE_ROLE_ABILITY (Criminals)', () => {
     const blocked = gameReducer(threatened, { type: 'DRAW_CARD' });
     expect(blocked.pendingThreaten).toEqual({ targetId: 'p1' });
 
-    // The target — not the Arsonist — picks discarding over losing money.
-    const resolved = gameReducer(threatened, { type: 'RESOLVE_THREATEN', mode: 'DISCARD' });
+    // The target — not the Arsonist — picks discarding over losing money,
+    // and picks which card to discard themselves (not random).
+    const resolved = gameReducer(threatened, { type: 'RESOLVE_THREATEN', mode: 'DISCARD', cardId: 'e1' });
     expect(resolved.pendingThreaten).toBeNull();
     expect(resolved.players[1].money).toBe(2);
     expect(resolved.players[1].hand).toHaveLength(0);
     expect(resolved.discardPile).toContainEqual(expect.objectContaining({ id: 'e1' }));
+  });
+
+  it("Threaten's discard is the target's own choice of card, not the first one in hand", () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('arsonist', 'CRIMINAL') }),
+      mkPlayer({
+        id: 'p1', role: role('mayor', 'CIVILIAN'), money: 2,
+        hand: [evidence('e1', ['MEANS']), evidence('e2', ['MOTIVE'])],
+      }),
+    ]);
+    const threatened = gameReducer(s, { type: 'USE_ROLE_ABILITY', payload: { targetId: 'p1' } });
+    // Choosing DISCARD without a card yet doesn't resolve — still their turn to pick.
+    const notYet = gameReducer(threatened, { type: 'RESOLVE_THREATEN', mode: 'DISCARD' });
+    expect(notYet.pendingThreaten).toEqual({ targetId: 'p1' });
+    expect(notYet.players[1].hand).toHaveLength(2);
+
+    // They pick the second card specifically, not hand[0].
+    const resolved = gameReducer(threatened, { type: 'RESOLVE_THREATEN', mode: 'DISCARD', cardId: 'e2' });
+    expect(resolved.players[1].hand.map((c) => c.id)).toEqual(['e1']);
+    expect(resolved.discardPile).toContainEqual(expect.objectContaining({ id: 'e2' }));
   });
 
   it('Arsonist Threaten falls back to the only option the target can afford', () => {
@@ -549,7 +570,7 @@ describe('gameReducer — USE_ROLE_ABILITY (Criminals)', () => {
     ]);
     const threatened = gameReducer(s, { type: 'USE_ROLE_ABILITY', payload: { targetId: 'p1' } });
     // Target tries to choose MONEY, but has none — forced to discard instead.
-    const resolved = gameReducer(threatened, { type: 'RESOLVE_THREATEN', mode: 'MONEY' });
+    const resolved = gameReducer(threatened, { type: 'RESOLVE_THREATEN', mode: 'MONEY', cardId: 'e1' });
     expect(resolved.players[1].money).toBe(0);
     expect(resolved.players[1].hand).toHaveLength(0);
   });

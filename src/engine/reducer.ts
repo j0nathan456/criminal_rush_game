@@ -52,7 +52,7 @@ export type GameAction =
   | { type: 'CLEAR_TRAFFIC' }
   | { type: 'USE_MARKET_DISCOUNT'; cardId: string }
   | { type: 'SKIP_MARKET_DISCOUNT' }
-  | { type: 'RESOLVE_THREATEN'; mode: 'MONEY' | 'DISCARD' }
+  | { type: 'RESOLVE_THREATEN'; mode: 'MONEY' | 'DISCARD'; cardId?: string }
   | { type: 'RESOLVE_SHERIFF'; cardId: string; category?: EvidenceCategory }
   | { type: 'END_TURN' };
 
@@ -305,7 +305,7 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
     case 'SKIP_MARKET_DISCOUNT':
       return skipMarketDiscount(state, player);
     case 'RESOLVE_THREATEN':
-      return resolveThreaten(state, action.mode);
+      return resolveThreaten(state, action.mode, action.cardId);
     case 'RESOLVE_SHERIFF':
       return resolveSheriff(state, action.cardId, action.category);
     case 'END_TURN':
@@ -725,9 +725,10 @@ function skipMarketDiscount(state: GameState, player: Player): GameState {
  * Resolve the Arsonist's Threaten choice (see pendingThreaten). This is the
  * targeted Civilian's own decision, so — like COMBAT_CHOICE — it isn't gated
  * by `state.currentPlayerIndex`; the target is identified from the pending
- * state itself, not from whoever's turn it nominally is.
+ * state itself, not from whoever's turn it nominally is. Discarding is the
+ * target's own card choice, not random — mirrors Pistol's discard choice.
  */
-function resolveThreaten(state: GameState, mode: 'MONEY' | 'DISCARD'): GameState {
+function resolveThreaten(state: GameState, mode: 'MONEY' | 'DISCARD', cardId?: string): GameState {
   const pending = state.pendingThreaten;
   if (!pending) return state;
   const targetIndex = playerIndexById(state, pending.targetId);
@@ -745,10 +746,11 @@ function resolveThreaten(state: GameState, mode: 'MONEY' | 'DISCARD'): GameState
     const s = updatePlayer(state, targetIndex, (p) => ({ ...p, money: p.money - 1 }));
     return log({ ...s, pendingThreaten: null }, `${target.name} loses $1.`);
   }
-  const discarded = target.hand[0];
-  let s = updatePlayer(state, targetIndex, (p) => ({ ...p, hand: p.hand.slice(1) }));
+  const discarded = target.hand.find((c) => c.id === cardId);
+  if (!discarded) return log(state, `${target.name} must choose a card to discard.`);
+  let s = updatePlayer(state, targetIndex, (p) => ({ ...p, hand: p.hand.filter((c) => c.id !== cardId) }));
   s = { ...s, discardPile: [...s.discardPile, discarded], pendingThreaten: null };
-  return log(s, `${target.name} discards a card.`);
+  return log(s, `${target.name} discards ${discarded.name}.`);
 }
 
 /**
