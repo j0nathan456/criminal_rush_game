@@ -58,11 +58,10 @@ export function RoleCard({
     return (
       <div
         key={item.id}
-        title={item.description}
         style={{ borderColor: typeMeta.color }}
         className="flex items-center justify-between gap-2 rounded-lg border-l-[3px] bg-panel-2/70 px-2.5 py-1.5 text-[13px]"
       >
-        <span className="truncate">
+        <span className="truncate" title={`${item.name} — ${item.description}`}>
           <span aria-hidden="true">{typeMeta.icon}</span> {item.name}
         </span>
         <span className="flex shrink-0 gap-1.5">
