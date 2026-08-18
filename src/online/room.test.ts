@@ -231,6 +231,19 @@ describe('viewFor redaction', () => {
     expect(viewFor(room, 't1').state?.lastPeek?.cards).toHaveLength(1); // owner (seat 1)
     expect(viewFor(room, 't0').state?.lastPeek).toBeNull(); // everyone else
   });
+
+  it("reveals the Sheriff's subpoena only to the Sheriff", () => {
+    const base = emptyGameState();
+    const state: GameState = {
+      ...base,
+      players: [playerStub('p0', 'A'), playerStub('p1', 'B')],
+      pendingSheriff: { sheriffId: 'p0', targetId: 'p1', cards: [card('secret')] },
+    };
+    const room = startedRoomWithState(state);
+
+    expect(viewFor(room, 't0').state?.pendingSheriff?.cards).toHaveLength(1); // the Sheriff (seat 0)
+    expect(viewFor(room, 't1').state?.pendingSheriff).toBeNull(); // everyone else
+  });
 });
 
 describe('leaveRoom', () => {

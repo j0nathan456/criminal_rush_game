@@ -79,14 +79,6 @@ export function RoleAbilityPanel({
     </div>
   );
 
-  const categoryRow = (only?: EvidenceCategory[]) => (
-    <div className="cr-role__chips">
-      {EVIDENCE_ORDER.filter((c) => !only || only.includes(c)).map((c) =>
-        chip(CATEGORY_META[c].label, category === c, () => setCategory(c), c),
-      )}
-    </div>
-  );
-
   const modeRow = (options: { value: Mode; label: string }[]) => (
     <div className="cr-role__chips">
       {options.map((o) => chip(o.label, mode === o.value, () => setMode(o.value), o.value))}
@@ -121,15 +113,17 @@ export function RoleAbilityPanel({
       break;
     }
     case 'sheriff':
+      // Subpoena: pick an opponent by name only — that's all this step
+      // reveals. Their Evidence cards only surface after the engine commits
+      // to the target (see pendingSheriff/SheriffPanel), so the reveal
+      // survives online redaction the same way the Spy's peek does.
       body = (
         <>
-          <p>Subpoena an opponent, then play one of their Evidence cards:</p>
+          <p>Subpoena an opponent — you'll see their Evidence cards next:</p>
           {playerRow(opponents)}
-          {target && (<><p className="cr-role__sub">Choose an Evidence card:</p>{cardRow(target.hand.filter((c) => c.type === 'EVIDENCE'), 'No Evidence cards visible.')}</>)}
-          {cardId && (<><p className="cr-role__sub">Play into which category?</p>{categoryRow()}</>)}
         </>
       );
-      canSubmit = !!targetId && !!cardId && !!category;
+      canSubmit = !!targetId;
       break;
     case 'bodyguard':
       body = (<><p>Give the Bodyguard token to a teammate:</p>{playerRow(teammates)}</>);

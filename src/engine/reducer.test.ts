@@ -406,15 +406,43 @@ describe('gameReducer — USE_ROLE_ABILITY (Civilians)', () => {
     expect(next.players[0].hasUsedRoleAbility).toBe(true);
   });
 
-  it('Sheriff plays an opponent’s Evidence card into the grid', () => {
+  it('Sheriff subpoenas an opponent, revealing their Evidence, then plays one into its category', () => {
     const s = stateWith([
       mkPlayer({ id: 'p0', role: role('sheriff', 'CIVILIAN') }),
       mkPlayer({ id: 'p1', role: role('hitman', 'CRIMINAL'), hand: [evidence('e1', ['MEANS'])] }),
     ]);
-    const next = gameReducer(s, { type: 'USE_ROLE_ABILITY', payload: { targetId: 'p1', cardId: 'e1', category: 'MEANS' } });
+    const revealed = gameReducer(s, { type: 'USE_ROLE_ABILITY', payload: { targetId: 'p1' } });
+    expect(revealed.players[0].actionsRemaining).toBe(2); // spent on targeting alone
+    expect(revealed.pendingSheriff?.cards.map((c) => c.id)).toEqual(['e1']);
+    const next = gameReducer(revealed, { type: 'RESOLVE_SHERIFF', cardId: 'e1' });
     expect(next.evidenceGrid.MEANS.cards.map((c) => c.id)).toEqual(['e1']);
     expect(next.players[1].hand).toHaveLength(0);
+    expect(next.pendingSheriff).toBeNull();
+  });
+
+  it('Sheriff must choose a category for a wild Evidence card', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('sheriff', 'CIVILIAN') }),
+      mkPlayer({ id: 'p1', role: role('hitman', 'CRIMINAL'), hand: [evidence('wild1', ['MEANS', 'MOTIVE'])] }),
+    ]);
+    const revealed = gameReducer(s, { type: 'USE_ROLE_ABILITY', payload: { targetId: 'p1' } });
+    const stuck = gameReducer(revealed, { type: 'RESOLVE_SHERIFF', cardId: 'wild1' });
+    expect(stuck.pendingSheriff).not.toBeNull(); // no category chosen yet — still pending
+    const next = gameReducer(revealed, { type: 'RESOLVE_SHERIFF', cardId: 'wild1', category: 'MOTIVE' });
+    expect(next.evidenceGrid.MOTIVE.cards.map((c) => c.id)).toEqual(['wild1']);
+    expect(next.pendingSheriff).toBeNull();
+  });
+
+  it('Sheriff subpoena is wasted when the target has no Evidence cards', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('sheriff', 'CIVILIAN') }),
+      mkPlayer({ id: 'p1', role: role('hitman', 'CRIMINAL'), hand: [] }),
+    ]);
+    const next = gameReducer(s, { type: 'USE_ROLE_ABILITY', payload: { targetId: 'p1' } });
+    expect(next.pendingSheriff).toBeNull();
     expect(next.players[0].actionsRemaining).toBe(2);
+    expect(next.players[0].hasUsedRoleAbility).toBe(true);
+    expect(next.gameLog.at(-1)).toMatch(/has no Evidence cards/);
   });
 
   it('Bodyguard moves the Protection token to a teammate', () => {

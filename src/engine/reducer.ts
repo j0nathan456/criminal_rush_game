@@ -53,6 +53,7 @@ export type GameAction =
   | { type: 'USE_MARKET_DISCOUNT'; cardId: string }
   | { type: 'SKIP_MARKET_DISCOUNT' }
   | { type: 'RESOLVE_THREATEN'; mode: 'MONEY' | 'DISCARD' }
+  | { type: 'RESOLVE_SHERIFF'; cardId: string; category?: EvidenceCategory }
   | { type: 'END_TURN' };
 
 /**
@@ -168,6 +169,7 @@ export function emptyGameState(): GameState {
     pendingThreaten: null,
     pendingTrade: null,
     pendingExpressShipping: null,
+    pendingSheriff: null,
   };
 }
 
@@ -254,6 +256,12 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
     return log(state, 'Choose Express Shipping\'s payout before taking other actions.');
   }
 
+  // The Sheriff has already spent the action subpoenaing an opponent; they
+  // must play one of the revealed Evidence cards before doing anything else.
+  if (state.pendingSheriff && action.type !== 'RESOLVE_SHERIFF') {
+    return log(state, "Resolve the Sheriff's subpoena before taking other actions.");
+  }
+
   switch (action.type) {
     case 'DRAW_CARD':
       return drawCard(state, idx, player);
@@ -295,6 +303,8 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
       return skipMarketDiscount(state, player);
     case 'RESOLVE_THREATEN':
       return resolveThreaten(state, action.mode);
+    case 'RESOLVE_SHERIFF':
+      return resolveSheriff(state, action.cardId, action.category);
     case 'END_TURN':
       return endTurn(state, idx);
     default:
@@ -738,6 +748,35 @@ function resolveThreaten(state: GameState, mode: 'MONEY' | 'DISCARD'): GameState
   return log(s, `${target.name} discards a card.`);
 }
 
+/**
+ * Resolve the Sheriff's card+category choice after their Subpoena reveal (see
+ * pendingSheriff). The action was already spent when the target was
+ * subpoenaed — pendingSheriff is only ever set once the reveal found at least
+ * one Evidence card, so a play is always possible here.
+ */
+function resolveSheriff(state: GameState, cardId: string, category?: EvidenceCategory): GameState {
+  const pending = state.pendingSheriff;
+  if (!pending) return state;
+  const sheriffIndex = playerIndexById(state, pending.sheriffId);
+  const targetIndex = playerIndexById(state, pending.targetId);
+  const sheriff = state.players[sheriffIndex];
+  const target = state.players[targetIndex];
+  if (!sheriff || !target) return { ...state, pendingSheriff: null };
+
+  const card = pending.cards.find((c) => c.id === cardId);
+  if (!card) return log(state, 'Choose one of the revealed Evidence cards.');
+  const options = card.evidenceCategories ?? [];
+  const resolvedCategory = options.length === 1 ? options[0] : category;
+  if (!resolvedCategory || !options.includes(resolvedCategory)) {
+    return log(state, `Choose a category for ${card.name}.`);
+  }
+
+  let s = updatePlayer(state, targetIndex, (p) => ({ ...p, hand: p.hand.filter((c) => c.id !== cardId) }));
+  s = placeEvidence(s, card, resolvedCategory, sheriff);
+  s = { ...s, pendingSheriff: null };
+  return log(s, `${sheriff.name} (Sheriff) subpoenas ${target.name} and plays ${card.name} into ${resolvedCategory}.`);
+}
+
 interface PurchaseOptions {
   /** Deduct 1 action for the buy itself (false when a role Action pays it). */
   spendAction?: boolean;
@@ -1101,14 +1140,19 @@ function applyRoleAbility(
     }
 
     case 'sheriff': {
-      // Subpoena: take an Evidence card from an opponent and play it now.
+      // Subpoena: force an opponent to reveal their Evidence cards. The
+      // action is spent on targeting alone (win or lose) — if they have none,
+      // it's wasted immediately; otherwise the card+category choice is a
+      // separate step (see pendingSheriff/resolveSheriff) so the reveal can
+      // survive online redaction the same way lastPeek does.
       if (!target || target.team === player.team) return log(state, 'Sheriff must target an opponent.');
-      const card = target.hand.find((c) => c.id === cardId);
-      if (!card || card.type !== 'EVIDENCE') return log(state, "That is not an Evidence card in the target's hand.");
-      if (!category || !card.evidenceCategories?.includes(category)) return log(state, `${card.name} cannot satisfy ${category}.`);
-      let s = updatePlayer(state, targetIndex, (p) => ({ ...p, hand: p.hand.filter((c) => c.id !== cardId) }));
-      s = placeEvidence(s, card, category, player);
-      return log(spend(s), `${player.name} (Sheriff) subpoenas ${target.name} and plays ${card.name} into ${category}.`);
+      const evidenceCards = target.hand.filter((c) => c.type === 'EVIDENCE');
+      const spent = spend(state);
+      if (evidenceCards.length === 0) {
+        return log(spent, `${target.name} has no Evidence cards — the Action is wasted.`);
+      }
+      const s = { ...spent, pendingSheriff: { sheriffId: player.id, targetId: target.id, cards: evidenceCards } };
+      return log(s, `${player.name} (Sheriff) subpoenas ${target.name}.`);
     }
 
     case 'bodyguard': {

@@ -193,6 +193,10 @@ function redactState(state: GameState, viewerId: string): GameState {
     drawPile: hiddenCards(state.drawPile.length, 'draw'),
     // The Spy's peek is private to the Spy.
     lastPeek: state.lastPeek && state.lastPeek.playerId === viewerId ? state.lastPeek : null,
+    // The Sheriff's subpoena reveal is private to the Sheriff — the target's
+    // hand is otherwise hidden above, so this is the only way they see it.
+    pendingSheriff:
+      state.pendingSheriff && state.pendingSheriff.sheriffId === viewerId ? state.pendingSheriff : null,
   };
 }
 

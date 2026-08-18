@@ -260,4 +260,14 @@ export interface GameState {
    * pattern rather than folding it silently into resolveTradeReturn.
    */
   pendingExpressShipping?: { playerId: string } | null;
+
+  /**
+   * Sheriff's Subpoena: after targeting an opponent, their Evidence cards are
+   * revealed here — the Sheriff's own decision, not another player's, but the
+   * revealed card identities must survive online redaction (see redactState
+   * in online/room.ts, exempted like lastPeek) so the Sheriff can actually see
+   * what to play. `cards` is a snapshot taken at reveal time (the target's
+   * hand may keep changing); resolved via RESOLVE_SHERIFF.
+   */
+  pendingSheriff?: { sheriffId: string; targetId: string; cards: ActionCard[] } | null;
 }
