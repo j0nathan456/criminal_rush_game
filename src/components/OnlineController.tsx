@@ -137,11 +137,23 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
                 <span className="grid h-6 w-6 place-items-center rounded-full bg-line text-xs font-bold">
                   {s.seat + 1}
                 </span>
-                <span className="text-sm">
+                <span className="flex-1 text-sm">
                   {s.name}
                   {s.seat === view.yourSeat ? ' (you)' : ''}
                   {s.seat === 0 ? ' · host' : ''}
                 </span>
+                {view.isHost && s.seat !== 0 && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost px-2 py-1 text-xs text-crim"
+                    disabled={game.connecting}
+                    onClick={() => game.kick(s.seat)}
+                    aria-label={`Remove ${s.name}`}
+                    title={`Remove ${s.name}`}
+                  >
+                    ✕
+                  </button>
+                )}
               </motion.div>
             ))}
           </div>

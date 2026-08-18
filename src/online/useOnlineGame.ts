@@ -53,6 +53,16 @@ function stateUrl(code: string, token: string | null): string {
   return `/api/state?code=${encodeURIComponent(code)}&token=${encodeURIComponent(token ?? '')}`;
 }
 
+/**
+ * `/api/state` never 404s for a token the room no longer recognizes — it
+ * just comes back with `yourSeat: -1` (see viewFor). That's how a kicked
+ * player finds out: their own poll returns a view that no longer includes
+ * them. Only meaningful pre-game — once started, seats are frozen.
+ */
+function wasRemoved(v: RoomView): boolean {
+  return !v.started && v.yourSeat === -1;
+}
+
 async function postJson<T>(url: string, payload: unknown): Promise<T> {
   const res = await fetch(url, {
     method: 'POST',
@@ -71,6 +81,8 @@ export interface OnlineGame {
   createRoom: (name: string) => Promise<void>;
   joinRoom: (code: string, name: string) => Promise<void>;
   start: () => Promise<void>;
+  /** Host-only: remove another not-yet-started player by their lobby seat. */
+  kick: (targetSeat: number) => Promise<void>;
   dispatch: (action: GameAction) => Promise<void>;
   leave: () => void;
 }
@@ -138,6 +150,19 @@ export function useOnlineGame(): OnlineGame {
     [run],
   );
 
+  const kick = useCallback(
+    (targetSeat: number) =>
+      run(async () => {
+        const { view: v } = await postJson<{ view: RoomView }>('/api/kick', {
+          code: codeRef.current,
+          token: tokenRef.current,
+          targetSeat,
+        });
+        setView(v);
+      }),
+    [run],
+  );
+
   const dispatch = useCallback(
     (action: GameAction) =>
       run(async () => {
@@ -191,7 +216,12 @@ export function useOnlineGame(): OnlineGame {
           return;
         }
         if (!res.ok) return;
-        setView((await res.json()) as RoomView);
+        const v = (await res.json()) as RoomView;
+        if (wasRemoved(v)) {
+          leave();
+          return;
+        }
+        setView(v);
       })
       .catch(() => {
         /* offline — keep the session and let the poll retry */
@@ -220,7 +250,16 @@ export function useOnlineGame(): OnlineGame {
           return;
         }
         if (!res.ok) return;
-        setView((await res.json()) as RoomView);
+        const v = (await res.json()) as RoomView;
+        if (wasRemoved(v)) {
+          clearSession();
+          codeRef.current = null;
+          tokenRef.current = null;
+          setView(null);
+          setError('You were removed from the room by the host.');
+          return;
+        }
+        setView(v);
       } catch {
         /* transient network error — keep the last view and retry next tick */
       }
@@ -232,5 +271,5 @@ export function useOnlineGame(): OnlineGame {
     };
   }, [view]);
 
-  return { view, error, connecting, createRoom, joinRoom, start, dispatch, leave };
+  return { view, error, connecting, createRoom, joinRoom, start, kick, dispatch, leave };
 }

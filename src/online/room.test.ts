@@ -3,6 +3,7 @@ import {
   createRoom,
   joinRoom,
   leaveRoom,
+  kickPlayer,
   startRoom,
   applyAction,
   viewFor,
@@ -272,6 +273,38 @@ describe('leaveRoom', () => {
     let room = createRoom({ code: 'ABCD', hostToken: 't0', hostName: 'Solo', now: 0 });
     room = leaveRoom(room, 't0');
     expect(room.players).toHaveLength(0);
+  });
+});
+
+describe('kickPlayer', () => {
+  it('removes the targeted seat and re-seats the rest contiguously', () => {
+    const room = roomWith(['Ava', 'Ben', 'Cara', 'Dev']); // Ava is the host (seat 0, t0)
+    const after = kickPlayer(room, { hostToken: 't0', targetSeat: 1 }); // Ben (seat 1) removed
+
+    expect(after.players).toHaveLength(3);
+    expect(after.players.map((p) => p.name)).toEqual(['Ava', 'Cara', 'Dev']);
+    expect(after.players.map((p) => p.seat)).toEqual([0, 1, 2]);
+    expect(after.players.map((p) => p.id)).toEqual(['p0', 'p1', 'p2']);
+  });
+
+  it('refuses a non-host caller', () => {
+    const room = roomWith(['Ava', 'Ben', 'Cara', 'Dev']);
+    expect(() => kickPlayer(room, { hostToken: 't1', targetSeat: 2 })).toThrow(/host/);
+  });
+
+  it('refuses to remove the host themselves', () => {
+    const room = roomWith(['Ava', 'Ben', 'Cara', 'Dev']);
+    expect(() => kickPlayer(room, { hostToken: 't0', targetSeat: 0 })).toThrow(/cannot remove themselves/);
+  });
+
+  it('refuses an unknown seat', () => {
+    const room = roomWith(['Ava', 'Ben', 'Cara', 'Dev']);
+    expect(() => kickPlayer(room, { hostToken: 't0', targetSeat: 9 })).toThrow(/no player/i);
+  });
+
+  it('refuses once the game has started', () => {
+    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev']), { token: 't0', newGame });
+    expect(() => kickPlayer(started, { hostToken: 't0', targetSeat: 1 })).toThrow(/game has started/);
   });
 });
 

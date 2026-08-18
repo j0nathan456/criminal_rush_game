@@ -73,6 +73,30 @@ export function leaveRoom(room: Room, token: string): Room {
   };
 }
 
+export interface KickPlayerInput {
+  hostToken: string;
+  /** The seat (as shown in the lobby) of the player to remove. */
+  targetSeat: number;
+}
+
+/**
+ * Host-only: remove another player from a not-yet-started room, re-seating
+ * everyone so seats and ids stay contiguous (`p0..pN`), same as leaveRoom.
+ * Unlike leaveRoom (which quietly no-ops for a token that isn't even in the
+ * room), this throws on any invalid request — it's an explicit privileged
+ * action, so a bad request should surface rather than fail silently.
+ */
+export function kickPlayer(room: Room, { hostToken, targetSeat }: KickPlayerInput): Room {
+  if (room.started) throw new RoomError('Cannot remove a player once the game has started.');
+  if (!isHost(room, hostToken)) throw new RoomError('Only the host can remove a player.');
+  if (targetSeat === 0) throw new RoomError('The host cannot remove themselves.');
+  if (!room.players.some((p) => p.seat === targetSeat)) throw new RoomError('No player in that seat.');
+  return {
+    ...room,
+    players: room.players.filter((p) => p.seat !== targetSeat).map((p, seat) => ({ ...p, seat, id: `p${seat}` })),
+  };
+}
+
 export interface StartRoomInput {
   token: string;
   newGame: (playerNames: string[]) => GameState;
