@@ -847,6 +847,56 @@ describe('gameReducer — Event cards', () => {
     expect(next.players[1].hand).toHaveLength(1); // untouched
   });
 
+  it('Gain Influence offers a Criminal a free burn when the taken card is Evidence', () => {
+    const evt: ActionCard = { id: 'e', name: 'Gain Influence', description: '', type: 'EVENT' };
+    const ev = evidence('ev', ['MEANS']);
+    const s = stateWith(
+      [
+        mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL'), hand: [evt] }),
+        mkPlayer({ id: 'p1', role: role('mayor', 'CIVILIAN'), hand: [ev] }),
+      ],
+      { drawPile: [money('d1', 1), money('d2', 1)] },
+    );
+    const next = gameReducer(s, { type: 'PLAY_CARD', cardId: 'e', targetId: 'p1' });
+    expect(next.pendingEvidenceBurn).toEqual({ playerId: 'p0', cardId: 'ev' });
+    expect(next.players[0].actionsRemaining).toBe(2); // only the event itself cost an action so far
+
+    // Other actions are blocked until the burn offer is answered.
+    const blocked = gameReducer(next, { type: 'DRAW_CARD' });
+    expect(blocked.pendingEvidenceBurn).toBeTruthy();
+
+    const burned = gameReducer(next, { type: 'RESOLVE_EVIDENCE_BURN', use: true });
+    expect(burned.pendingEvidenceBurn).toBeNull();
+    expect(burned.players[0].actionsRemaining).toBe(2); // free — no extra action spent
+    expect(burned.players[0].hand.some((c) => c.id === 'ev')).toBe(false);
+    expect(burned.discardPile.some((c) => c.id === 'ev')).toBe(true);
+    expect(burned.players[0].hand).toHaveLength(2); // drew 2 replacements
+  });
+
+  it('declining Gain Influence\'s burn offer leaves the Evidence in hand', () => {
+    const evt: ActionCard = { id: 'e', name: 'Gain Influence', description: '', type: 'EVENT' };
+    const ev = evidence('ev', ['MEANS']);
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL'), hand: [evt] }),
+      mkPlayer({ id: 'p1', role: role('mayor', 'CIVILIAN'), hand: [ev] }),
+    ]);
+    const next = gameReducer(s, { type: 'PLAY_CARD', cardId: 'e', targetId: 'p1' });
+    const kept = gameReducer(next, { type: 'RESOLVE_EVIDENCE_BURN', use: false });
+    expect(kept.pendingEvidenceBurn).toBeNull();
+    expect(kept.players[0].hand.some((c) => c.id === 'ev')).toBe(true);
+  });
+
+  it('Gain Influence does not offer a burn to a Civilian who takes Evidence', () => {
+    const evt: ActionCard = { id: 'e', name: 'Gain Influence', description: '', type: 'EVENT' };
+    const ev = evidence('ev', ['MEANS']);
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), hand: [evt] }),
+      mkPlayer({ id: 'p1', role: role('hitman', 'CRIMINAL'), hand: [ev] }),
+    ]);
+    const next = gameReducer(s, { type: 'PLAY_CARD', cardId: 'e', targetId: 'p1' });
+    expect(next.pendingEvidenceBurn).toBeFalsy();
+  });
+
   it('Tax Collection takes $1 from a chosen opponent', () => {
     const evt: ActionCard = { id: 'e', name: 'Tax Collection', description: '', type: 'EVENT' };
     const s = stateWith([

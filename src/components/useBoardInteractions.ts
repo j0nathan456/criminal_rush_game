@@ -267,6 +267,8 @@ export function useBoardInteractions(
     onUseJournal: (targetId: string | undefined, options: EventOptions) =>
       dispatch({ type: 'RESOLVE_JOURNAL', use: true, targetId, options }),
     onDeclineJournal: () => dispatch({ type: 'RESOLVE_JOURNAL', use: false }),
+    onUseEvidenceBurn: () => dispatch({ type: 'RESOLVE_EVIDENCE_BURN', use: true }),
+    onDeclineEvidenceBurn: () => dispatch({ type: 'RESOLVE_EVIDENCE_BURN', use: false }),
   };
 
   return {

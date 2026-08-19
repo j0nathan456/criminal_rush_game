@@ -19,6 +19,8 @@ function stateWith(players: Player[], over: Partial<GameState> = {}): GameState 
   return { ...emptyGameState(), players, ...over };
 }
 const taxCard: ActionCard = { id: 'e1', name: 'Tax Collection', description: '', type: 'EVENT' };
+const gainInfluenceCard: ActionCard = { id: 'e2', name: 'Gain Influence', description: '', type: 'EVENT' };
+const moneyCard: ActionCard = { id: 'm1', name: 'Profit', description: '', type: 'MONEY', value: 1 };
 
 describe('<EventPanel /> — Tax Collection', () => {
   it('only lists opponents with $1 or more, not the broke one or a teammate', () => {
@@ -56,5 +58,21 @@ describe('<EventPanel /> — Tax Collection', () => {
     render(<EventPanel state={s} viewerIndex={0} card={taxCard} onSubmit={vi.fn()} onCancel={() => {}} />);
     expect(screen.queryByText('Cy')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Play Tax Collection/ })).toBeDisabled();
+  });
+});
+
+describe('<EventPanel /> — Gain Influence', () => {
+  it('only lists opponents with a card in hand, not an empty-handed one or a teammate', () => {
+    const viewer = mkPlayer({ id: 'p0', name: 'Ana', role: role('mayor', 'CIVILIAN') });
+    const stockedFoe = mkPlayer({ id: 'p1', name: 'Ben', role: role('hitman', 'CRIMINAL'), hand: [moneyCard] });
+    const emptyFoe = mkPlayer({ id: 'p2', name: 'Cy', role: role('robber', 'CRIMINAL'), hand: [] });
+    const teammate = mkPlayer({ id: 'p3', name: 'Dee', role: role('attorney', 'CIVILIAN'), hand: [moneyCard] });
+    const s = stateWith([viewer, stockedFoe, emptyFoe, teammate]);
+
+    render(<EventPanel state={s} viewerIndex={0} card={gainInfluenceCard} onSubmit={vi.fn()} onCancel={() => {}} />);
+
+    expect(screen.getByText('Ben')).toBeInTheDocument();
+    expect(screen.queryByText('Cy')).not.toBeInTheDocument(); // opponent, but no cards to take
+    expect(screen.queryByText('Dee')).not.toBeInTheDocument(); // has cards, but a teammate
   });
 });

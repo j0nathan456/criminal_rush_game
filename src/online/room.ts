@@ -257,6 +257,10 @@ function redactState(state: GameState, viewerId: string): GameState {
     // otherwise hidden above, so this is the only way they see it.
     pendingManipulate:
       state.pendingManipulate && state.pendingManipulate.playerId === viewerId ? state.pendingManipulate : null,
+    // Gain Influence's burn offer references a card still sitting in the
+    // actor's own (otherwise-hidden) hand — private to them, like the above.
+    pendingEvidenceBurn:
+      state.pendingEvidenceBurn && state.pendingEvidenceBurn.playerId === viewerId ? state.pendingEvidenceBurn : null,
   };
 }
 

@@ -57,6 +57,7 @@ export type GameAction =
   | { type: 'RESOLVE_MANIPULATE'; cardId: string }
   | { type: 'RESOLVE_BODYGUARD_SETUP'; targetId: string }
   | { type: 'RESOLVE_JOURNAL'; use: boolean; targetId?: string; options?: EventOptions }
+  | { type: 'RESOLVE_EVIDENCE_BURN'; use: boolean }
   | { type: 'END_TURN' };
 
 /**
@@ -176,6 +177,7 @@ export function emptyGameState(): GameState {
     pendingManipulate: null,
     pendingBodyguardSetup: null,
     pendingJournal: null,
+    pendingEvidenceBurn: null,
   };
 }
 
@@ -290,6 +292,13 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
     return log(state, 'Resolve the Journal offer before taking other actions.');
   }
 
+  // Gain Influence hands a Criminal the option to burn the Evidence it just
+  // took for free — like Journal, this costs no action but still needs an
+  // answer before anything else so it's never silently skipped past.
+  if (state.pendingEvidenceBurn && action.type !== 'RESOLVE_EVIDENCE_BURN') {
+    return log(state, 'Resolve the Evidence burn offer before taking other actions.');
+  }
+
   switch (action.type) {
     case 'DRAW_CARD':
       return drawCard(state, idx, player);
@@ -339,6 +348,8 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
       return resolveBodyguardSetup(state, action.targetId);
     case 'RESOLVE_JOURNAL':
       return resolveJournal(state, action.use, action.targetId, action.options);
+    case 'RESOLVE_EVIDENCE_BURN':
+      return resolveEvidenceBurn(state, action.use);
     case 'END_TURN':
       return endTurn(state, idx);
     default:
@@ -478,7 +489,13 @@ function resolveEvent(state: GameState, idx: number, name: string, targetId: str
       const taken = victim.hand[0];
       let s = updatePlayer(state, victimIndex, (p) => ({ ...p, hand: p.hand.slice(1) }));
       s = updatePlayer(s, idx, (p) => ({ ...p, hand: [...p.hand, taken] }));
-      return log(s, `${actor.name} takes a card from ${victim.name}.`);
+      s = log(s, `${actor.name} takes a card from ${victim.name}.`);
+      // "If Evidence, you may... burn it as a Criminal" — offered as a free
+      // (no action cost) follow-up, same as the Journal's repeat offer.
+      if (taken.type === 'EVIDENCE' && actor.team === 'CRIMINAL') {
+        s = { ...s, pendingEvidenceBurn: { playerId: actor.id, cardId: taken.id } };
+      }
+      return s;
     }
     case 'Market Exchange': {
       // Give a perk to, or take a perk from, a teammate — then draw a card.
@@ -702,17 +719,19 @@ function placeEvidence(
 
 /**
  * Burn Evidence (rulebook p.5): a Criminal may discard an Evidence card from
- * hand to draw 2 new cards, in place of playing it into the grid.
+ * hand to draw 2 new cards, in place of playing it into the grid. `free`
+ * waives the action cost — used by Gain Influence's immediate burn offer,
+ * which the card text grants at no extra cost.
  */
-function burnEvidence(state: GameState, idx: number, player: Player, cardId: string): GameState {
-  if (player.actionsRemaining < 1) return log(state, `${player.name} has no actions left.`);
+function burnEvidence(state: GameState, idx: number, player: Player, cardId: string, opts: { free?: boolean } = {}): GameState {
+  if (!opts.free && player.actionsRemaining < 1) return log(state, `${player.name} has no actions left.`);
   const card = player.hand.find((c) => c.id === cardId);
   if (!card || card.type !== 'EVIDENCE') return log(state, 'That card is not evidence.');
 
   let s = updatePlayer(state, idx, (p) => ({
     ...p,
     hand: p.hand.filter((c) => c.id !== cardId),
-    actionsRemaining: p.actionsRemaining - 1,
+    actionsRemaining: opts.free ? p.actionsRemaining : p.actionsRemaining - 1,
   }));
   s = { ...s, discardPile: [...s.discardPile, card] };
   s = gameReducerDraw(s);
@@ -916,6 +935,26 @@ function resolveJournal(state: GameState, use: boolean, targetId?: string, optio
   s = resolveEvent(s, idx, pending.card.name, targetId, options ?? {});
   s = { ...s, pendingJournal: null };
   return log(s, `${player.name} discards their Journal to repeat ${pending.card.name}.`);
+}
+
+/**
+ * Resolve Gain Influence's free burn offer (see pendingEvidenceBurn). Declining
+ * just clears it, leaving the Evidence in the actor's hand to burn later (at
+ * the usual action cost) or hold. Using it burns the card for free.
+ */
+function resolveEvidenceBurn(state: GameState, use: boolean): GameState {
+  const pending = state.pendingEvidenceBurn;
+  if (!pending) return state;
+  const idx = playerIndexById(state, pending.playerId);
+  const player = state.players[idx];
+  if (!player) return { ...state, pendingEvidenceBurn: null };
+
+  if (!use) {
+    return { ...log(state, `${player.name} keeps the Evidence instead of burning it.`), pendingEvidenceBurn: null };
+  }
+
+  const s = burnEvidence(state, idx, player, pending.cardId, { free: true });
+  return { ...s, pendingEvidenceBurn: null };
 }
 
 interface PurchaseOptions {

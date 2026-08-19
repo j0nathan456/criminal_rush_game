@@ -52,7 +52,7 @@ describe('<JournalPanel />', () => {
   it('a configurable Event opens a fresh target picker instead of calling onUse right away', () => {
     const onUse = vi.fn();
     const actor = mkPlayer({ id: 'p0', name: 'Ana', role: role('mayor', 'CIVILIAN') });
-    const foe = mkPlayer({ id: 'p1', name: 'Ben', role: role('hitman', 'CRIMINAL') });
+    const foe = mkPlayer({ id: 'p1', name: 'Ben', role: role('hitman', 'CRIMINAL'), hand: [noInputCard] });
     const state = stateWith([actor, foe], { pendingJournal: { playerId: 'p0', card: configurableCard } });
     render(<JournalPanel state={state} viewerIndex={0} onUse={onUse} onDecline={vi.fn()} />);
 

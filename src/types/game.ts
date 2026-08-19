@@ -306,4 +306,14 @@ export interface GameState {
    * until answered via RESOLVE_JOURNAL, so the choice isn't missed.
    */
   pendingJournal?: { playerId: string; card: ActionCard } | null;
+
+  /**
+   * Gain Influence's free burn offer: set when the Evidence card it just took
+   * lands in a Criminal's hand (rulebook: "you may... burn it as a
+   * Criminal"). Free — costs no action — but still blocks other actions
+   * until answered via RESOLVE_EVIDENCE_BURN. Not redacted like pendingJournal
+   * (the card stays in the actor's own hand, not a public pile), so
+   * redactState hides it from everyone but the actor, same as pendingSheriff.
+   */
+  pendingEvidenceBurn?: { playerId: string; cardId: string } | null;
 }

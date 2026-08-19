@@ -100,10 +100,11 @@ export function EventPanel({ state, viewerIndex, card, onSubmit, onCancel, submi
       break;
     }
     case 'Gain Influence': {
+      const withCards = opponents.filter((p) => p.hand.length > 0);
       body = (
         <>
           <p>Choose an opponent to randomly take a card from:</p>
-          {playerRow(opponents)}
+          {playerRow(withCards)}
         </>
       );
       canSubmit = !!targetId;
