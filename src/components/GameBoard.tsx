@@ -27,6 +27,7 @@ import { AllySupportPanel } from './AllySupportPanel';
 import { EventPanel } from './EventPanel';
 import { MarketDiscountPanel } from './MarketDiscountPanel';
 import { ThreatenPanel } from './ThreatenPanel';
+import { BodyguardSetupPanel } from './BodyguardSetupPanel';
 import { SheriffPanel } from './SheriffPanel';
 import { ManipulatePanel } from './ManipulatePanel';
 import { ExposeEvidencePanel } from './ExposeEvidencePanel';
@@ -67,6 +68,7 @@ export interface GameBoardHandlers {
   onUseMarketDiscount?: (cardId: string) => void;
   onSkipMarketDiscount?: () => void;
   onResolveThreaten?: (mode: 'MONEY' | 'DISCARD', cardId?: string) => void;
+  onResolveBodyguardSetup?: (targetId: string) => void;
   onResolveSheriff?: (cardId: string, category?: EvidenceCategory) => void;
   onResolveManipulate?: (cardId: string) => void;
   onSubmitExpose?: (targetId: string, evidenceChoices: Partial<Record<EvidenceCategory, string>>) => void;
@@ -147,6 +149,7 @@ export function GameBoard({
   onUseMarketDiscount,
   onSkipMarketDiscount,
   onResolveThreaten,
+  onResolveBodyguardSetup,
   onResolveSheriff,
   onResolveManipulate,
   onSubmitExpose,
@@ -245,6 +248,10 @@ export function GameBoard({
         />
       )}
 
+      {state.pendingBodyguardSetup && !state.combat && !state.winner && (
+        <BodyguardSetupPanel state={state} viewerIndex={viewerIndex} onResolve={onResolveBodyguardSetup} />
+      )}
+
       {state.pendingThreaten && !state.combat && !state.winner && (
         <ThreatenPanel state={state} viewerIndex={viewerIndex} onResolveThreaten={onResolveThreaten} />
       )}
@@ -325,7 +332,7 @@ export function GameBoard({
                 </button>
               )}
               {selectedCard && selectedCard.type === 'EVIDENCE' && viewer.team === 'CIVILIAN' && isViewersTurn &&
-                !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.winner && (
+                !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.winner && (
                   <EvidencePlayPanel card={selectedCard} team={viewer.team} onPlay={onPlayEvidence} onCancel={onCancelEvidencePlay} />
               )}
 
@@ -333,10 +340,10 @@ export function GameBoard({
                   right under the viewer's own hand, rather than up at the top of
                   the page — this is their own decision, so it belongs next to the
                   hand they're making it from. */}
-              {targeting && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.winner && (
+              {targeting && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.winner && (
                 <TargetPicker state={state} viewerIndex={viewerIndex} mode={targeting} onSelectTarget={onSelectTarget} onCancel={onCancelTargeting} />
               )}
-              {exposeTargetId && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.winner && (
+              {exposeTargetId && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.winner && (
                 <ExposeEvidencePanel
                   state={state}
                   viewerIndex={viewerIndex}
@@ -345,28 +352,28 @@ export function GameBoard({
                   onCancel={onCancelExpose}
                 />
               )}
-              {roleAbilityOpen && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.winner && (
+              {roleAbilityOpen && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.winner && (
                 <RoleAbilityPanel state={state} viewerIndex={viewerIndex} onSubmit={onSubmitRoleAbility} onCancel={onCancelRoleAbility} />
               )}
-              {perkPickerOpen && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.winner && (
+              {perkPickerOpen && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.winner && (
                 <PerkPickerPanel viewer={viewer} onSelect={onSelectPerk} onCancel={onCancelPerkPicker} />
               )}
-              {activePerkId && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.winner && (
+              {activePerkId && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.winner && (
                 <PerkActionPanel state={state} viewerIndex={viewerIndex} perkId={activePerkId} onSubmit={onSubmitPerk} onCancel={onCancelPerk} />
               )}
               {state.pendingManipulate && !state.combat && !state.winner && (
                 <ManipulatePanel state={state} viewerIndex={viewerIndex} onResolve={onResolveManipulate} />
               )}
-              {allySupportCardId && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.winner && (
+              {allySupportCardId && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.winner && (
                 <AllySupportPanel state={state} viewerIndex={viewerIndex} onSubmit={onSubmitAllySupport} onCancel={onCancelAllySupport} />
               )}
-              {eventCardId && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.winner && (() => {
+              {eventCardId && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.winner && (() => {
                 const eventCard = viewer.hand.find((c) => c.id === eventCardId);
                 return eventCard ? (
                   <EventPanel state={state} viewerIndex={viewerIndex} card={eventCard} onSubmit={onSubmitEvent} onCancel={onCancelEvent} />
                 ) : null;
               })()}
-              {state.pendingMarketDiscount?.playerId === viewer.id && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.winner && (
+              {state.pendingMarketDiscount?.playerId === viewer.id && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.winner && (
                 <MarketDiscountPanel
                   state={state}
                   viewerIndex={viewerIndex}

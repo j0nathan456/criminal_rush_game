@@ -248,6 +248,7 @@ export function useBoardInteractions(
     onUseMarketDiscount: (cardId: string) => dispatch({ type: 'USE_MARKET_DISCOUNT', cardId }),
     onSkipMarketDiscount: () => dispatch({ type: 'SKIP_MARKET_DISCOUNT' }),
     onResolveThreaten: (mode: 'MONEY' | 'DISCARD', cardId?: string) => dispatch({ type: 'RESOLVE_THREATEN', mode, cardId }),
+    onResolveBodyguardSetup: (targetId: string) => dispatch({ type: 'RESOLVE_BODYGUARD_SETUP', targetId }),
     onResolveSheriff: (cardId: string, category?: EvidenceCategory) =>
       dispatch({ type: 'RESOLVE_SHERIFF', cardId, category }),
     onResolveManipulate: (cardId: string) => dispatch({ type: 'RESOLVE_MANIPULATE', cardId }),

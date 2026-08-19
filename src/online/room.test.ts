@@ -177,6 +177,25 @@ describe('applyAction', () => {
     expect(after.state?.pendingThreaten).toBeNull();
   });
 
+  it("authorizes RESOLVE_BODYGUARD_SETUP against the Bodyguard, not the current turn", () => {
+    const started = startRoom(roomWith(['A', 'B', 'C', 'D']), { token: 't0', newGame });
+    const state = started.state as GameState;
+    const currentSeat = state.currentPlayerIndex;
+    // +2 keeps the same team (seats alternate CIVILIAN/CRIMINAL) so the
+    // target is a legal same-team teammate, distinct from both the Bodyguard
+    // and (for this check) the current-turn player.
+    const bodyguardSeat = (currentSeat + 2) % 4;
+    const teammateSeat = currentSeat;
+    const room: Room = { ...started, state: { ...state, pendingBodyguardSetup: { bodyguardId: state.players[bodyguardSeat].id } } };
+    const action = { type: 'RESOLVE_BODYGUARD_SETUP' as const, targetId: state.players[teammateSeat].id };
+
+    // Even the current-turn player isn't necessarily the Bodyguard.
+    expect(() => applyAction(room, { token: `t${currentSeat}`, action, reducer: gameReducer })).toThrow(/not your Bodyguard choice/);
+
+    const after = applyAction(room, { token: `t${bodyguardSeat}`, action, reducer: gameReducer });
+    expect(after.state?.pendingBodyguardSetup).toBeNull();
+  });
+
   it('authorizes RESOLVE_TRADE_RETURN against the recipient, not the initiator', () => {
     const started = startRoom(roomWith(['A', 'B', 'C', 'D']), { token: 't0', newGame });
     const state = started.state as GameState;

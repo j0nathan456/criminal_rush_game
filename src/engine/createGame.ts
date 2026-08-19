@@ -91,15 +91,23 @@ export function createGame(options: CreateGameOptions): GameState {
   });
 
   // Bodyguard's Protection: at game start the token goes to a Civilian
-  // teammate (rulebook p.17). Prefer a different Civilian; fall back to the
-  // Bodyguard themselves if they have no teammate.
+  // teammate (rulebook p.17). With only one possible teammate (4-player
+  // games: 2 Civilians total) there's nothing to choose, so it's assigned
+  // automatically. With a genuine choice (5+ players, 2+ other Civilian
+  // teammates) the Bodyguard picks — see pendingBodyguardSetup/
+  // resolveBodyguardSetup — and play can't start until they do.
   const bodyguardIndex = players.findIndex((p) => p.role.id === 'bodyguard');
+  let pendingBodyguardSetup: GameState['pendingBodyguardSetup'] = null;
   if (bodyguardIndex >= 0) {
-    const teammateIndex = players.findIndex(
-      (p, i) => i !== bodyguardIndex && p.team === 'CIVILIAN',
-    );
-    const holder = teammateIndex >= 0 ? teammateIndex : bodyguardIndex;
-    players[holder] = { ...players[holder], hasBodyguardToken: true };
+    const teammateIndices = players
+      .map((_, i) => i)
+      .filter((i) => i !== bodyguardIndex && players[i].team === players[bodyguardIndex].team);
+    if (teammateIndices.length > 1) {
+      pendingBodyguardSetup = { bodyguardId: players[bodyguardIndex].id };
+    } else {
+      const holder = teammateIndices.length === 1 ? teammateIndices[0] : bodyguardIndex;
+      players[holder] = { ...players[holder], hasBodyguardToken: true };
+    }
   }
 
   // Face-up markets plus the face-down decks they refill from (rulebook p.6).
@@ -143,6 +151,9 @@ export function createGame(options: CreateGameOptions): GameState {
     expandNetworkPile,
     teamScores: { CIVILIAN: 0, CRIMINAL: 0 },
     vpTargets: config.vpTargets,
-    gameLog: ['The Rush begins!'],
+    pendingBodyguardSetup,
+    gameLog: pendingBodyguardSetup
+      ? ['The Rush begins!', 'The Bodyguard must give the Protection token to a teammate.']
+      : ['The Rush begins!'],
   };
 }

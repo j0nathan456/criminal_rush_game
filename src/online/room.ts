@@ -166,6 +166,8 @@ const COMBAT_PHASE_ACTIONS = new Set(['PLAY_POWER', 'COMBAT_DISCARD_MONEY']);
  *    victim, not the Arsonist (whose turn it nominally still is).
  *  - RESOLVE_TRADE_RETURN belongs to `pendingTrade.recipientId` — the
  *    teammate who owes a return gift, not the trade's initiator.
+ *  - RESOLVE_BODYGUARD_SETUP belongs to `pendingBodyguardSetup.bodyguardId`
+ *    — the Bodyguard isn't necessarily the starting (current) player.
  * Returns the room unchanged if the game is already over.
  */
 export function applyAction(room: Room, { token, action, reducer }: ApplyActionInput): Room {
@@ -187,6 +189,9 @@ export function applyAction(room: Room, { token, action, reducer }: ApplyActionI
   } else if (action.type === 'RESOLVE_TRADE_RETURN') {
     const recipientId = room.state.pendingTrade?.recipientId;
     if (!recipientId || me.id !== recipientId) throw new RoomError('It is not your trade to respond to.');
+  } else if (action.type === 'RESOLVE_BODYGUARD_SETUP') {
+    const bodyguardId = room.state.pendingBodyguardSetup?.bodyguardId;
+    if (!bodyguardId || me.id !== bodyguardId) throw new RoomError('It is not your Bodyguard choice to make.');
   } else if (!COMBAT_PHASE_ACTIONS.has(action.type)) {
     const currentId = room.state.players[room.state.currentPlayerIndex]?.id;
     if (me.id !== currentId) throw new RoomError('It is not your turn.');

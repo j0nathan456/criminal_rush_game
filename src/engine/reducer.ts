@@ -55,6 +55,7 @@ export type GameAction =
   | { type: 'RESOLVE_THREATEN'; mode: 'MONEY' | 'DISCARD'; cardId?: string }
   | { type: 'RESOLVE_SHERIFF'; cardId: string; category?: EvidenceCategory }
   | { type: 'RESOLVE_MANIPULATE'; cardId: string }
+  | { type: 'RESOLVE_BODYGUARD_SETUP'; targetId: string }
   | { type: 'END_TURN' };
 
 /**
@@ -172,6 +173,7 @@ export function emptyGameState(): GameState {
     pendingExpressShipping: null,
     pendingSheriff: null,
     pendingManipulate: null,
+    pendingBodyguardSetup: null,
   };
 }
 
@@ -274,6 +276,12 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
     return log(state, 'Finish using Manipulate before taking other actions.');
   }
 
+  // The game can't meaningfully start until the Bodyguard has assigned the
+  // Protection token — blocks everything, including ending the first turn.
+  if (state.pendingBodyguardSetup && action.type !== 'RESOLVE_BODYGUARD_SETUP') {
+    return log(state, 'The Bodyguard must give the Protection token to a teammate before play begins.');
+  }
+
   switch (action.type) {
     case 'DRAW_CARD':
       return drawCard(state, idx, player);
@@ -319,6 +327,8 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
       return resolveSheriff(state, action.cardId, action.category);
     case 'RESOLVE_MANIPULATE':
       return resolveManipulate(state, action.cardId);
+    case 'RESOLVE_BODYGUARD_SETUP':
+      return resolveBodyguardSetup(state, action.targetId);
     case 'END_TURN':
       return endTurn(state, idx);
     default:
@@ -834,6 +844,30 @@ function resolveManipulate(state: GameState, cardId: string): GameState {
   };
   const discardNote = rest.length ? ` Discards ${rest.map((c) => c.name).join(', ')}.` : '';
   return log(s, `${player.name} puts ${card.name} back on top of the deck.${discardNote}`);
+}
+
+/**
+ * Resolve the Bodyguard's start-of-game Protection choice (see
+ * pendingBodyguardSetup) — only ever set when there's a genuine choice (2+
+ * other Civilian teammates); createGame assigns the token automatically
+ * otherwise. Not gated by `state.currentPlayerIndex` — the Bodyguard isn't
+ * necessarily the starting player.
+ */
+function resolveBodyguardSetup(state: GameState, targetId: string): GameState {
+  const pending = state.pendingBodyguardSetup;
+  if (!pending) return state;
+  const bodyguardIndex = playerIndexById(state, pending.bodyguardId);
+  const bodyguard = state.players[bodyguardIndex];
+  if (!bodyguard) return { ...state, pendingBodyguardSetup: null };
+
+  const targetIndex = playerIndexById(state, targetId);
+  const target = state.players[targetIndex];
+  if (!target || target.id === bodyguard.id || target.team !== bodyguard.team) {
+    return log(state, 'Choose a Civilian teammate for the Bodyguard token.');
+  }
+
+  const s = updatePlayer(state, targetIndex, (p) => ({ ...p, hasBodyguardToken: true }));
+  return log({ ...s, pendingBodyguardSetup: null }, `${bodyguard.name} (Bodyguard) gives the Protection token to ${target.name}.`);
 }
 
 interface PurchaseOptions {

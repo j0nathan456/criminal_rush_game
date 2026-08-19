@@ -282,4 +282,15 @@ export interface GameState {
    * pendingSheriff, exempted the same way in redactState.
    */
   pendingManipulate?: { playerId: string; cards: ActionCard[]; phase: 'KEEP' | 'TOP' } | null;
+
+  /**
+   * Bodyguard's Protection at game start (rulebook p.17): with only one other
+   * Civilian to choose from (4-player games) the token is assigned
+   * automatically and this is never set. With a genuine choice (5+ players,
+   * 2+ other Civilian teammates) it's the Bodyguard's own pick, blocking
+   * every other action — including END_TURN — until resolved via
+   * RESOLVE_BODYGUARD_SETUP, since the game can't meaningfully start before
+   * it's answered.
+   */
+  pendingBodyguardSetup?: { bodyguardId: string } | null;
 }
