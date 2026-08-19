@@ -36,6 +36,7 @@ import { TradePanel } from './TradePanel';
 import { ExpressShippingPanel } from './ExpressShippingPanel';
 import { JournalPanel } from './JournalPanel';
 import { EvidenceBurnPanel } from './EvidenceBurnPanel';
+import { MarketPickerPanel } from './MarketPickerPanel';
 import { TargetPicker } from './TargetPicker';
 
 /** Which target the board is currently asking the player to pick. */
@@ -83,6 +84,7 @@ export interface GameBoardHandlers {
   onDeclineJournal?: () => void;
   onUseEvidenceBurn?: () => void;
   onDeclineEvidenceBurn?: () => void;
+  onCancelBuy?: () => void;
 }
 
 interface GameBoardProps extends GameBoardHandlers {
@@ -107,6 +109,8 @@ interface GameBoardProps extends GameBoardHandlers {
   exposeTargetId?: string | null;
   /** Whether the Trade panel is open for the viewer to initiate a trade. */
   tradeOpen?: boolean;
+  /** Whether the Market/Black Market buy picker is open for the viewer. */
+  buyOpen?: boolean;
 }
 
 /**
@@ -127,6 +131,7 @@ export function GameBoard({
   eventCardId = null,
   exposeTargetId = null,
   tradeOpen = false,
+  buyOpen = false,
   onAction,
   onEndTurn,
   onSelectCard,
@@ -168,6 +173,7 @@ export function GameBoard({
   onDeclineJournal,
   onUseEvidenceBurn,
   onDeclineEvidenceBurn,
+  onCancelBuy,
 }: GameBoardProps) {
   const viewer = state.players[viewerIndex];
   const isViewersTurn = viewerIndex === state.currentPlayerIndex;
@@ -288,7 +294,7 @@ export function GameBoard({
           defaultOpen
         />
         <div className="min-w-0">
-          <Markets state={state} viewer={viewer} isViewersTurn={isViewersTurn} onBuy={onBuy} />
+          <Markets state={state} viewer={viewer} isViewersTurn={isViewersTurn} />
         </div>
         <GameLog entries={state.gameLog} />
 
@@ -356,6 +362,9 @@ export function GameBoard({
                   onSubmit={onSubmitExpose}
                   onCancel={onCancelExpose}
                 />
+              )}
+              {buyOpen && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.winner && (
+                <MarketPickerPanel state={state} viewerIndex={viewerIndex} onBuy={onBuy} onCancel={onCancelBuy} />
               )}
               {roleAbilityOpen && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.winner && (
                 <RoleAbilityPanel state={state} viewerIndex={viewerIndex} onSubmit={onSubmitRoleAbility} onCancel={onCancelRoleAbility} />

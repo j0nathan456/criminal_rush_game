@@ -1,0 +1,78 @@
+import { useState } from 'react';
+import type { GameState } from '../types/game';
+import type { AnyCard, MarketCard } from '../types/cards';
+import { TEAM_META } from '../constants/theme';
+
+export interface MarketPickerPanelProps {
+  state: GameState;
+  viewerIndex: number;
+  onBuy?: (card: AnyCard) => void;
+  onCancel?: () => void;
+}
+
+/**
+ * The "Buy" action's picker, opened instead of buying by clicking a card
+ * directly in the Market/Black Market — the Action box is the one place that
+ * spends the turn's AP, so purchasing goes through it like every other
+ * action. Civilians go straight to the 5 public Market cards; Criminals pick
+ * Market or Black Market first, since only they can see/buy the latter.
+ */
+export function MarketPickerPanel({ state, viewerIndex, onBuy, onCancel }: MarketPickerPanelProps) {
+  const viewer = state.players[viewerIndex];
+  const isCriminal = viewer?.team === 'CRIMINAL';
+  const [source, setSource] = useState<'public' | 'black' | null>(isCriminal ? null : 'public');
+
+  if (!viewer) return null;
+
+  if (source === null) {
+    return (
+      <section className="cr-role" aria-label="Buy from a Market">
+        <header className="cr-role__head" style={{ color: TEAM_META[viewer.team].color }}>
+          <h2>🛒 Buy</h2>
+        </header>
+        <p className="cr-role__desc">Which Market?</p>
+        <div className="cr-role__chips">
+          <button type="button" className="cr-role__chip" onClick={() => setSource('public')}>Market</button>
+          <button type="button" className="cr-role__chip" onClick={() => setSource('black')}>Black Market</button>
+        </div>
+        <div className="cr-role__actions">
+          <button type="button" className="cr-role__cancel" onClick={onCancel}>Cancel</button>
+        </div>
+      </section>
+    );
+  }
+
+  const cards: MarketCard[] = source === 'black' ? state.blackMarket : state.publicMarket;
+  const title = source === 'black' ? 'Black Market' : 'Market';
+
+  return (
+    <section className="cr-role" aria-label="Buy from a Market">
+      <header className="cr-role__head" style={{ color: TEAM_META[viewer.team].color }}>
+        <h2>🛒 Buy from the {title}</h2>
+      </header>
+      <div className="cr-role__body">
+        <div className="cr-role__chips">
+          {cards.length === 0 && <span className="cr-role__empty">Nothing available.</span>}
+          {cards.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              className="cr-role__chip"
+              disabled={c.cost > viewer.money}
+              title={c.cost > viewer.money ? `${c.name} — you can't afford this ($${c.cost}).` : `${c.name} — ${c.description}`}
+              onClick={() => onBuy?.(c)}
+            >
+              {c.name} (${c.cost})
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="cr-role__actions">
+        {isCriminal && (
+          <button type="button" className="cr-role__cancel" onClick={() => setSource(null)}>Back</button>
+        )}
+        <button type="button" className="cr-role__cancel" onClick={onCancel}>Cancel</button>
+      </div>
+    </section>
+  );
+}

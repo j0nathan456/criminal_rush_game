@@ -33,6 +33,8 @@ export interface BoardInteractions {
   exposeTargetId: string | null;
   /** Whether the Trade panel is open for the viewer to initiate a trade. */
   tradeOpen: boolean;
+  /** Whether the Market/Black Market buy picker is open for the viewer. */
+  buyOpen: boolean;
   handlers: GameBoardHandlers;
   /** Clear transient selection/targeting (e.g. after ending a turn). */
   reset: () => void;
@@ -53,6 +55,7 @@ export function useBoardInteractions(
   const [eventCardId, setEventCardId] = useState<string | null>(null);
   const [exposeTargetId, setExposeTargetId] = useState<string | null>(null);
   const [tradeOpen, setTradeOpen] = useState(false);
+  const [buyOpen, setBuyOpen] = useState(false);
 
   const viewer = state.players[viewerIndex];
   const selectedCard = viewer?.hand.find((c) => c.id === selectedCardId);
@@ -68,6 +71,7 @@ export function useBoardInteractions(
     setEventCardId(null);
     setExposeTargetId(null);
     setTradeOpen(false);
+    setBuyOpen(false);
   };
 
   /**
@@ -116,7 +120,9 @@ export function useBoardInteractions(
         }
         break;
       case 'PURCHASE_MARKET':
-        setNotice('Click a card in the Market to buy it.');
+        setSelectedCardId(null);
+        setTargeting(null);
+        setBuyOpen(true);
         break;
       case 'SELL_ITEM':
         setNotice('Click an item under "Items" to sell it for $1.');
@@ -204,7 +210,9 @@ export function useBoardInteractions(
     onBuy: (card) => {
       dispatch({ type: 'PURCHASE', cardId: card.id });
       setSelectedCardId(null);
+      setBuyOpen(false);
     },
+    onCancelBuy: () => setBuyOpen(false),
     onSell: (card) => dispatch({ type: 'SELL', cardId: card.id }),
     onSelectTarget,
     onCancelTargeting: () => setTargeting(null),
@@ -273,6 +281,6 @@ export function useBoardInteractions(
 
   return {
     selectedCardId, targeting, notice, roleAbilityOpen, activePerkId, perkPickerOpen, allySupportCardId, eventCardId,
-    exposeTargetId, tradeOpen, handlers, reset,
+    exposeTargetId, tradeOpen, buyOpen, handlers, reset,
   };
 }
