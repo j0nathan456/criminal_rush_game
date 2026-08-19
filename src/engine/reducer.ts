@@ -59,6 +59,7 @@ export type GameAction =
   | { type: 'RESOLVE_JOURNAL'; use: boolean; targetId?: string; options?: EventOptions }
   | { type: 'RESOLVE_EVIDENCE_BURN'; use: boolean }
   | { type: 'RESOLVE_RECYCLING_BIN'; cardId?: string; mode?: 'MONEY' | 'DRAW' }
+  | { type: 'RESOLVE_GETAWAY_CAR_GIFT'; give: boolean; teammateId?: string; cardId?: string }
   | { type: 'END_TURN' };
 
 /**
@@ -180,6 +181,7 @@ export function emptyGameState(): GameState {
     pendingJournal: null,
     pendingEvidenceBurn: null,
     pendingRecyclingBin: null,
+    pendingGetawayCarGift: null,
   };
 }
 
@@ -307,6 +309,12 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
     return log(state, 'Resolve the Recycling Bin before taking other actions.');
   }
 
+  // Getaway Car's start-of-turn offer is free — costs no action — but still
+  // needs an answer before anything else, same as the Journal's repeat offer.
+  if (state.pendingGetawayCarGift && action.type !== 'RESOLVE_GETAWAY_CAR_GIFT') {
+    return log(state, 'Resolve the Getaway Car offer before taking other actions.');
+  }
+
   switch (action.type) {
     case 'DRAW_CARD':
       return drawCard(state, idx, player);
@@ -360,6 +368,8 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
       return resolveEvidenceBurn(state, action.use);
     case 'RESOLVE_RECYCLING_BIN':
       return resolveRecyclingBin(state, action.cardId, action.mode);
+    case 'RESOLVE_GETAWAY_CAR_GIFT':
+      return resolveGetawayCarGift(state, action.give, action.teammateId, action.cardId);
     case 'END_TURN':
       return endTurn(state, idx);
     default:
@@ -1008,6 +1018,51 @@ function resolveRecyclingBin(state: GameState, cardId: string | undefined, mode:
   return { ...s, pendingRecyclingBin: null };
 }
 
+/**
+ * Resolve Getaway Car's start-of-turn offer (see pendingGetawayCarGift).
+ * Declining just clears it. Giving moves both the perk and the chosen hand
+ * card to the teammate in one go — the rulebook pairs them ("this + a
+ * card"), so there's no partial gift. Invalid picks (no such teammate, a
+ * full perk rack, no such card) log and stay pending so the player can
+ * retry, matching Trade's "stays pending" pattern.
+ */
+function resolveGetawayCarGift(
+  state: GameState,
+  give: boolean,
+  teammateId: string | undefined,
+  cardId: string | undefined,
+): GameState {
+  const pending = state.pendingGetawayCarGift;
+  if (!pending) return state;
+  const idx = playerIndexById(state, pending.playerId);
+  const player = state.players[idx];
+  if (!player) return { ...state, pendingGetawayCarGift: null };
+
+  if (!give) {
+    return { ...log(state, `${player.name} keeps their Getaway Car.`), pendingGetawayCarGift: null };
+  }
+
+  const car = player.inventory.find((c) => c.name === 'Getaway Car');
+  const mateIdx = teammateId ? playerIndexById(state, teammateId) : -1;
+  const mate = state.players[mateIdx];
+  const card = cardId ? player.hand.find((c) => c.id === cardId) : undefined;
+  if (!car || !mate || mateIdx === idx || mate.team !== player.team || !card) {
+    return log(state, 'Choose a teammate and a card to give with the Getaway Car.');
+  }
+  if (mate.inventory.filter((c) => c.type !== 'WEAPON').length >= MAX_PERKS) {
+    return log(state, `${mate.name} already has 4 perks.`);
+  }
+
+  let s = updatePlayer(state, idx, (p) => ({
+    ...p,
+    inventory: p.inventory.filter((c) => c.id !== car.id),
+    hand: p.hand.filter((c) => c.id !== card.id),
+  }));
+  s = updatePlayer(s, mateIdx, (p) => ({ ...p, inventory: [...p.inventory, car], hand: [...p.hand, card] }));
+  s = { ...s, pendingGetawayCarGift: null };
+  return log(s, `${player.name} gives their Getaway Car and a card to ${mate.name}.`);
+}
+
 interface PurchaseOptions {
   /** Deduct 1 action for the buy itself (false when a role Action pays it). */
   spendAction?: boolean;
@@ -1519,6 +1574,7 @@ function applyTradeItem(
   from: Player,
   to: Player,
   item: TradeItem,
+  opts: { allowWeaponOverflow?: boolean } = {},
 ): { ok: true; from: Player; to: Player } | { ok: false; error: string } {
   if (item.kind === 'MONEY') {
     if (from.money < 1) return { ok: false, error: `${from.name} has no money to trade.` };
@@ -1535,8 +1591,16 @@ function applyTradeItem(
   }
   const w = from.inventory.find((c) => c.id === item.cardId && c.type === 'WEAPON');
   if (!w) return { ok: false, error: `${from.name} does not own that weapon.` };
-  if (to.inventory.filter((c) => c.type === 'WEAPON').length >= MAX_WEAPONS) {
-    return { ok: false, error: `${to.name} already has 2 weapons.` };
+  // A fresh weapon gift (initiating only — allowWeaponOverflow) may briefly
+  // push the receiver to 3, settled by a forced weapon-back on the return
+  // leg (see resolveTradeReturn's overWeaponCap check). The return leg
+  // itself never gets this allowance — nothing would settle it back down.
+  const cap = MAX_WEAPONS + (opts.allowWeaponOverflow ? 1 : 0);
+  if (to.inventory.filter((c) => c.type === 'WEAPON').length >= cap) {
+    return {
+      ok: false,
+      error: opts.allowWeaponOverflow ? `${to.name} already has too many weapons to accept another.` : `${to.name} already has 2 weapons.`,
+    };
   }
   return {
     ok: true,
@@ -1583,7 +1647,7 @@ function initiateTrade(
   const cost = Math.max(0, 1 + (trafficSnarled ? 1 : 0) - (usesRadio ? 1 : 0));
   if (player.actionsRemaining < cost) return log(state, `Trading costs ${cost} action(s).`);
 
-  const moved = applyTradeItem(player, mate, give);
+  const moved = applyTradeItem(player, mate, give, { allowWeaponOverflow: true });
   if (!moved.ok) return log(state, moved.error);
 
   let s = updatePlayer(state, idx, () => ({
@@ -1612,6 +1676,14 @@ function resolveTradeReturn(state: GameState, give: TradeItem | null): GameState
   const initiator = state.players[initIdx];
   const recipient = state.players[recIdx];
   if (!initiator || !recipient) return { ...state, pendingTrade: null };
+
+  // A weapon swap that temporarily pushed the recipient to 3 weapons (see
+  // applyTradeItem) must be settled with a weapon back — they can't keep
+  // it and trade back money or a card instead, or decline outright.
+  const overWeaponCap = recipient.inventory.filter((c) => c.type === 'WEAPON').length > MAX_WEAPONS;
+  if (overWeaponCap && give?.kind !== 'WEAPON') {
+    return log(state, `${recipient.name} has 3 weapons — must trade back a weapon to return to the limit.`);
+  }
 
   let s: GameState;
   if (!give) {
@@ -1942,5 +2014,18 @@ function applyStartOfTurn(state: GameState, index: number): GameState {
     s = updatePlayer(s, index, (p) => ({ ...p, inventory: p.inventory.filter((c) => c.name !== 'Disguise') }));
     s = log(s, `${player.name} sheds their Disguise.`);
   }
+
+  // Getaway Car: offer to pass it (plus a hand card) to a teammate — only
+  // when there's actually a teammate and a card to give (see
+  // resolveGetawayCarGift). Uses the current hand/roster, not the stale
+  // `player` snapshot, since Computer/Laboratory may have just drawn.
+  if (has('Getaway Car')) {
+    const current = s.players[index];
+    const hasTeammate = s.players.some((p) => p.team === current.team && p.id !== current.id);
+    if (hasTeammate && current.hand.length > 0) {
+      s = { ...s, pendingGetawayCarGift: { playerId: current.id } };
+    }
+  }
+
   return s;
 }

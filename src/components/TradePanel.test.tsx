@@ -33,9 +33,20 @@ describe('<TradePanel /> — initiating', () => {
     expect(screen.queryByText('Trade a card')).not.toBeInTheDocument();
   });
 
-  it('hides the weapon option once the teammate already has 2 weapons', () => {
+  it('still offers a weapon swap even when the teammate already has 2 — it settles via the return trade', () => {
     const viewer = mkPlayer({ id: 'p0', name: 'Ana', inventory: [weapon('w1', 'Axe')] });
     const mate = mkPlayer({ id: 'p1', name: 'Ben', inventory: [weapon('w2', 'Bat'), weapon('w3', 'Pistol')] });
+    render(<TradePanel state={stateWith([viewer, mate])} viewerIndex={0} />);
+
+    fireEvent.click(screen.getByText('Ben'));
+    expect(screen.getByText('Trade a weapon')).toBeInTheDocument();
+  });
+
+  it('hides the weapon option once the teammate already has 3 — the temporary swap ceiling', () => {
+    const viewer = mkPlayer({ id: 'p0', name: 'Ana', inventory: [weapon('w1', 'Axe')] });
+    const mate = mkPlayer({
+      id: 'p1', name: 'Ben', inventory: [weapon('w2', 'Bat'), weapon('w3', 'Pistol'), weapon('w4', 'Hammer')],
+    });
     render(<TradePanel state={stateWith([viewer, mate])} viewerIndex={0} />);
 
     fireEvent.click(screen.getByText('Ben'));
@@ -118,5 +129,26 @@ describe('<TradePanel /> — the pending return', () => {
     render(<TradePanel state={s} viewerIndex={0} />); // the initiator, not the recipient
     expect(screen.getByText('Waiting for Ben to trade something back to Ana.')).toBeInTheDocument();
     expect(screen.queryByText('Trade a card')).not.toBeInTheDocument();
+  });
+
+  it('warns and restricts the return to a weapon when the recipient is holding 3 weapons', () => {
+    const onResolveReturn = vi.fn();
+    const initiator = mkPlayer({ id: 'p0', name: 'Ana' });
+    const recipient = mkPlayer({
+      id: 'p1', name: 'Ben', money: 3, hand: [money('c1')],
+      inventory: [weapon('w1', 'Axe'), weapon('w2', 'Bat'), weapon('w3', 'Pistol')],
+    });
+    const s = stateWith([initiator, recipient], { pendingTrade: { initiatorId: 'p0', recipientId: 'p1' } });
+
+    render(<TradePanel state={s} viewerIndex={1} onResolveReturn={onResolveReturn} />);
+    expect(screen.getByText(/must trade back a weapon/)).toBeInTheDocument();
+    expect(screen.queryByText('Trade $1')).not.toBeInTheDocument();
+    expect(screen.queryByText('Trade a card')).not.toBeInTheDocument();
+    expect(screen.queryByText('Confirm — nothing to give back')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Trade a weapon'));
+    fireEvent.click(screen.getByText('Axe'));
+    fireEvent.click(screen.getByText('Confirm trade'));
+    expect(onResolveReturn).toHaveBeenCalledWith({ kind: 'WEAPON', cardId: 'w1' });
   });
 });

@@ -334,4 +334,13 @@ export interface GameState {
     discardedType: ActionCardType;
     phase: 'TAKE' | 'REWARD';
   } | null;
+
+  /**
+   * Getaway Car's start-of-turn offer (see applyStartOfTurn): free — costs no
+   * action — but blocks other actions until answered, same as the Journal's
+   * repeat offer. Only set when the turn-holder has both a teammate to give
+   * it to and a card in hand to give alongside it (rulebook: "may pass this +
+   * a card to a teammate").
+   */
+  pendingGetawayCarGift?: { playerId: string } | null;
 }

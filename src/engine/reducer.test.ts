@@ -380,6 +380,73 @@ describe('gameReducer — start-of-turn perks', () => {
     expect(next.players[1].hand).toHaveLength(1); // Computer drew
     expect(next.players[1].money).toBe(3); // Investment +$1
   });
+
+  const getawayCar: MarketCard = { id: 'gc', name: 'Getaway Car', description: '', cost: 3, source: 'BLACK_MARKET', type: 'PERK' };
+  const giftCard: ActionCard = { id: 'h1', name: 'Boost', description: '', type: 'POWER', power: 1 };
+
+  it('offers to give Getaway Car away at the start of a turn, blocking other actions until answered', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN') }),
+      mkPlayer({ id: 'p1', role: role('attorney', 'CIVILIAN'), inventory: [getawayCar], hand: [giftCard] }),
+    ]);
+    const next = gameReducer(s, { type: 'END_TURN' });
+    expect(next.pendingGetawayCarGift).toEqual({ playerId: 'p1' });
+
+    const blocked = gameReducer(next, { type: 'DRAW_CARD' });
+    expect(blocked.pendingGetawayCarGift).toBeTruthy(); // still pending — draw refused
+  });
+
+  it('declining Getaway Car’s offer leaves it and the hand untouched', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN') }),
+      mkPlayer({ id: 'p1', role: role('attorney', 'CIVILIAN'), inventory: [getawayCar], hand: [giftCard] }),
+    ]);
+    const offered = gameReducer(s, { type: 'END_TURN' });
+    const next = gameReducer(offered, { type: 'RESOLVE_GETAWAY_CAR_GIFT', give: false });
+    expect(next.pendingGetawayCarGift).toBeNull();
+    expect(next.players[1].inventory.some((c) => c.name === 'Getaway Car')).toBe(true);
+    expect(next.players[1].hand).toHaveLength(1);
+  });
+
+  it('giving Getaway Car moves both the perk and the chosen card to the teammate', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN') }),
+      mkPlayer({ id: 'p1', role: role('attorney', 'CIVILIAN'), inventory: [getawayCar], hand: [giftCard] }),
+    ]);
+    const offered = gameReducer(s, { type: 'END_TURN' });
+    const next = gameReducer(offered, { type: 'RESOLVE_GETAWAY_CAR_GIFT', give: true, teammateId: 'p0', cardId: 'h1' });
+    expect(next.pendingGetawayCarGift).toBeNull();
+    expect(next.players[1].inventory.some((c) => c.name === 'Getaway Car')).toBe(false);
+    expect(next.players[1].hand).toHaveLength(0);
+    expect(next.players[0].inventory.some((c) => c.name === 'Getaway Car')).toBe(true);
+    expect(next.players[0].hand.map((c) => c.id)).toContain('h1');
+  });
+
+  it('does not offer Getaway Car with no teammate to give it to, or an empty hand', () => {
+    const solo = stateWith([
+      mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN') }),
+      mkPlayer({ id: 'p1', role: role('hitman', 'CRIMINAL'), inventory: [getawayCar], hand: [giftCard] }),
+    ]);
+    expect(gameReducer(solo, { type: 'END_TURN' }).pendingGetawayCarGift).toBeFalsy(); // no teammate — different team
+
+    const emptyHand = stateWith([
+      mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN') }),
+      mkPlayer({ id: 'p1', role: role('attorney', 'CIVILIAN'), inventory: [getawayCar], hand: [] }),
+    ]);
+    expect(gameReducer(emptyHand, { type: 'END_TURN' }).pendingGetawayCarGift).toBeFalsy();
+  });
+
+  it('refuses to give Getaway Car to a teammate whose perk rack is already full, staying pending', () => {
+    const fullPerks: MarketCard[] = ['a', 'b', 'c', 'd'].map((id) => ({ id, name: id, description: '', cost: 1, source: 'PUBLIC', type: 'PERK' }));
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), inventory: fullPerks }),
+      mkPlayer({ id: 'p1', role: role('attorney', 'CIVILIAN'), inventory: [getawayCar], hand: [giftCard] }),
+    ]);
+    const offered = gameReducer(s, { type: 'END_TURN' });
+    const next = gameReducer(offered, { type: 'RESOLVE_GETAWAY_CAR_GIFT', give: true, teammateId: 'p0', cardId: 'h1' });
+    expect(next.pendingGetawayCarGift).toEqual({ playerId: 'p1' }); // still pending
+    expect(next.players[1].inventory.some((c) => c.name === 'Getaway Car')).toBe(true); // never left p1
+  });
 });
 
 const marketPerk = (id: string, cost: number, source: MarketCard['source'] = 'PUBLIC'): MarketCard => ({
@@ -1299,6 +1366,56 @@ describe('gameReducer — INITIATE_TRADE / RESOLVE_TRADE_RETURN', () => {
     const next = gameReducer(pending, { type: 'RESOLVE_TRADE_RETURN', give: { kind: 'WEAPON', cardId: 'w3' } });
     expect(next.pendingTrade).toEqual({ initiatorId: 'p0', recipientId: 'p1' }); // still pending — refused
     expect(next.players[1].inventory.map((c) => c.id)).toContain('w3'); // never left p1
+  });
+
+  it('initiating a weapon gift may briefly push a 2-weapon teammate to 3', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), inventory: [weapon('w1', 'Axe')] }),
+      mkPlayer({ id: 'p1', role: role('attorney', 'CIVILIAN'), inventory: [weapon('w2', 'Bat'), weapon('w3', 'Pistol')] }),
+    ]);
+    const pending = gameReducer(s, { type: 'INITIATE_TRADE', targetId: 'p1', give: { kind: 'WEAPON', cardId: 'w1' } });
+    expect(pending.players[1].inventory.map((c) => c.id)).toEqual(['w2', 'w3', 'w1']); // now holding 3
+    expect(pending.pendingTrade).toEqual({ initiatorId: 'p0', recipientId: 'p1' });
+  });
+
+  it('refuses to push a teammate past 3 weapons even on the initiating leg', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), inventory: [weapon('w1', 'Axe')] }),
+      mkPlayer({
+        id: 'p1', role: role('attorney', 'CIVILIAN'),
+        inventory: [weapon('w2', 'Bat'), weapon('w3', 'Pistol'), weapon('w4', 'Hammer')],
+      }),
+    ]);
+    const next = gameReducer(s, { type: 'INITIATE_TRADE', targetId: 'p1', give: { kind: 'WEAPON', cardId: 'w1' } });
+    expect(next.pendingTrade).toBeNull(); // refused outright, no trade started
+    expect(next.players[0].inventory.map((c) => c.id)).toContain('w1'); // never left p0
+  });
+
+  it('a recipient sitting at 3 weapons must trade back a weapon — money or a card are refused, so is declining', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), inventory: [weapon('w1', 'Axe')] }),
+      mkPlayer({
+        id: 'p1', role: role('attorney', 'CIVILIAN'), money: 3, hand: [money('m1')],
+        inventory: [weapon('w2', 'Bat'), weapon('w3', 'Pistol')],
+      }),
+    ]);
+    const pending = gameReducer(s, { type: 'INITIATE_TRADE', targetId: 'p1', give: { kind: 'WEAPON', cardId: 'w1' } });
+    expect(pending.players[1].inventory).toHaveLength(3);
+
+    const refusedMoney = gameReducer(pending, { type: 'RESOLVE_TRADE_RETURN', give: { kind: 'MONEY' } });
+    expect(refusedMoney.pendingTrade).not.toBeNull(); // still pending — refused
+    expect(refusedMoney.players[0].money).toBe(5); // default — nothing moved
+
+    const refusedCard = gameReducer(pending, { type: 'RESOLVE_TRADE_RETURN', give: { kind: 'CARD', cardId: 'm1' } });
+    expect(refusedCard.pendingTrade).not.toBeNull();
+
+    const refusedDecline = gameReducer(pending, { type: 'RESOLVE_TRADE_RETURN', give: null });
+    expect(refusedDecline.pendingTrade).not.toBeNull();
+
+    const settled = gameReducer(pending, { type: 'RESOLVE_TRADE_RETURN', give: { kind: 'WEAPON', cardId: 'w2' } });
+    expect(settled.pendingTrade).toBeNull();
+    expect(settled.players[1].inventory.map((c) => c.id)).toEqual(['w3', 'w1']); // back to 2
+    expect(settled.players[0].inventory.map((c) => c.id)).toContain('w2');
   });
 
   it('Express Shipping offers the initiator a $1-or-draw choice once the trade fully resolves', () => {

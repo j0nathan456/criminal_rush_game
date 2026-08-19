@@ -279,6 +279,8 @@ export function useBoardInteractions(
     onDeclineEvidenceBurn: () => dispatch({ type: 'RESOLVE_EVIDENCE_BURN', use: false }),
     onResolveRecyclingBin: (cardId: string | undefined, mode: 'MONEY' | 'DRAW' | undefined) =>
       dispatch({ type: 'RESOLVE_RECYCLING_BIN', cardId, mode }),
+    onResolveGetawayCarGift: (give: boolean, teammateId?: string, cardId?: string) =>
+      dispatch({ type: 'RESOLVE_GETAWAY_CAR_GIFT', give, teammateId, cardId }),
   };
 
   return {

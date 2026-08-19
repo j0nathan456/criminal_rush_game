@@ -37,20 +37,36 @@ export function TradePanel({ state, viewerIndex, onInitiate, onResolveReturn, on
   /**
    * The weapon/$1/card picker, shared by both halves of a trade. Each option
    * only appears when it's actually possible: `from` must hold that resource,
-   * and a weapon additionally needs a free slot on `to`'s side (rulebook:
-   * "cannot give a weapon if teammate already has 2").
+   * and a weapon additionally needs room on `to`'s side — normally capped at
+   * 2. `allowOverflow` (initiating only — see applyTradeItem) lets a fresh
+   * weapon gift briefly push the receiver to 3; the return leg never gets
+   * this allowance, since nothing would settle it back down again.
+   * `forceWeapon` is set for that settling return: the recipient is
+   * currently sitting at 3 and must trade back a weapon specifically to
+   * return to the limit — money, a card, or declining outright aren't
+   * options until they do.
    */
-  const giftPicker = (from: Player, to: Player, onSubmit: (item: TradeItem) => void, onNone?: () => void) => {
-    const canMoney = from.money >= 1;
-    const canCard = from.hand.length > 0;
+  const giftPicker = (
+    from: Player,
+    to: Player,
+    onSubmit: (item: TradeItem) => void,
+    onNone?: () => void,
+    forceWeapon = false,
+    allowOverflow = false,
+  ) => {
+    const canMoney = !forceWeapon && from.money >= 1;
+    const canCard = !forceWeapon && from.hand.length > 0;
     const weapons = from.inventory.filter((c) => c.type === 'WEAPON');
-    const canWeapon = weapons.length > 0 && to.inventory.filter((c) => c.type === 'WEAPON').length < MAX_WEAPONS;
+    const weaponCap = MAX_WEAPONS + (allowOverflow ? 1 : 0);
+    const canWeapon = weapons.length > 0 && to.inventory.filter((c) => c.type === 'WEAPON').length < weaponCap;
 
     if (!canMoney && !canCard && !canWeapon) {
       return (
         <>
-          <p className="cr-role__empty">{from.name} has nothing to trade.</p>
-          {onNone && (
+          <p className="cr-role__empty">
+            {forceWeapon ? `${from.name} has no weapon to trade back.` : `${from.name} has nothing to trade.`}
+          </p>
+          {onNone && !forceWeapon && (
             <button type="button" className="cr-role__use" onClick={onNone}>
               Confirm — nothing to give back
             </button>
@@ -103,6 +119,11 @@ export function TradePanel({ state, viewerIndex, onInitiate, onResolveReturn, on
     const recipient = state.players.find((p) => p.id === recipientId);
     if (!initiator || !recipient) return null;
 
+    // A weapon-for-weapon swap left the recipient holding 3 — they must
+    // settle back to the 2-weapon limit with a weapon back (see
+    // applyTradeItem / resolveTradeReturn's overWeaponCap check).
+    const mustReturnWeapon = recipient.inventory.filter((c) => c.type === 'WEAPON').length > MAX_WEAPONS;
+
     if (viewer.id !== recipient.id) {
       return (
         <section className="cr-role" aria-label="Trade">
@@ -120,7 +141,14 @@ export function TradePanel({ state, viewerIndex, onInitiate, onResolveReturn, on
           <h2>🤝 Trade something back to {initiator.name}</h2>
         </header>
         <p className="cr-role__desc">You received a trade from {initiator.name} — now give something back.</p>
-        <div className="cr-role__body">{giftPicker(recipient, initiator, (item) => onResolveReturn?.(item), () => onResolveReturn?.(null))}</div>
+        {mustReturnWeapon && (
+          <p className="cr-role__sub" style={{ color: 'var(--color-amber)' }}>
+            ⚠️ You have 3 weapons — you must trade back a weapon to return to the 2-weapon limit.
+          </p>
+        )}
+        <div className="cr-role__body">
+          {giftPicker(recipient, initiator, (item) => onResolveReturn?.(item), () => onResolveReturn?.(null), mustReturnWeapon)}
+        </div>
       </section>
     );
   }
@@ -152,7 +180,7 @@ export function TradePanel({ state, viewerIndex, onInitiate, onResolveReturn, on
             🚧 +1 AP more — a Traffic token is involved.
           </p>
         )}
-        {target && giftPicker(viewer, target, (item) => onInitiate?.(target.id, item))}
+        {target && giftPicker(viewer, target, (item) => onInitiate?.(target.id, item), undefined, false, true)}
       </div>
       <div className="cr-role__actions">
         <button type="button" className="cr-role__cancel" onClick={onCancel}>Cancel</button>
