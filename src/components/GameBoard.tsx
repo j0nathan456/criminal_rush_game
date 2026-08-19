@@ -260,7 +260,7 @@ export function GameBoard({
           row 3  Profile     · Hand          · Actions
           Case Log sits closer to the action row than the deck does — it's
           consulted far more often than the pile counts. */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,3fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(260px,1fr)_minmax(800px,3fr)_minmax(350px,1.2fr)]">
         {/* Row 1 */}
         <ScoreBoard scores={state.teamScores} targets={state.vpTargets} winner={state.winner} />
         <main className="min-w-0">
