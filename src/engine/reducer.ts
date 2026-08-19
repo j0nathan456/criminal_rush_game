@@ -707,9 +707,10 @@ function placeEvidence(
       [category]: { cards: [...state.evidenceGrid[category].cards, card] },
     },
   };
-  // Attorney's Retainer: teammate Attorneys collect $1.
+  // Attorney's Retainer: teammate Attorneys collect $1 — unless injured, same
+  // as any other role ability being unavailable while injured.
   s = s.players.reduce((acc, p, i) => {
-    if (p.team === 'CIVILIAN' && p.role.id === 'attorney' && p.id !== playedBy.id) {
+    if (p.team === 'CIVILIAN' && p.role.id === 'attorney' && p.id !== playedBy.id && !p.isInjured) {
       return updatePlayer(acc, i, (pl) => ({ ...pl, money: pl.money + 1 }));
     }
     return acc;

@@ -79,6 +79,16 @@ describe('gameReducer — PLAY_EVIDENCE', () => {
     expect(next.players[1].money).toBe(3); // Attorney collected $1
   });
 
+  it('does not pay an injured Attorney when a teammate plays Evidence', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('sheriff', 'CIVILIAN'), hand: [evidence('e1', ['MEANS'])] }),
+      mkPlayer({ id: 'p1', role: role('attorney', 'CIVILIAN'), money: 2, isInjured: true }),
+    ]);
+
+    const next = gameReducer(s, { type: 'PLAY_EVIDENCE', cardId: 'e1', category: 'MEANS' });
+    expect(next.players[1].money).toBe(2); // no Retainer payout while injured
+  });
+
   it('leaves the card sitting in the grid rather than discarding it on play', () => {
     const s = stateWith([mkPlayer({ id: 'p0', role: role('sheriff', 'CIVILIAN'), hand: [evidence('e1', ['MEANS'])] })]);
     const next = gameReducer(s, { type: 'PLAY_EVIDENCE', cardId: 'e1', category: 'MEANS' });
@@ -418,6 +428,17 @@ describe('gameReducer — USE_ROLE_ABILITY (Civilians)', () => {
     expect(next.evidenceGrid.MEANS.cards.map((c) => c.id)).toEqual(['e1']);
     expect(next.players[1].hand).toHaveLength(0);
     expect(next.pendingSheriff).toBeNull();
+  });
+
+  it('pays a teammate Attorney when the Sheriff plays the subpoenaed Evidence into the grid', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('sheriff', 'CIVILIAN') }),
+      mkPlayer({ id: 'p1', role: role('hitman', 'CRIMINAL'), hand: [evidence('e1', ['MEANS'])] }),
+      mkPlayer({ id: 'p2', role: role('attorney', 'CIVILIAN'), money: 2 }),
+    ]);
+    const revealed = gameReducer(s, { type: 'USE_ROLE_ABILITY', payload: { targetId: 'p1' } });
+    const next = gameReducer(revealed, { type: 'RESOLVE_SHERIFF', cardId: 'e1' });
+    expect(next.players[2].money).toBe(3); // Attorney collected $1
   });
 
   it('Sheriff must choose a category for a wild Evidence card', () => {
@@ -895,6 +916,22 @@ describe('gameReducer — Event cards', () => {
     ]);
     const next = gameReducer(s, { type: 'PLAY_CARD', cardId: 'e', targetId: 'p1' });
     expect(next.pendingEvidenceBurn).toBeFalsy();
+  });
+
+  it('pays a teammate Attorney when Evidence stolen via Gain Influence is later played into the grid', () => {
+    const evt: ActionCard = { id: 'e', name: 'Gain Influence', description: '', type: 'EVENT' };
+    const ev = evidence('ev', ['MEANS']);
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), hand: [evt] }),
+      mkPlayer({ id: 'p1', role: role('hitman', 'CRIMINAL'), hand: [ev] }),
+      mkPlayer({ id: 'p2', role: role('attorney', 'CIVILIAN'), money: 2 }),
+    ]);
+    const stolen = gameReducer(s, { type: 'PLAY_CARD', cardId: 'e', targetId: 'p1' });
+    expect(stolen.players[0].hand.some((c) => c.id === 'ev')).toBe(true);
+
+    const next = gameReducer(stolen, { type: 'PLAY_EVIDENCE', cardId: 'ev', category: 'MEANS' });
+    expect(next.evidenceGrid.MEANS.cards.map((c) => c.id)).toEqual(['ev']);
+    expect(next.players[2].money).toBe(3); // Attorney collected $1
   });
 
   it('Tax Collection takes $1 from a chosen opponent', () => {
