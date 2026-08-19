@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import type { ActionCard } from '../types/cards';
 import { Card } from './Card';
+import { DiscardPilePanel } from './DiscardPilePanel';
 
 interface PilesProps {
   drawPile: ActionCard[];
@@ -24,18 +26,24 @@ function Pile({ label, count, children }: { label: string; count: number; childr
   );
 }
 
-/** The face-up top of the discard, or a dashed empty slot when nothing's there. */
-function DiscardTop({ top }: { top?: ActionCard }) {
-  if (top) return <Card card={top} preview />;
+/** The face-up top of the discard, or a dashed empty slot when nothing's there. Click either to see the whole pile. */
+function DiscardTop({ top, onClick }: { top?: ActionCard; onClick: () => void }) {
+  if (top) return <Card card={top} preview onClick={onClick} />;
   return (
-    <div className="flex aspect-[5/7] w-[140px] items-center justify-center rounded-xl border border-dashed border-line text-xs text-fog/50">
+    <button
+      type="button"
+      onClick={onClick}
+      title="Click to see every discarded card"
+      className="flex aspect-[5/7] w-[140px] items-center justify-center rounded-xl border border-dashed border-line text-xs text-fog/50 transition hover:border-amber/50"
+    >
       Empty
-    </div>
+    </button>
   );
 }
 
 /** The draw and discard piles, as a panel that sits parallel to the Evidence Grid. */
 export function Piles({ drawPile, discardPile }: PilesProps) {
+  const [discardOpen, setDiscardOpen] = useState(false);
   const drawCount = drawPile.length;
   const discardTop = discardPile.at(-1);
 
@@ -50,7 +58,7 @@ export function Piles({ drawPile, discardPile }: PilesProps) {
           <Card faceDown />
         </Pile>
         <Pile label={`Discard · ${discardPile.length}`} count={discardPile.length}>
-          <DiscardTop top={discardTop} />
+          <DiscardTop top={discardTop} onClick={() => setDiscardOpen(true)} />
         </Pile>
       </div>
       {drawCount <= LOW_DECK && (
@@ -58,6 +66,7 @@ export function Piles({ drawPile, discardPile }: PilesProps) {
           Deck low — when it runs out, both teams score 1 VP and the discard reshuffles.
         </p>
       )}
+      {discardOpen && <DiscardPilePanel cards={discardPile} onClose={() => setDiscardOpen(false)} />}
     </section>
   );
 }
