@@ -90,6 +90,44 @@ export function weaponPower(
 }
 
 /**
+ * The power Mutants gains from copying a weapon — its *effect*, never the
+ * weapon's own flat printed power. Three different kinds of "effect":
+ *  - Resource-scaling weapons (Pocket Knife/Robot Soldier/Cannon) count as an
+ *    effect and copy in full, caps included (Robot Soldier's max +5) — using
+ *    the same "you"/"your opponent" mapping the printed text always has,
+ *    just re-pointed at the new holder: Pocket Knife/Robot Soldier scale with
+ *    the *copying holder's own* stat ("cards/perks YOU hold"), while Cannon
+ *    scales with "your opponent['s]" — the holder's actual opponent, `opp`.
+ *  - A flat "+2 more if opponent has an X weapon" conditional (Harpoon,
+ *    Switch Blade, Magnetic Deflector, Corrosion Cannisters) copies as just
+ *    that +2, evaluated against `opp` — the copying holder's own actual
+ *    opponent — never the weapon's own base power.
+ *  - Parasites (a role-identity stat, not a countable resource) and Catapult
+ *    (flat power set by table size, not a per-object count) copy 0 power;
+ *    Catapult's real copyable effect is its non-neighbor targeting, handled
+ *    separately by canReachNonNeighbors.
+ */
+function weaponCopyPower(weapon: MarketCard, holder: Player, opp: Player, playerCount: number): number {
+  switch (weapon.name) {
+    case 'Parasites':
+    case 'Catapult':
+      return 0;
+    case 'Pocket Knife':
+    case 'Robot Soldier':
+    case 'Cannon':
+      return weaponPower(weapon, holder, opp, playerCount);
+    default: {
+      let bonus = 0;
+      if (weapon.name === 'Switch Blade' && hasWeaponType(opp, 'CHEMICAL')) bonus += 2;
+      if (weapon.name === 'Harpoon' && hasWeaponType(opp, 'MELEE')) bonus += 2;
+      if (weapon.name === 'Magnetic Deflector' && hasWeaponType(opp, 'RANGED')) bonus += 2;
+      if (weapon.name === 'Corrosion Cannisters' && hasWeaponType(opp, 'TECH')) bonus += 2;
+      return bonus;
+    }
+  }
+}
+
+/**
  * A case-log line for a weapon's conditional or computed power this combat
  * (Harpoon's +2 vs Melee, Parasites matching a role's PL, a Laboratory buff,
  * …) — undefined when the weapon just contributes its flat printed value with
@@ -154,9 +192,16 @@ export function computeBasePower(
 
 // --- Targeting & cost --------------------------------------------------------
 
-/** Weapons that let the holder attack beyond their two neighbors. */
-function canReachNonNeighbors(player: Player): boolean {
-  return hasItem(player, 'Catapult') || hasItem(player, 'Machine Gun');
+/**
+ * Weapons that let the holder attack beyond their two neighbors — including,
+ * for a Mutants holder, a non-neighbor `target` who themselves carries
+ * Catapult/Machine Gun: Mutants can only copy a weapon from this fight's
+ * actual opponent, so reaching them in the first place has to be legal on
+ * the strength of the copy they intend to make.
+ */
+function canReachNonNeighbors(player: Player, target: Player): boolean {
+  if (hasItem(player, 'Catapult') || hasItem(player, 'Machine Gun')) return true;
+  return hasItem(player, 'Mutants') && (hasItem(target, 'Catapult') || hasItem(target, 'Machine Gun'));
 }
 
 /**
@@ -170,7 +215,7 @@ export function attackError(state: GameState, attackerIndex: number, target: Pla
   if (attacker.id === target.id) return 'You cannot attack yourself.';
   if (attacker.isInjured || attacker.isCaptured) return 'You cannot attack in your current state.';
 
-  if (!neighborIds(state, attackerIndex).includes(target.id) && !canReachNonNeighbors(attacker)) {
+  if (!neighborIds(state, attackerIndex).includes(target.id) && !canReachNonNeighbors(attacker, target)) {
     return 'You may only attack a neighbor.';
   }
 
@@ -335,8 +380,16 @@ export function enterPowerPhase(state: GameState): GameState {
       combat: {
         ...combat,
         phase: 'POWER',
-        attacker: { ...combat.attacker, basePower: atkBase, canPlayPower: !hasItem(def, 'Signal Jammer') },
-        defender: { ...combat.defender, basePower: defBase, canPlayPower: !hasItem(atk, 'Signal Jammer') },
+        attacker: {
+          ...combat.attacker,
+          basePower: atkBase,
+          canPlayPower: !hasItem(def, 'Signal Jammer') && combat.defender.copiedWeaponName !== 'Signal Jammer',
+        },
+        defender: {
+          ...combat.defender,
+          basePower: defBase,
+          canPlayPower: !hasItem(atk, 'Signal Jammer') && combat.attacker.copiedWeaponName !== 'Signal Jammer',
+        },
       },
     },
     `Power phase — ${atk.name}: ${atkBase} vs ${def.name}: ${defBase}. Play Power cards or pass.`,
@@ -409,11 +462,13 @@ function applyDronesReturn(state: GameState, head: Extract<CombatChoice, { kind:
 }
 
 /**
- * Mutants: copy one weapon belonging to this fight's actual opponent — never
- * any other player — gaining both its power (weaponPower, capped/scaled the
- * same as if the holder truly held it) and, if it has one, its before-combat
- * effect (Hammer draws, Barbed Wire/Mosquitos force a discard, Brass Knuckles
- * steals), fired against that same opponent.
+ * Mutants: copy the *effect* of one weapon belonging to this fight's actual
+ * opponent — never any other player — not its full power level. That means
+ * weaponCopyPower's conditional bonus (if any), plus its before-combat effect
+ * (Hammer draws, Barbed Wire/Mosquitos force a discard, Brass Knuckles
+ * steals) fired against that same opponent. A copied Signal Jammer's "may not
+ * play Power cards" lockout is applied separately in enterPowerPhase, keyed
+ * off copiedWeaponName below.
  */
 function applyMutants(state: GameState, head: Extract<CombatChoice, { kind: 'MUTANTS' }>, input: CombatChoiceInput): GameState {
   const combat = state.combat!;
@@ -425,11 +480,12 @@ function applyMutants(state: GameState, head: Extract<CombatChoice, { kind: 'MUT
   const opp = state.players[playerIndexById(state, oppId)];
   const weapon = opp.inventory.find((c) => c.id === input.opponentWeaponId && c.type === 'WEAPON');
   if (!weapon) return log(state, 'No such opponent weapon to copy.');
-  const copied = weaponPower(weapon, holder, opp, combat.playerCount);
+  const copied = weaponCopyPower(weapon, holder, opp, combat.playerCount);
   const part = head.side === 'ATTACKER' ? combat.attacker : combat.defender;
-  const newPart = { ...part, copiedWeaponPower: (part.copiedWeaponPower ?? 0) + copied };
+  const newPart = { ...part, copiedWeaponPower: (part.copiedWeaponPower ?? 0) + copied, copiedWeaponName: weapon.name };
   const newCombat = head.side === 'ATTACKER' ? { ...combat, attacker: newPart } : { ...combat, defender: newPart };
-  const s = log({ ...state, combat: newCombat }, `${holder.name}'s Mutants copy ${weapon.name} (+${copied} power).`);
+  const powerNote = copied ? ` (+${copied} power)` : '';
+  const s = log({ ...state, combat: newCombat }, `${holder.name}'s Mutants copy ${weapon.name}'s effect${powerNote}.`);
   return applyPreCombatWeaponEffect(s, weapon, holder.id, opp.id, head.side === 'ATTACKER');
 }
 
@@ -498,7 +554,19 @@ function applyLeavingEvidence(
 function advancePendingQueue(state: GameState): GameState {
   const combat = state.combat;
   if (!combat) return state;
-  const rest = combat.pending.slice(1);
+  let rest = combat.pending.slice(1);
+  // A queued Missile/Molotov destroy-choice can go dead mid-queue — an
+  // earlier one in the same combat already destroyed the target's last perk
+  // (e.g. the winner holds both weapons, or holds one and copied the other
+  // via Mutants). Auto-skip it rather than showing an empty picker.
+  let head = rest[0];
+  while (head !== undefined && head.kind === 'DESTROY_PERK') {
+    const targetId = head.targetId;
+    const target = state.players.find((p) => p.id === targetId);
+    if (target?.inventory.some((c) => c.type === 'PERK')) break;
+    rest = rest.slice(1);
+    head = rest[0];
+  }
   let s: GameState = { ...state, combat: { ...combat, pending: rest } };
   if (rest.length === 0) {
     if (combat.phase === 'PRE') s = enterPowerPhase(s);
@@ -532,6 +600,7 @@ export function applyCombatChoice(state: GameState, input: CombatChoiceInput, rn
     case 'MUTANTS': s = applyMutants(s, head, input); break;
     case 'PISTOL': s = applyPistol(s, head, input); break;
     case 'LEAVING_EVIDENCE': s = applyLeavingEvidence(s, head, input, rng); break;
+    case 'DESTROY_PERK': s = applyDestroyPerk(s, head, input); break;
   }
 
   return advancePendingQueue(s);
@@ -608,37 +677,44 @@ export function powerCardValue(
 
 // --- Resolution --------------------------------------------------------------
 
-/** Remove the victim's first destroyable perk (not a weapon or Expand Network). */
-function destroyFirstPerk(state: GameState, victimId: string): { state: GameState; perk: MarketCard | null } {
-  const idx = playerIndexById(state, victimId);
-  const victim = state.players[idx];
-  const perkIndex = victim?.inventory.findIndex((c) => c.type === 'PERK') ?? -1;
-  if (!victim || perkIndex < 0) return { state, perk: null };
-  const perk = victim.inventory[perkIndex];
-  const s = updatePlayer(state, idx, (p) => ({
-    ...p,
-    inventory: p.inventory.filter((_, i) => i !== perkIndex),
-  }));
-  return { state: s, perk };
+/**
+ * Missile/Molotov Cocktail choices to queue for the winner: one per weapon
+ * that triggers it (literally held, or copied via Mutants — copiedWeaponName
+ * is set the same way for either), each letting the winner pick which of the
+ * loser's perks to destroy. Skipped entirely (no queued choice at all) when
+ * the loser has no perk to destroy.
+ */
+function queueDestroyPerkChoices(combat: CombatState, winner: Player, loser: Player, winnerSide: CombatSide): CombatChoice[] {
+  if (!loser.inventory.some((c) => c.type === 'PERK')) return [];
+  const triggers: Array<'Missile' | 'Molotov Cocktail'> = [];
+  for (const weapon of weaponsOf(winner)) {
+    if (weapon.name === 'Missile' || weapon.name === 'Molotov Cocktail') triggers.push(weapon.name);
+  }
+  const part = winnerSide === 'ATTACKER' ? combat.attacker : combat.defender;
+  if (part.copiedWeaponName === 'Missile' || part.copiedWeaponName === 'Molotov Cocktail') {
+    triggers.push(part.copiedWeaponName);
+  }
+  return triggers.map((weaponName) => ({ kind: 'DESTROY_PERK' as const, playerId: winner.id, targetId: loser.id, weaponName, side: winnerSide }));
 }
 
-/** Winner's after-combat weapon effects (Missile / Molotov perk destruction). */
-function applyWinnerWeapons(state: GameState, winner: Player, loser: Player): GameState {
-  let s = state;
-  for (const weapon of weaponsOf(winner)) {
-    if (weapon.name === 'Missile' || weapon.name === 'Molotov Cocktail') {
-      const { state: after, perk } = destroyFirstPerk(s, loser.id);
-      s = after;
-      if (perk) {
-        s = log(s, `${winner.name}'s ${weapon.name} destroys ${loser.name}'s ${perk.name}.`);
-        // Molotov: a Civilian victim recovers the destroyed perk's cost in money.
-        if (weapon.name === 'Molotov Cocktail' && loser.team === 'CIVILIAN') {
-          const li = playerIndexById(s, loser.id);
-          s = updatePlayer(s, li, (p) => ({ ...p, money: p.money + perk.cost }));
-          s = log(s, `${loser.name} recovers $${perk.cost} for the destroyed perk.`);
-        }
-      }
-    }
+/**
+ * Resolve one queued Missile/Molotov destroy-choice (see queueDestroyPerkChoices).
+ * Mandatory, like Pistol's discard — no skip variant, since the effect isn't
+ * optional, only which perk is. Molotov additionally refunds a Civilian
+ * victim the destroyed perk's cost.
+ */
+function applyDestroyPerk(state: GameState, head: Extract<CombatChoice, { kind: 'DESTROY_PERK' }>, input: CombatChoiceInput): GameState {
+  const winner = state.players[playerIndexById(state, head.playerId)];
+  const targetIdx = playerIndexById(state, head.targetId);
+  const target = state.players[targetIdx];
+  const perk = input.kind === 'DESTROY_PERK' ? target?.inventory.find((c) => c.id === input.perkId && c.type === 'PERK') : undefined;
+  if (!winner || !target || !perk) return log(state, `Choose one of ${target?.name ?? 'the opponent'}'s perks to destroy.`);
+
+  let s = updatePlayer(state, targetIdx, (p) => ({ ...p, inventory: p.inventory.filter((c) => c.id !== perk.id) }));
+  s = log(s, `${winner.name}'s ${head.weaponName} destroys ${target.name}'s ${perk.name}.`);
+  if (head.weaponName === 'Molotov Cocktail' && target.team === 'CIVILIAN') {
+    s = updatePlayer(s, targetIdx, (p) => ({ ...p, money: p.money + perk.cost }));
+    s = log(s, `${target.name} recovers $${perk.cost} for the destroyed perk.`);
   }
   return s;
 }
@@ -698,10 +774,22 @@ function injureAndMaybeLeaveEvidence(state: GameState, combat: CombatState, defe
 }
 
 /**
+ * Splice any queued destroy-perk choices (see queueDestroyPerkChoices) in
+ * front of whatever AFTER-phase result the caller already computed —
+ * `result.combat` is either null (fight closes) or already carries its own
+ * pending item (Triage, Leaving Evidence). Both cases just gain a new front.
+ */
+function withPendingPrefix(combat: CombatState, prefix: CombatChoice[], result: GameState): GameState {
+  if (prefix.length === 0) return result;
+  const restPending = result.combat?.pending ?? [];
+  return { ...result, combat: { ...combat, phase: 'AFTER', pending: [...prefix, ...restPending] } };
+}
+
+/**
  * Resolve the pending combat: compare totals (defender wins ties), apply the
  * VP/injury/capture outcome and after-combat weapon effects, and clear combat
- * — unless a Nurse teammate can offer Triage first (see findAvailableNurse),
- * in which case the AFTER phase pauses on that choice before injury applies.
+ * — unless a Missile/Molotov destroy-perk choice, then a Nurse teammate's
+ * Triage (see findAvailableNurse), pause the AFTER phase first.
  */
 export function resolveCombat(state: GameState): GameState {
   const combat = state.combat;
@@ -714,13 +802,17 @@ export function resolveCombat(state: GameState): GameState {
   const attackerWins = atkTotal > defTotal; // defender wins ties
 
   // Keep `combat` set through outcome application; close it (or hand off to an
-  // AFTER-phase choice — Triage, then Leaving Evidence) at the end.
+  // AFTER-phase choice — destroy-perk, Triage, then Leaving Evidence) at the end.
   let s: GameState = log(state, `Combat resolves — ${attacker.name}: ${atkTotal} vs ${defender.name}: ${defTotal}.`);
 
   if (!attackerWins) {
     s = log(s, `${attacker.name}'s attack fails.`);
     s = applyVirusTokens(s, attacker, defender);
-    return { ...s, combat: null };
+    // A repelling defender "wins" this combat too — their own (or a
+    // Mutants-copied) Missile/Molotov Cocktail still destroys a perk, same
+    // as an attacker's win, just with the roles reversed.
+    const destroyChoices = queueDestroyPerkChoices(combat, defender, attacker, 'DEFENDER');
+    return withPendingPrefix(combat, destroyChoices, { ...s, combat: null });
   }
 
   if (attacker.team === 'CIVILIAN') {
@@ -728,29 +820,30 @@ export function resolveCombat(state: GameState): GameState {
     const defIdx = playerIndexById(s, defender.id);
     s = updatePlayer(s, defIdx, (p) => ({ ...p, isCaptured: true, isExposed: false }));
     s = applyScore(s, 'CIVILIAN', 1, `${attacker.name} captures ${defender.name}! Civilians score a VP.`);
-    s = applyWinnerWeapons(s, attacker, defender);
     s = applyVirusTokens(s, attacker, defender);
-    return { ...s, combat: null };
+    const destroyChoices = queueDestroyPerkChoices(combat, attacker, defender, 'ATTACKER');
+    return withPendingPrefix(combat, destroyChoices, { ...s, combat: null });
   }
 
   s = applyScore(s, 'CRIMINAL', 1, `${attacker.name} defeats ${defender.name}! Criminals score a VP.`);
-  s = applyWinnerWeapons(s, attacker, defender);
   s = applyVirusTokens(s, attacker, defender);
+  const destroyChoices = queueDestroyPerkChoices(combat, attacker, defender, 'ATTACKER');
 
   if (defender.role.id === 'vigilante') {
-    return { ...log(s, `${defender.name} is a Vigilante and cannot be injured.`), combat: null };
+    const closed = { ...log(s, `${defender.name} is a Vigilante and cannot be injured.`), combat: null };
+    return withPendingPrefix(combat, destroyChoices, closed);
   }
 
   const nurse = findAvailableNurse(s, defender);
   if (nurse) {
     s = log(s, `${defender.name} would be injured — ${nurse.name} may use Triage to prevent it.`);
-    return {
+    return withPendingPrefix(combat, destroyChoices, {
       ...s,
       combat: { ...combat, phase: 'AFTER', pending: [{ kind: 'NURSE_HEAL', playerId: nurse.id, injuredId: defender.id, side: 'DEFENDER' }] },
-    };
+    });
   }
 
-  return injureAndMaybeLeaveEvidence(s, combat, defender);
+  return withPendingPrefix(combat, destroyChoices, injureAndMaybeLeaveEvidence(s, combat, defender));
 }
 
 /** Opposite side helper. */

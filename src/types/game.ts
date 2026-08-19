@@ -90,6 +90,8 @@ export interface CombatParticipant {
   canPlayPower: boolean;
   /** Extra power from a Mutants copy of an opponent weapon (folded into basePower). */
   copiedWeaponPower?: number;
+  /** Name of the weapon a Mutants copy took its effect from, if any (e.g. a copied Signal Jammer still locks the opponent out of Power cards — see enterPowerPhase). */
+  copiedWeaponName?: string;
 }
 
 /**
@@ -108,7 +110,8 @@ export type CombatChoice =
   | { kind: 'MUTANTS'; playerId: string; weaponId: string; side: CombatSide }
   | { kind: 'PISTOL'; playerId: string; weaponId: string; side: CombatSide }
   | { kind: 'NURSE_HEAL'; playerId: string; injuredId: string; side: CombatSide }
-  | { kind: 'LEAVING_EVIDENCE'; playerId: string; side: CombatSide };
+  | { kind: 'LEAVING_EVIDENCE'; playerId: string; side: CombatSide }
+  | { kind: 'DESTROY_PERK'; playerId: string; targetId: string; weaponName: 'Missile' | 'Molotov Cocktail'; side: CombatSide };
 
 /** The decision a player submits for the current pending CombatChoice. */
 export type CombatChoiceInput =
@@ -122,7 +125,8 @@ export type CombatChoiceInput =
   | { kind: 'PISTOL'; cardId: string }
   | { kind: 'NURSE_HEAL'; mode: 'SKIP' }
   | { kind: 'NURSE_HEAL'; mode: 'HEAL'; cardId: string }
-  | { kind: 'LEAVING_EVIDENCE'; evidenceIds: string[] };
+  | { kind: 'LEAVING_EVIDENCE'; evidenceIds: string[] }
+  | { kind: 'DESTROY_PERK'; perkId: string };
 
 /** The interactive combat sub-state machine. Null when no fight is in progress. */
 export interface CombatState {

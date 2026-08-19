@@ -28,6 +28,7 @@ export function CombatChoicePanel({ state, viewerIndex, onCombatChoice }: Combat
   const [weaponId, setWeaponId] = useState<string>();
   const [myCardId, setMyCardId] = useState<string>();
   const [evidenceIds, setEvidenceIds] = useState<string[]>([]);
+  const [perkId, setPerkId] = useState<string>();
 
   const combat = state.combat;
   const head = combat?.pending[0];
@@ -43,6 +44,7 @@ export function CombatChoicePanel({ state, viewerIndex, onCombatChoice }: Combat
     head.kind === 'LEAVING_EVIDENCE' ? 'Leaving Evidence'
     : head.kind === 'NURSE_HEAL' ? 'Triage'
     : head.kind === 'DRONES_RETURN' ? 'Drones — your card back'
+    : head.kind === 'DESTROY_PERK' ? head.weaponName
     : `${holder.name}: ${head.kind[0]}${head.kind.slice(1).toLowerCase()}`;
 
   if (viewer?.id !== holder.id) {
@@ -60,7 +62,9 @@ export function CombatChoicePanel({ state, viewerIndex, onCombatChoice }: Combat
                 ? `Waiting for ${holder.name} to decide whether to use Triage on ${byId(head.injuredId).name}.`
                 : head.kind === 'DRONES_RETURN'
                   ? `Waiting for ${holder.name} to choose a card to give back to ${byId(head.holderId).name} via Drones.`
-                  : `Waiting for ${holder.name} to decide.`}
+                  : head.kind === 'DESTROY_PERK'
+                    ? `Waiting for ${holder.name} to choose which of ${byId(head.targetId).name}'s perks to destroy with their ${head.weaponName}.`
+                    : `Waiting for ${holder.name} to decide.`}
           </p>
         </div>
       </section>
@@ -88,7 +92,9 @@ export function CombatChoicePanel({ state, viewerIndex, onCombatChoice }: Combat
             <div className="cr-role__chips">{mates.map((p) => chip(p.name, teammateId === p.id, () => { setTeammateId(p.id); setWeaponId(undefined); }, p.id))}</div>
             {teammate && (
               <div className="cr-role__chips">
-                {teammate.inventory.filter((c) => c.type === 'WEAPON').map((w) => chip(w.name, weaponId === w.id, () => setWeaponId(w.id), w.id))}
+                {teammate.inventory
+                  .filter((c) => c.type === 'WEAPON')
+                  .map((w) => chip(w.name, weaponId === w.id, () => setWeaponId(w.id), w.id, `${w.name} — ${w.description}`))}
               </div>
             )}
             <button
@@ -158,7 +164,9 @@ export function CombatChoicePanel({ state, viewerIndex, onCombatChoice }: Combat
         {oppWeapons.length > 0 && (
           <div className="cr-choice__block">
             <p className="cr-role__sub">Copy one of the opponent’s weapons:</p>
-            <div className="cr-role__chips">{oppWeapons.map((w) => chip(w.name, weaponId === w.id, () => setWeaponId(w.id), w.id))}</div>
+            <div className="cr-role__chips">
+              {oppWeapons.map((w) => chip(w.name, weaponId === w.id, () => setWeaponId(w.id), w.id, `${w.name} — ${w.description}`))}
+            </div>
             <button
               type="button"
               className="cr-role__use"
@@ -208,6 +216,26 @@ export function CombatChoicePanel({ state, viewerIndex, onCombatChoice }: Combat
             Skip
           </button>
         </div>
+      </>
+    );
+  } else if (head.kind === 'DESTROY_PERK') {
+    const target = byId(head.targetId);
+    const perks = target.inventory.filter((c) => c.type === 'PERK');
+    body = (
+      <>
+        <p className="cr-role__sub">{holder.name}’s {head.weaponName} destroys one of {target.name}’s perks:</p>
+        <div className="cr-role__chips">
+          {perks.length === 0 && <span className="cr-role__empty">No perks to destroy.</span>}
+          {perks.map((c) => chip(c.name, perkId === c.id, () => setPerkId(c.id), c.id))}
+        </div>
+        <button
+          type="button"
+          className="cr-role__use"
+          disabled={!perkId}
+          onClick={() => onCombatChoice?.({ kind: 'DESTROY_PERK', perkId: perkId! })}
+        >
+          Destroy
+        </button>
       </>
     );
   } else {

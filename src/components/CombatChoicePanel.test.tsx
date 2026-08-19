@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import type { GameState, Player, RoleIdentity, CombatState } from '../types/game';
-import type { ActionCard } from '../types/cards';
+import type { ActionCard, MarketCard } from '../types/cards';
 import { emptyGameState } from '../engine';
 import { CombatChoicePanel } from './CombatChoicePanel';
 
@@ -37,6 +37,37 @@ describe('<CombatChoicePanel />', () => {
     );
     fireEvent.click(screen.getByText('Draw 2 cards'));
     expect(onCombatChoice).toHaveBeenCalledWith({ kind: 'PORTAL', mode: 'DRAW' });
+  });
+
+  it('Portal: picks a teammate first, then which of their two weapons to swap for — each hoverable like a Market card', () => {
+    const onCombatChoice = vi.fn();
+    const holder = mkPlayer({ id: 'a', name: 'Mona', role: role('hitman', 'CRIMINAL'), money: 3 });
+    const mate = mkPlayer({
+      id: 'm', name: 'Sal', role: role('spy', 'CRIMINAL'),
+      inventory: [
+        { id: 'axe', name: 'Axe', description: '+5 power.', cost: 5, source: 'PUBLIC', type: 'WEAPON', weaponType: 'MELEE', power: 5 },
+        { id: 'mos', name: 'Mosquitos', description: 'Before combat, opponent discards a card.', cost: 3, source: 'PUBLIC', type: 'WEAPON', weaponType: 'CHEMICAL', power: 3 },
+      ],
+    });
+    const def = mkPlayer({ id: 'd', name: 'Dee', role: role('mayor', 'CIVILIAN') });
+    const combat: CombatState = {
+      attacker: part('a'), defender: part('d'), turn: 'ATTACKER', played: [], actionCost: 2, playerCount: 3,
+      phase: 'PRE', pending: [{ kind: 'PORTAL', playerId: 'a', weaponId: 'por', side: 'ATTACKER' }],
+    };
+    render(<CombatChoicePanel state={stateWith([holder, def, mate], combat)} viewerIndex={0} onCombatChoice={onCombatChoice} />);
+
+    // No weapon chips until a teammate is picked.
+    expect(screen.queryByText('Axe')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('Sal'));
+
+    const axeButton = screen.getByText('Axe').closest('button');
+    const mosButton = screen.getByText('Mosquitos').closest('button');
+    expect(axeButton).toHaveAttribute('title', 'Axe — +5 power.');
+    expect(mosButton).toHaveAttribute('title', 'Mosquitos — Before combat, opponent discards a card.');
+
+    fireEvent.click(screen.getByText('Mosquitos'));
+    fireEvent.click(screen.getByText('Swap ($1)'));
+    expect(onCombatChoice).toHaveBeenCalledWith({ kind: 'PORTAL', mode: 'SWAP', teammateId: 'm', teammateWeaponId: 'mos' });
   });
 
   it('Leaving Evidence: the injured defender picks a card and shuffles it back', () => {
@@ -134,5 +165,39 @@ describe('<CombatChoicePanel />', () => {
     expect(screen.getByText(/waiting for dee/i)).toBeInTheDocument();
     expect(screen.queryByText('Time Evidence')).not.toBeInTheDocument();
     expect(screen.queryByText('Confirm')).not.toBeInTheDocument();
+  });
+
+  it('Destroy Perk: the winner picks which of the loser’s perks to destroy', () => {
+    const onCombatChoice = vi.fn();
+    const radio: MarketCard = { id: 'r1', name: 'Radio', description: '', cost: 2, source: 'PUBLIC', type: 'PERK' };
+    const computer: MarketCard = { id: 'c1', name: 'Computer', description: '', cost: 3, source: 'PUBLIC', type: 'PERK' };
+    const attacker = mkPlayer({ id: 'a', name: 'Mona', role: role('hitman', 'CRIMINAL') });
+    const def = mkPlayer({ id: 'd', name: 'Dee', role: role('mayor', 'CIVILIAN'), inventory: [radio, computer] });
+    const combat: CombatState = {
+      attacker: part('a'), defender: part('d'), turn: 'ATTACKER', played: [], actionCost: 2, playerCount: 2,
+      phase: 'AFTER', pending: [{ kind: 'DESTROY_PERK', playerId: 'a', targetId: 'd', weaponName: 'Missile', side: 'ATTACKER' }],
+    };
+    render(<CombatChoicePanel state={stateWith([attacker, def], combat)} viewerIndex={0} onCombatChoice={onCombatChoice} />);
+
+    expect(screen.getByText('Radio')).toBeInTheDocument();
+    expect(screen.getByText('Computer')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Computer'));
+    fireEvent.click(screen.getByText('Destroy'));
+    expect(onCombatChoice).toHaveBeenCalledWith({ kind: 'DESTROY_PERK', perkId: 'c1' });
+  });
+
+  it('Destroy Perk: everyone but the winner sees a read-only waiting notice', () => {
+    const onCombatChoice = vi.fn();
+    const radio: MarketCard = { id: 'r1', name: 'Radio', description: '', cost: 2, source: 'PUBLIC', type: 'PERK' };
+    const attacker = mkPlayer({ id: 'a', name: 'Mona', role: role('hitman', 'CRIMINAL') });
+    const def = mkPlayer({ id: 'd', name: 'Dee', role: role('mayor', 'CIVILIAN'), inventory: [radio] });
+    const combat: CombatState = {
+      attacker: part('a'), defender: part('d'), turn: 'ATTACKER', played: [], actionCost: 2, playerCount: 2,
+      phase: 'AFTER', pending: [{ kind: 'DESTROY_PERK', playerId: 'a', targetId: 'd', weaponName: 'Molotov Cocktail', side: 'ATTACKER' }],
+    };
+    render(<CombatChoicePanel state={stateWith([attacker, def], combat)} viewerIndex={1} onCombatChoice={onCombatChoice} />);
+
+    expect(screen.getByText(/Waiting for Mona to choose which of Dee's perks to destroy/)).toBeInTheDocument();
+    expect(screen.queryByText('Radio')).not.toBeInTheDocument();
   });
 });

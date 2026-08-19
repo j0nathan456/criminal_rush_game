@@ -76,6 +76,18 @@ describe('weaponPower — conditionals & scaling', () => {
     expect(weaponPower(wpn('p', 'Parasites', 'CHEMICAL', 0), hitman, foe, 4)).toBe(4);
   });
 
+  it('Parasites still matches only the Vigilante’s base PL, not their VP-stacked current PL', () => {
+    // Base PL 2, but boosted to 5 by 3 Vengeance stacks (max +3) from Criminal VPs.
+    const boostedVigilante = mkPlayer({ id: 'v', role: role('vigilante', 'CIVILIAN', 2), powerLevel: 5, vigilanteStacks: 3 });
+    expect(weaponPower(wpn('p', 'Parasites', 'CHEMICAL', 0), hitman, boostedVigilante, 4)).toBe(2);
+  });
+
+  it('Parasites still matches the full base PL of an exposed Criminal, ignoring their -1 PL penalty', () => {
+    // Base PL 3, but reduced to 2 by Expose's -1 PL penalty.
+    const exposedCriminal = mkPlayer({ id: 'x', role: role('robber', 'CRIMINAL', 3), powerLevel: 2, isExposed: true });
+    expect(weaponPower(wpn('p', 'Parasites', 'CHEMICAL', 0), hitman, exposedCriminal, 4)).toBe(3);
+  });
+
   it('Pocket Knife counts perks + weapons (including itself)', () => {
     const knife = wpn('k', 'Pocket Knife', 'MELEE', 0);
     const self = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [knife, perk('x', 'Radio'), perk('y', 'Bank')] });
@@ -416,8 +428,12 @@ describe('interactive combat — outcomes', () => {
     let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
     next = gameReducer(next, { type: 'PASS_COMBAT', side: 'ATTACKER' });
     next = gameReducer(next, { type: 'PASS_COMBAT', side: 'DEFENDER' });
+    expect(next.players[1].virusTokens).toBe(1); // Viruses token, applied unconditionally
+    expect(next.combat!.pending[0]).toEqual({ kind: 'DESTROY_PERK', playerId: 'a', targetId: 'd', weaponName: 'Missile', side: 'ATTACKER' });
+
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'DESTROY_PERK', perkId: 'rp' } });
     expect(next.players[1].inventory.some((c) => c.name === 'Radio')).toBe(false); // Missile destroyed it
-    expect(next.players[1].virusTokens).toBe(1); // Viruses token
+    expect(next.combat).toBeNull(); // AFTER queue empties, fight closes
   });
 
   it('a Virus token costs an action at the start of the next turn', () => {
@@ -466,7 +482,24 @@ describe('interactive combat — pre-combat choices', () => {
     expect(next.combat!.attacker.basePower).toBe(9);
   });
 
-  it('Mutants copies an opponent weapon’s power', () => {
+  it('Portal SWAP lets the holder pick which of a teammate’s two weapons to take', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), money: 3, inventory: [wpn('por', 'Portal', 'TECH', 0)] });
+    const mate = mkPlayer({
+      id: 'm', role: role('spy', 'CRIMINAL', 4), inventory: [wpn('axe', 'Axe', 'MELEE', 5), wpn('mos', 'Mosquitos', 'CHEMICAL', 3)],
+    });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2) });
+    const s = stateWith([atk, def, mate], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    // Choosing the second weapon (Mosquitos) specifically, not just "the teammate's weapon".
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'PORTAL', mode: 'SWAP', teammateId: 'm', teammateWeaponId: 'mos' } });
+    expect(next.players[0].inventory.some((c) => c.name === 'Mosquitos')).toBe(true);
+    expect(next.players[0].inventory.some((c) => c.name === 'Axe')).toBe(false); // left with the teammate
+    expect(next.players[2].inventory.map((c) => c.name).sort()).toEqual(['Axe', 'Portal']); // teammate keeps Axe, gains Portal
+  });
+
+  it('Mutants copies a weapon’s effect, not its flat printed power', () => {
+    // Axe is pure flat power with no other effect — nothing to copy.
     const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mut', 'Mutants', 'CHEMICAL', 1)] });
     const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2), inventory: [wpn('axe', 'Axe', 'MELEE', 5)] });
     const s = stateWith([atk, def], { currentPlayerIndex: 0 });
@@ -474,8 +507,150 @@ describe('interactive combat — pre-combat choices', () => {
     let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
     expect(next.combat!.pending[0].kind).toBe('MUTANTS');
     next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'COPY', opponentWeaponId: 'axe' } });
-    // 3 (Hitman) + Mutants own 1 + Hitman marksman (+1 weapon) + copied Axe 5 = 10.
+    // 3 (Hitman) + Mutants own 1 + Hitman marksman (+1 weapon) + copied Axe's flat power (0, no effect) = 5.
+    expect(next.combat!.attacker.basePower).toBe(5);
+  });
+
+  it('Mutants copying Harpoon gets only its conditional +2, never Harpoon’s own flat power', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mut', 'Mutants', 'CHEMICAL', 1)] });
+    // The defender owns both Harpoon (to be copied) and a Melee weapon (Axe),
+    // which is what triggers Harpoon's "+2 more if opponent has Melee" clause
+    // from the copying holder's perspective (their opponent is the defender).
+    const def = mkPlayer({
+      id: 'd', role: role('mayor', 'CIVILIAN', 2),
+      inventory: [wpn('harp', 'Harpoon', 'RANGED', 2), wpn('axe', 'Axe', 'MELEE', 5)],
+    });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'COPY', opponentWeaponId: 'harp' } });
+    // 3 (Hitman) + Mutants own 1 + Hitman marksman (+1 weapon) + Harpoon's copied conditional +2 (not its flat +2) = 7.
+    expect(next.combat!.attacker.basePower).toBe(7);
+  });
+
+  it('Mutants copying Parasites gains nothing — a PL-scaling stat isn’t a copyable effect', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mut', 'Mutants', 'CHEMICAL', 1)] });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 4), inventory: [wpn('par', 'Parasites', 'CHEMICAL', 0)] });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'COPY', opponentWeaponId: 'par' } });
+    // 3 (Hitman) + Mutants own 1 + Hitman marksman (+1 weapon) + copied Parasites (0) = 5, not 4 (defender's role PL).
+    expect(next.combat!.attacker.basePower).toBe(5);
+  });
+
+  it('Mutants copying Signal Jammer still locks its original owner out of Power cards', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mut', 'Mutants', 'CHEMICAL', 1)] });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2), inventory: [wpn('sj', 'Signal Jammer', 'TECH', 2)] });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'COPY', opponentWeaponId: 'sj' } });
+    // The defender's own Signal Jammer already locks the attacker; the copy
+    // now also locks the defender (its original owner) out in return.
+    expect(next.combat!.attacker.canPlayPower).toBe(false);
+    expect(next.combat!.defender.canPlayPower).toBe(false);
+    // No flat power from the copy — Signal Jammer has no conditional bonus.
+    expect(next.combat!.attacker.basePower).toBe(5); // 3 (Hitman) + Mutants own 1 + Hitman marksman (+1 weapon)
+  });
+
+  it('Mutants copying Robot Soldier scales with the copying holder’s own hand, capped at +5', () => {
+    const atk = mkPlayer({
+      id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mut', 'Mutants', 'CHEMICAL', 1)],
+      hand: [junk('1'), junk('2'), junk('3'), junk('4')],
+    });
+    // The defender's own hand size (1 card) must NOT be what gets copied.
+    const def = mkPlayer({
+      id: 'd', role: role('mayor', 'CIVILIAN', 2), inventory: [wpn('rs', 'Robot Soldier', 'TECH', 0)], hand: [junk('x')],
+    });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'COPY', opponentWeaponId: 'rs' } });
+    // 3 (Hitman) + Mutants own 1 + Hitman marksman (+1 weapon) + copied Robot Soldier (holder's own 4 cards) = 9.
+    expect(next.combat!.attacker.basePower).toBe(9);
+  });
+
+  it('Mutants copying Robot Soldier still caps its copied power at +5, even with 6+ cards', () => {
+    const atk = mkPlayer({
+      id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mut', 'Mutants', 'CHEMICAL', 1)],
+      hand: [junk('1'), junk('2'), junk('3'), junk('4'), junk('5'), junk('6')],
+    });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2), inventory: [wpn('rs', 'Robot Soldier', 'TECH', 0)] });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'COPY', opponentWeaponId: 'rs' } });
+    // 3 + 1 + 1 (Hitman marksman) + Robot Soldier capped at +5 (not +6) = 10.
     expect(next.combat!.attacker.basePower).toBe(10);
+  });
+
+  it('Mutants copying Pocket Knife scales with the copying holder’s own perk/weapon count', () => {
+    const perk: MarketCard = { id: 'p1', name: 'Radio', description: '', cost: 2, source: 'PUBLIC', type: 'PERK' };
+    const atk = mkPlayer({
+      id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mut', 'Mutants', 'CHEMICAL', 1), perk],
+    });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2), inventory: [wpn('pk', 'Pocket Knife', 'MELEE', 0)] });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'COPY', opponentWeaponId: 'pk' } });
+    // Holder's own perk/weapon count: Mutants + Radio = 2.
+    // 3 (Hitman) + Mutants own 1 + Hitman marksman (+1 weapon) + copied Pocket Knife (2) = 7.
+    expect(next.combat!.attacker.basePower).toBe(7);
+  });
+
+  it('Mutants copying Cannon scales with the original owner’s hand — the copying holder’s actual opponent', () => {
+    const atk = mkPlayer({
+      id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mut', 'Mutants', 'CHEMICAL', 1)], hand: [junk('x')],
+    });
+    // The attacker's own hand size (1 card) must NOT be what gets copied.
+    const def = mkPlayer({
+      id: 'd', role: role('mayor', 'CIVILIAN', 2), inventory: [wpn('can', 'Cannon', 'RANGED', 0)],
+      hand: [junk('1'), junk('2'), junk('3')],
+    });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'COPY', opponentWeaponId: 'can' } });
+    // Cannon scales with "your opponent's" hand — for the copying holder,
+    // that opponent is the defender it was copied from: 3 cards.
+    // 3 (Hitman) + Mutants own 1 + Hitman marksman (+1) + copied Cannon (3) = 8.
+    expect(next.combat!.attacker.basePower).toBe(8);
+  });
+
+  it('Mutants copying Catapult gains no power — its flat power isn’t a copyable effect', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mut', 'Mutants', 'CHEMICAL', 1)] });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2), inventory: [wpn('cat', 'Catapult', 'RANGED', 2)] });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'COPY', opponentWeaponId: 'cat' } });
+    expect(next.combat!.attacker.basePower).toBe(5); // 3 (Hitman) + Mutants own 1 + Hitman marksman (+1 weapon)
+  });
+
+  it('Mutants lets its holder attack a non-neighbor who carries Catapult', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mut', 'Mutants', 'CHEMICAL', 1)] });
+    const neighbor1 = mkPlayer({ id: 'n1', role: role('mayor', 'CIVILIAN', 2) });
+    // Seated opposite the attacker in a 4-player circle — not a neighbor.
+    const farTarget = mkPlayer({ id: 'far', role: role('sheriff', 'CIVILIAN', 3), inventory: [wpn('cat', 'Catapult', 'RANGED', 2)] });
+    const neighbor2 = mkPlayer({ id: 'n2', role: role('attorney', 'CIVILIAN', 3) });
+    const s = stateWith([atk, neighbor1, farTarget, neighbor2], { currentPlayerIndex: 0 });
+
+    const next = gameReducer(s, { type: 'ATTACK', targetId: 'far' });
+    expect(next.combat).toBeTruthy();
+    expect(next.combat!.defender.playerId).toBe('far');
+  });
+
+  it('Mutants does not let its holder reach a non-neighbor without Catapult/Machine Gun', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mut', 'Mutants', 'CHEMICAL', 1)] });
+    const neighbor1 = mkPlayer({ id: 'n1', role: role('mayor', 'CIVILIAN', 2) });
+    const farTarget = mkPlayer({ id: 'far', role: role('sheriff', 'CIVILIAN', 3) });
+    const neighbor2 = mkPlayer({ id: 'n2', role: role('attorney', 'CIVILIAN', 3) });
+    const s = stateWith([atk, neighbor1, farTarget, neighbor2], { currentPlayerIndex: 0 });
+
+    const next = gameReducer(s, { type: 'ATTACK', targetId: 'far' });
+    expect(next.combat).toBeFalsy();
   });
 
   it('Mutants copying Mosquitos also forces this fight’s opponent to discard — not just its power', () => {
@@ -795,5 +970,110 @@ describe('interactive combat — Leaving Evidence (AFTER phase)', () => {
     next = gameReducer(next, { type: 'PASS_COMBAT', side: 'DEFENDER' });
     expect(next.combat).toBeNull(); // no AFTER phase without discard evidence
     expect(next.players[1].isInjured).toBe(true);
+  });
+});
+
+describe('interactive combat — Missile/Molotov destroy-perk (AFTER phase)', () => {
+  it('lets the winner choose which of the loser’s perks to destroy', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mis', 'Missile', 'TECH', 2)] });
+    const def = mkPlayer({
+      id: 'd', role: role('mayor', 'CIVILIAN', 2), inventory: [perk('r1', 'Radio'), perk('c1', 'Computer')],
+    });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'ATTACKER' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'DEFENDER' });
+    expect(next.combat!.pending[0]).toEqual({ kind: 'DESTROY_PERK', playerId: 'a', targetId: 'd', weaponName: 'Missile', side: 'ATTACKER' });
+
+    // The winner picks Computer, not Radio — a real choice, not "first perk".
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'DESTROY_PERK', perkId: 'c1' } });
+    expect(next.players[1].inventory.map((c) => c.id)).toEqual(['r1']);
+    expect(next.combat).toBeNull();
+  });
+
+  it('a defender who repels the attack still triggers their own Missile — roles reversed', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 1), inventory: [perk('r1', 'Radio')] });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 3), inventory: [wpn('mis', 'Missile', 'TECH', 2)] });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+
+    // Attacker base 1 vs defender base 3 + 2 (Missile) = 5 → the defender repels it.
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'ATTACKER' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'DEFENDER' });
+    expect(next.combat!.pending[0]).toEqual({ kind: 'DESTROY_PERK', playerId: 'd', targetId: 'a', weaponName: 'Missile', side: 'DEFENDER' });
+
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'DESTROY_PERK', perkId: 'r1' } });
+    expect(next.players[0].inventory).toHaveLength(0); // the attacker's Radio, destroyed
+    expect(next.players[0].isInjured).toBe(false); // repelling doesn't injure the attacker
+    expect(next.combat).toBeNull();
+  });
+
+  it('is skipped entirely — no pending choice at all — when the loser has no perks', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mis', 'Missile', 'TECH', 2)] });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2) });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'ATTACKER' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'DEFENDER' });
+    expect(next.combat).toBeNull(); // no perks to destroy — closes immediately
+    expect(next.players[1].isInjured).toBe(true);
+  });
+
+  it('Molotov Cocktail refunds a destroyed perk’s cost to a Civilian victim', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mol', 'Molotov Cocktail', 'RANGED', 2)] });
+    const def = mkPlayer({
+      id: 'd', role: role('mayor', 'CIVILIAN', 2), money: 1, inventory: [perk('r1', 'Radio', { cost: 2 })],
+    });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'ATTACKER' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'DEFENDER' });
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'DESTROY_PERK', perkId: 'r1' } });
+    expect(next.players[1].inventory).toHaveLength(0);
+    expect(next.players[1].money).toBe(3); // 1 + Radio's $2 cost refunded
+  });
+
+  it('Mutants copying an opponent’s Missile also queues a destroy-perk choice', () => {
+    const atk = mkPlayer({
+      id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mut', 'Mutants', 'CHEMICAL', 1)],
+    });
+    const def = mkPlayer({
+      id: 'd', role: role('mayor', 'CIVILIAN', 2),
+      inventory: [wpn('mis', 'Missile', 'TECH', 2), perk('r1', 'Radio')],
+    });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'COPY', opponentWeaponId: 'mis' } });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'ATTACKER' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'DEFENDER' });
+    expect(next.combat!.pending[0]).toEqual({ kind: 'DESTROY_PERK', playerId: 'a', targetId: 'd', weaponName: 'Missile', side: 'ATTACKER' });
+
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'DESTROY_PERK', perkId: 'r1' } });
+    expect(next.players[1].inventory.some((c) => c.name === 'Radio')).toBe(false);
+    expect(next.players[1].inventory.some((c) => c.name === 'Missile')).toBe(true); // the weapon itself is untouched
+    expect(next.combat).toBeNull();
+  });
+
+  it('auto-skips a second destroy-perk choice once the first already took the loser’s only perk', () => {
+    const atk = mkPlayer({
+      id: 'a', role: role('hitman', 'CRIMINAL', 3),
+      inventory: [wpn('mis', 'Missile', 'TECH', 2), wpn('mol', 'Molotov Cocktail', 'RANGED', 2)],
+    });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2), inventory: [perk('r1', 'Radio')] });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'ATTACKER' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'DEFENDER' });
+    expect(next.combat!.pending).toHaveLength(2); // one per weapon
+
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'DESTROY_PERK', perkId: 'r1' } });
+    // The second (Molotov's) choice had nothing left to destroy — auto-skipped.
+    expect(next.players[1].inventory).toHaveLength(0);
+    expect(next.combat).toBeNull();
   });
 });
