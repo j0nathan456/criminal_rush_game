@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Player } from '../types/game';
 import { TEAM_META, STATUS_META } from '../constants/theme';
@@ -24,8 +24,13 @@ type StatusKey = keyof typeof STATUS_META;
  * it (when not being used to pick a target) opens a popover with the player's
  * full detail — money, PL, hand size, statuses, tokens, and inventory.
  */
+/** Rough max height of the detail popover — enough for a full status/token/inventory list. */
+const POPOVER_HEIGHT_ESTIMATE = 280;
+
 export function PlayerSeat({ player, active, isSelf, isNeighbor, targetable, onClick }: PlayerSeatProps) {
   const [open, setOpen] = useState(false);
+  const [openUpward, setOpenUpward] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const meta = TEAM_META[player.team];
   const statuses = (Object.keys(STATUS_META) as StatusKey[]).filter((k) => player[k]);
   const tokens = playerTokens(player);
@@ -34,8 +39,17 @@ export function PlayerSeat({ player, active, isSelf, isNeighbor, targetable, onC
   const showNeighbor = isNeighbor && !active && !targetable;
 
   const handleClick = () => {
-    if (selectsTarget) onClick!(player);
-    else setOpen((o) => !o);
+    if (selectsTarget) {
+      onClick!(player);
+      return;
+    }
+    // Flip the popover above the seat when there isn't room below (e.g. the
+    // last few seats in a long roster) so it never gets clipped off-screen.
+    if (!open) {
+      const rect = buttonRef.current?.getBoundingClientRect();
+      setOpenUpward(Boolean(rect) && window.innerHeight - rect!.bottom < POPOVER_HEIGHT_ESTIMATE);
+    }
+    setOpen((o) => !o);
   };
 
   const style: React.CSSProperties = {
@@ -50,6 +64,7 @@ export function PlayerSeat({ player, active, isSelf, isNeighbor, targetable, onC
   return (
     <div className="relative">
       <motion.button
+        ref={buttonRef}
         type="button"
         whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.98 }}
@@ -100,7 +115,8 @@ export function PlayerSeat({ player, active, isSelf, isNeighbor, targetable, onC
               exit={{ opacity: 0, y: -4, scale: 0.98 }}
               transition={{ duration: 0.12 }}
               style={{ borderLeftColor: meta.color }}
-              className="absolute left-0 top-full z-50 mt-1 w-60 rounded-xl border border-l-4 border-line bg-panel p-3 shadow-noir"
+              className={`absolute left-0 z-50 w-60 rounded-xl border border-l-4 border-line bg-panel p-3 shadow-noir
+                ${openUpward ? 'bottom-full mb-1' : 'top-full mt-1'}`}
             >
               <div className="flex items-baseline justify-between">
                 <span className="font-extrabold" style={{ color: meta.color }}>{player.name}</span>
