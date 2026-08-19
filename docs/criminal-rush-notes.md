@@ -209,7 +209,7 @@ Attacker vs. defender (person initiating = attacker).
 | Arrows | $3 | Ranged | +2 power |
 | Pistol | $4 | Ranged | +4 power. Before combat: must discard a card (if possible). |
 | Harpoon | $4 | Ranged | +2 power; +2 more if opponent has a Melee weapon |
-| Catapult | $4 | Ranged | +2 power. May attack non-neighbors. (+3 power instead of +2 in 4-player games.) |
+| Catapult | $4 | Ranged | You may attack non-neighbors OR +1 power. (2 base power; +1 more — 3 total — only when the fight is within normal neighbor range. Reaching past a neighbor via Catapult forgoes the +1.) |
 | Machine Gun | $5 | Ranged | +3 power. Power phase: may discard any # of Money cards, each +1 power. May attack non-neighbors. |
 | Electric Baton | $3 | Tech | +2 power |
 | Missile | $4 | Tech | +2 power. After combat, if won: destroy one of opponent's perks. |
@@ -282,7 +282,7 @@ Attacker vs. defender (person initiating = attacker).
 - **Mutants**: copies a weapon's *effect*, never its flat printed power. Three cases:
   - Resource-scaling weapons (Pocket Knife, Robot Soldier, Cannon) count as an effect and copy in full, caps included (Robot Soldier still maxes at +5) — using the same "you"/"your opponent" the printed text always has, just re-pointed at the new holder. Pocket Knife/Robot Soldier scale with the *copying holder's own* stat ("cards/perks YOU hold"); Cannon scales with "your opponent['s]" hand — the holder's actual opponent, i.e. the weapon's original owner.
   - A conditional "+2 more if opponent has an X weapon" clause (Harpoon, Switch Blade, Magnetic Deflector, Corrosion Cannisters) transfers as just that +2 — evaluated against the copying holder's own actual opponent — never the weapon's own base power.
-  - Parasites (a role-identity stat, not a countable resource) and Catapult (flat power set by table size, not a per-object count) copy 0 power. Catapult's real copyable effect is its non-neighbor targeting: a Mutants holder may attack a non-neighbor who themselves carries Catapult or Machine Gun, on the strength of the copy they intend to make.
+  - Parasites (a role-identity stat, not a countable resource) copies 0 power. Catapult's own conditional — +1 for fighting within neighbor range — copies the same way as Harpoon's, never its flat 2 base; its non-neighbor *targeting* is a separate effect (a Mutants holder may attack a non-neighbor who themselves carries Catapult or Machine Gun, on the strength of the copy they intend to make), handled by canReachNonNeighbors, not power at all.
   - Non-power effects transfer fully regardless of category: Hammer draws, Barbed Wire/Mosquitos force a discard, Brass Knuckles steals, and a copied Signal Jammer still locks its original owner out of Power cards.
 - **Mutants / Barbed Wire / Hammer / Pistol / Mosquitos stacking**: resolution order — (1) Mutants chooses which weapon to copy first; (2) resolve "before combat" effects for attacker then defender (Hammer, Mosquitos, etc.).
 - **Vitamin**: reward is granted at the **start of your NEXT turn**, not immediately on purchase. At the final stage, the +2 PL is a permanent, always-on bonus.

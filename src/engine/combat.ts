@@ -50,7 +50,7 @@ export function weaponPower(
   weapon: MarketCard,
   self: Player,
   opponent: Player,
-  playerCount: number,
+  areNeighbors: boolean,
 ): number {
   let power: number;
 
@@ -68,8 +68,11 @@ export function weaponPower(
     case 'Cannon':
       power = Math.min(opponent.hand.length, 4);
       break;
+    // "You may attack non-neighbors OR +1 power": the extended reach (see
+    // canReachNonNeighbors) is free, but only fighting within normal
+    // (neighbor) range earns the +1 — reaching past it doesn't.
     case 'Catapult':
-      power = playerCount === 4 ? 3 : 2;
+      power = areNeighbors ? 3 : 2;
       break;
     default: {
       power = weapon.power ?? 0;
@@ -98,30 +101,28 @@ export function weaponPower(
  *    just re-pointed at the new holder: Pocket Knife/Robot Soldier scale with
  *    the *copying holder's own* stat ("cards/perks YOU hold"), while Cannon
  *    scales with "your opponent['s]" — the holder's actual opponent, `opp`.
- *  - A flat "+2 more if opponent has an X weapon" conditional (Harpoon,
- *    Switch Blade, Magnetic Deflector, Corrosion Cannisters) copies as just
- *    that +2, evaluated against `opp` — the copying holder's own actual
- *    opponent — never the weapon's own base power.
- *  - Parasites (a role-identity stat, not a countable resource) and Catapult
- *    (flat power set by table size, not a per-object count) copy 0 power;
- *    Catapult's real copyable effect is its non-neighbor targeting, handled
- *    separately by canReachNonNeighbors.
+ *  - A conditional bonus (Harpoon/Switch Blade/Magnetic Deflector/Corrosion
+ *    Cannisters' "+2 more if opponent has an X weapon"; Catapult's own +1 for
+ *    fighting within neighbor range) copies as just that bonus, never the
+ *    weapon's own flat base power — Catapult's non-neighbor *targeting* is a
+ *    separate effect, handled by canReachNonNeighbors, not power at all.
+ *  - Parasites (a role-identity stat, not a countable resource) copies 0 power.
  */
-function weaponCopyPower(weapon: MarketCard, holder: Player, opp: Player, playerCount: number): number {
+function weaponCopyPower(weapon: MarketCard, holder: Player, opp: Player, areNeighbors: boolean): number {
   switch (weapon.name) {
     case 'Parasites':
-    case 'Catapult':
       return 0;
     case 'Pocket Knife':
     case 'Robot Soldier':
     case 'Cannon':
-      return weaponPower(weapon, holder, opp, playerCount);
+      return weaponPower(weapon, holder, opp, areNeighbors);
     default: {
       let bonus = 0;
       if (weapon.name === 'Switch Blade' && hasWeaponType(opp, 'CHEMICAL')) bonus += 2;
       if (weapon.name === 'Harpoon' && hasWeaponType(opp, 'MELEE')) bonus += 2;
       if (weapon.name === 'Magnetic Deflector' && hasWeaponType(opp, 'RANGED')) bonus += 2;
       if (weapon.name === 'Corrosion Cannisters' && hasWeaponType(opp, 'TECH')) bonus += 2;
+      if (weapon.name === 'Catapult' && areNeighbors) bonus += 1;
       return bonus;
     }
   }
@@ -135,7 +136,7 @@ function weaponCopyPower(weapon: MarketCard, holder: Player, opp: Player, player
  * kept separate so weaponPower itself stays a plain number for its other
  * callers (computeBasePower, Mutants' copy) and their tests.
  */
-function weaponPowerNote(weapon: MarketCard, self: Player, opponent: Player, playerCount: number): string | undefined {
+function weaponPowerNote(weapon: MarketCard, self: Player, opponent: Player, areNeighbors: boolean): string | undefined {
   switch (weapon.name) {
     case 'Parasites':
       return `${weapon.name} matches ${opponent.name}'s Base PL (${opponent.role.powerlevel}).`;
@@ -146,7 +147,9 @@ function weaponPowerNote(weapon: MarketCard, self: Player, opponent: Player, pla
     case 'Cannon':
       return `${weapon.name} scales with ${opponent.name}'s hand size (+${Math.min(opponent.hand.length, 4)} PL).`;
     case 'Catapult':
-      return `${weapon.name} grants +${playerCount === 4 ? 3 : 2} PL in a ${playerCount}-player game.`;
+      return areNeighbors
+        ? `${weapon.name} grants +1 PL for fighting within neighbor range.`
+        : `${weapon.name} reaches a non-neighbor — no +1 PL.`;
     default: {
       const bonuses: string[] = [];
       if (weapon.name === 'Switch Blade' && hasWeaponType(opponent, 'CHEMICAL')) bonuses.push('+2 PL against a Chemical weapon');
@@ -181,10 +184,10 @@ function bodyguardBonusActive(self: Player, allPlayers: Player[]): boolean {
 export function computeBasePower(
   self: Player,
   opponent: Player,
-  opts: { isAttacker: boolean; playerCount: number; allPlayers: Player[] },
+  opts: { isAttacker: boolean; areNeighbors: boolean; allPlayers: Player[] },
 ): number {
   const weapons = weaponsOf(self);
-  const weaponSum = weapons.reduce((sum, w) => sum + weaponPower(w, self, opponent, opts.playerCount), 0);
+  const weaponSum = weapons.reduce((sum, w) => sum + weaponPower(w, self, opponent, opts.areNeighbors), 0);
   const hitmanBonus = opts.isAttacker && self.role.id === 'hitman' ? weapons.length : 0;
   const bodyguardBonus = !opts.isAttacker && bodyguardBonusActive(self, opts.allPlayers) ? 2 : 0;
   return self.powerLevel + weaponSum + hitmanBonus + bodyguardBonus;
@@ -356,21 +359,24 @@ export function buildPendingChoices(state: GameState, attackerId: string, defend
 export function enterPowerPhase(state: GameState): GameState {
   const combat = state.combat;
   if (!combat) return state;
-  const atk = state.players[playerIndexById(state, combat.attacker.playerId)];
+  const attackerIdx = playerIndexById(state, combat.attacker.playerId);
+  const atk = state.players[attackerIdx];
   const def = state.players[playerIndexById(state, combat.defender.playerId)];
-  const pc = combat.playerCount;
-  const atkBase = computeBasePower(atk, def, { isAttacker: true, playerCount: pc, allPlayers: state.players }) + (combat.attacker.copiedWeaponPower ?? 0);
-  const defBase = computeBasePower(def, atk, { isAttacker: false, playerCount: pc, allPlayers: state.players }) + (combat.defender.copiedWeaponPower ?? 0);
+  // Catapult's +1 PL depends on whether this fight is within normal (neighbor)
+  // range — symmetric, so both sides' Catapults share the same answer.
+  const areNeighbors = neighborIds(state, attackerIdx).includes(def.id);
+  const atkBase = computeBasePower(atk, def, { isAttacker: true, areNeighbors, allPlayers: state.players }) + (combat.attacker.copiedWeaponPower ?? 0);
+  const defBase = computeBasePower(def, atk, { isAttacker: false, areNeighbors, allPlayers: state.players }) + (combat.defender.copiedWeaponPower ?? 0);
 
   // Record any conditional/computed weapon bonuses that just applied, so a
   // non-obvious base-power number is explained in the case log.
   let s = state;
   for (const w of weaponsOf(atk)) {
-    const note = weaponPowerNote(w, atk, def, pc);
+    const note = weaponPowerNote(w, atk, def, areNeighbors);
     if (note) s = log(s, note);
   }
   for (const w of weaponsOf(def)) {
-    const note = weaponPowerNote(w, def, atk, pc);
+    const note = weaponPowerNote(w, def, atk, areNeighbors);
     if (note) s = log(s, note);
   }
 
@@ -480,7 +486,8 @@ function applyMutants(state: GameState, head: Extract<CombatChoice, { kind: 'MUT
   const opp = state.players[playerIndexById(state, oppId)];
   const weapon = opp.inventory.find((c) => c.id === input.opponentWeaponId && c.type === 'WEAPON');
   if (!weapon) return log(state, 'No such opponent weapon to copy.');
-  const copied = weaponCopyPower(weapon, holder, opp, combat.playerCount);
+  const areNeighbors = neighborIds(state, playerIndexById(state, combat.attacker.playerId)).includes(combat.defender.playerId);
+  const copied = weaponCopyPower(weapon, holder, opp, areNeighbors);
   const part = head.side === 'ATTACKER' ? combat.attacker : combat.defender;
   const newPart = { ...part, copiedWeaponPower: (part.copiedWeaponPower ?? 0) + copied, copiedWeaponName: weapon.name };
   const newCombat = head.side === 'ATTACKER' ? { ...combat, attacker: newPart } : { ...combat, defender: newPart };

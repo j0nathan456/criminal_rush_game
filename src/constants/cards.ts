@@ -113,7 +113,7 @@ export const MARKET_WEAPONS: CardDef<MarketCard>[] = [
   { name: 'Arrows', description: '+2 power.', cost: 3, source: 'PUBLIC', type: 'WEAPON', weaponType: 'RANGED', power: 2, copies: 2 },
   { name: 'Pistol', description: '+4 power. Before combat, discard a card (if possible).', cost: 4, source: 'PUBLIC', type: 'WEAPON', weaponType: 'RANGED', power: 4, copies: 2 },
   { name: 'Harpoon', description: '+2 power, +2 more if your opponent has a Melee weapon.', cost: 4, source: 'PUBLIC', type: 'WEAPON', weaponType: 'RANGED', power: 2, copies: 2 },
-  { name: 'Catapult', description: '+2 power (+3 in 4-player games). May attack non-neighbors.', cost: 4, source: 'PUBLIC', type: 'WEAPON', weaponType: 'RANGED', power: 2, copies: 2 },
+  { name: 'Catapult', description: 'You may attack non-neighbors OR +1 power.', cost: 4, source: 'PUBLIC', type: 'WEAPON', weaponType: 'RANGED', power: 2, copies: 2 },
   { name: 'Machine Gun', description: '+3 power. Power phase: discard Money cards for +1 power each. May attack non-neighbors.', cost: 5, source: 'PUBLIC', type: 'WEAPON', weaponType: 'RANGED', power: 3, copies: 2 },
   { name: 'Electric Baton', description: '+2 power.', cost: 3, source: 'PUBLIC', type: 'WEAPON', weaponType: 'TECH', power: 2, copies: 2 },
   { name: 'Missile', description: '+2 power. If you win with this, destroy one of the opponent’s perks.', cost: 4, source: 'PUBLIC', type: 'WEAPON', weaponType: 'TECH', power: 2, copies: 2 },

@@ -54,8 +54,8 @@ const perk = (id: string, name: string, over: Partial<MarketCard> = {}): MarketC
 const pow = (id: string, name: string, power: number): ActionCard => ({ id, name, description: '', type: 'POWER', power });
 const junk = (id: string): ActionCard => ({ id, name: `junk-${id}`, description: '', type: 'MONEY', value: 1 });
 
-const ATK = { isAttacker: true, playerCount: 4 };
-const DEF = { isAttacker: false, playerCount: 4 };
+const ATK = { isAttacker: true, areNeighbors: true };
+const DEF = { isAttacker: false, areNeighbors: true };
 
 // --- weaponPower / computeBasePower -----------------------------------------
 
@@ -65,57 +65,57 @@ describe('weaponPower — conditionals & scaling', () => {
   it('adds +2 when a conditional weapon matches the opponent’s class', () => {
     const meleeFoe = mkPlayer({ id: 'b', role: role('mayor', 'CIVILIAN', 2), inventory: [wpn('m', 'Bat', 'MELEE', 2)] });
     // Harpoon: +2, +2 more vs a Melee opponent.
-    expect(weaponPower(wpn('h', 'Harpoon', 'RANGED', 2), hitman, meleeFoe, 4)).toBe(4);
+    expect(weaponPower(wpn('h', 'Harpoon', 'RANGED', 2), hitman, meleeFoe, true)).toBe(4);
     // No melee opponent → just +2.
     const bareFoe = mkPlayer({ id: 'c', role: role('mayor', 'CIVILIAN', 2) });
-    expect(weaponPower(wpn('h', 'Harpoon', 'RANGED', 2), hitman, bareFoe, 4)).toBe(2);
+    expect(weaponPower(wpn('h', 'Harpoon', 'RANGED', 2), hitman, bareFoe, true)).toBe(2);
   });
 
   it('Parasites equals the opponent’s role base PL', () => {
     const foe = mkPlayer({ id: 'b', role: role('spy', 'CRIMINAL', 4) });
-    expect(weaponPower(wpn('p', 'Parasites', 'CHEMICAL', 0), hitman, foe, 4)).toBe(4);
+    expect(weaponPower(wpn('p', 'Parasites', 'CHEMICAL', 0), hitman, foe, true)).toBe(4);
   });
 
   it('Parasites still matches only the Vigilante’s base PL, not their VP-stacked current PL', () => {
     // Base PL 2, but boosted to 5 by 3 Vengeance stacks (max +3) from Criminal VPs.
     const boostedVigilante = mkPlayer({ id: 'v', role: role('vigilante', 'CIVILIAN', 2), powerLevel: 5, vigilanteStacks: 3 });
-    expect(weaponPower(wpn('p', 'Parasites', 'CHEMICAL', 0), hitman, boostedVigilante, 4)).toBe(2);
+    expect(weaponPower(wpn('p', 'Parasites', 'CHEMICAL', 0), hitman, boostedVigilante, true)).toBe(2);
   });
 
   it('Parasites still matches the full base PL of an exposed Criminal, ignoring their -1 PL penalty', () => {
     // Base PL 3, but reduced to 2 by Expose's -1 PL penalty.
     const exposedCriminal = mkPlayer({ id: 'x', role: role('robber', 'CRIMINAL', 3), powerLevel: 2, isExposed: true });
-    expect(weaponPower(wpn('p', 'Parasites', 'CHEMICAL', 0), hitman, exposedCriminal, 4)).toBe(3);
+    expect(weaponPower(wpn('p', 'Parasites', 'CHEMICAL', 0), hitman, exposedCriminal, true)).toBe(3);
   });
 
   it('Pocket Knife counts perks + weapons (including itself)', () => {
     const knife = wpn('k', 'Pocket Knife', 'MELEE', 0);
     const self = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [knife, perk('x', 'Radio'), perk('y', 'Bank')] });
     const foe = mkPlayer({ id: 'b', role: role('mayor', 'CIVILIAN', 2) });
-    expect(weaponPower(knife, self, foe, 4)).toBe(3); // 3 items
+    expect(weaponPower(knife, self, foe, true)).toBe(3); // 3 items
   });
 
   it('Robot Soldier caps at +5 and Cannon caps at +4', () => {
     const bigHand = Array.from({ length: 8 }, (_, i) => junk(`h${i}`));
     const self = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), hand: bigHand });
     const foe = mkPlayer({ id: 'b', role: role('mayor', 'CIVILIAN', 2), hand: bigHand });
-    expect(weaponPower(wpn('r', 'Robot Soldier', 'TECH', 0), self, foe, 4)).toBe(5);
-    expect(weaponPower(wpn('c', 'Cannon', 'RANGED', 0), self, foe, 4)).toBe(4);
+    expect(weaponPower(wpn('r', 'Robot Soldier', 'TECH', 0), self, foe, true)).toBe(5);
+    expect(weaponPower(wpn('c', 'Cannon', 'RANGED', 0), self, foe, true)).toBe(4);
   });
 
-  it('Catapult is +3 in a 4-player game, +2 otherwise', () => {
+  it('Catapult is +3 within neighbor range, +2 for a non-neighbor', () => {
     const self = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3) });
     const foe = mkPlayer({ id: 'b', role: role('mayor', 'CIVILIAN', 2) });
-    expect(weaponPower(wpn('c', 'Catapult', 'RANGED', 2), self, foe, 4)).toBe(3);
-    expect(weaponPower(wpn('c', 'Catapult', 'RANGED', 2), self, foe, 6)).toBe(2);
+    expect(weaponPower(wpn('c', 'Catapult', 'RANGED', 2), self, foe, true)).toBe(3);
+    expect(weaponPower(wpn('c', 'Catapult', 'RANGED', 2), self, foe, false)).toBe(2);
   });
 
   it('Laboratory/Ironworks buff the matching weapon classes', () => {
     const foe = mkPlayer({ id: 'b', role: role('mayor', 'CIVILIAN', 2) });
     const lab = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [perk('l', 'Laboratory')] });
-    expect(weaponPower(wpn('t', 'Toxic Gas', 'CHEMICAL', 2), lab, foe, 4)).toBe(3); // +1 chemical
+    expect(weaponPower(wpn('t', 'Toxic Gas', 'CHEMICAL', 2), lab, foe, true)).toBe(3); // +1 chemical
     const iron = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [perk('i', 'Ironworks')] });
-    expect(weaponPower(wpn('bt', 'Bat', 'MELEE', 2), iron, foe, 4)).toBe(3); // +1 melee
+    expect(weaponPower(wpn('bt', 'Bat', 'MELEE', 2), iron, foe, true)).toBe(3); // +1 melee
   });
 });
 
@@ -619,14 +619,30 @@ describe('interactive combat — pre-combat choices', () => {
     expect(next.combat!.attacker.basePower).toBe(8);
   });
 
-  it('Mutants copying Catapult gains no power — its flat power isn’t a copyable effect', () => {
+  it('Mutants copying Catapult gains its conditional +1 for fighting a neighbor, never its flat base power', () => {
     const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mut', 'Mutants', 'CHEMICAL', 1)] });
     const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2), inventory: [wpn('cat', 'Catapult', 'RANGED', 2)] });
+    // Only two seats — attacker and defender are each other's neighbor.
     const s = stateWith([atk, def], { currentPlayerIndex: 0 });
 
     let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
     next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'COPY', opponentWeaponId: 'cat' } });
-    expect(next.combat!.attacker.basePower).toBe(5); // 3 (Hitman) + Mutants own 1 + Hitman marksman (+1 weapon)
+    // 3 (Hitman) + Mutants own 1 + Hitman marksman (+1 weapon) + copied Catapult's neighbor-range +1 = 6.
+    expect(next.combat!.attacker.basePower).toBe(6);
+  });
+
+  it('Mutants copying Catapult from a non-neighbor gains no power at all — no base, no conditional', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mut', 'Mutants', 'CHEMICAL', 1)] });
+    const neighbor1 = mkPlayer({ id: 'n1', role: role('mayor', 'CIVILIAN', 2) });
+    // Seated opposite the attacker in a 4-player circle — not a neighbor, reachable via Catapult.
+    const farTarget = mkPlayer({ id: 'far', role: role('sheriff', 'CIVILIAN', 3), inventory: [wpn('cat', 'Catapult', 'RANGED', 2)] });
+    const neighbor2 = mkPlayer({ id: 'n2', role: role('attorney', 'CIVILIAN', 3) });
+    const s = stateWith([atk, neighbor1, farTarget, neighbor2], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'far' });
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'COPY', opponentWeaponId: 'cat' } });
+    // 3 (Hitman) + Mutants own 1 + Hitman marksman (+1 weapon) + copied Catapult (0, non-neighbor) = 5.
+    expect(next.combat!.attacker.basePower).toBe(5);
   });
 
   it('Mutants lets its holder attack a non-neighbor who carries Catapult', () => {
@@ -640,6 +656,24 @@ describe('interactive combat — pre-combat choices', () => {
     const next = gameReducer(s, { type: 'ATTACK', targetId: 'far' });
     expect(next.combat).toBeTruthy();
     expect(next.combat!.defender.playerId).toBe('far');
+  });
+
+  it('a Catapult holder gets +1 PL attacking a neighbor, but none reaching past one', () => {
+    const withNeighbor = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('cat', 'Catapult', 'RANGED', 2)] });
+    const neighborTarget = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2) });
+    const s1 = stateWith([withNeighbor, neighborTarget], { currentPlayerIndex: 0 });
+    const attackedNeighbor = gameReducer(s1, { type: 'ATTACK', targetId: 'd' });
+    // 3 (Hitman) + Catapult (2 base + 1 neighbor-range) + Marksman (+1 weapon) = 7.
+    expect(attackedNeighbor.combat!.attacker.basePower).toBe(7);
+
+    const withFar = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('cat', 'Catapult', 'RANGED', 2)] });
+    const n1 = mkPlayer({ id: 'n1', role: role('mayor', 'CIVILIAN', 2) });
+    const farTarget = mkPlayer({ id: 'far', role: role('sheriff', 'CIVILIAN', 3) });
+    const n2 = mkPlayer({ id: 'n2', role: role('attorney', 'CIVILIAN', 3) });
+    const s2 = stateWith([withFar, n1, farTarget, n2], { currentPlayerIndex: 0 });
+    const attackedFar = gameReducer(s2, { type: 'ATTACK', targetId: 'far' });
+    // 3 (Hitman) + Catapult (2 base, no neighbor-range bonus) + Marksman (+1 weapon) = 6.
+    expect(attackedFar.combat!.attacker.basePower).toBe(6);
   });
 
   it('Mutants does not let its holder reach a non-neighbor without Catapult/Machine Gun', () => {
