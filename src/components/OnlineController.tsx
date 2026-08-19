@@ -42,7 +42,7 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
           <img
             src={`${import.meta.env.BASE_URL ?? '/'}branding/title.png`}
             alt="Criminal Rush — Save the City… or Control It"
-            className="mx-auto w-full max-w-xs"
+            className="mx-auto w-full max-w-sm"
           />
           <div className="gold-rule my-5" />
           <p className="mb-4 text-center text-sm text-fog">
