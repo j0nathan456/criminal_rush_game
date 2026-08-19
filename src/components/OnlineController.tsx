@@ -39,8 +39,11 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
               ← Back
             </button>
           )}
-          <h1 className="text-center text-4xl font-extrabold tracking-wide">Criminal Rush</h1>
-          <p className="mt-1 text-center text-teal">Save the City… or Control It</p>
+          <img
+            src={`${import.meta.env.BASE_URL ?? '/'}branding/title.png`}
+            alt="Criminal Rush — Save the City… or Control It"
+            className="mx-auto w-full max-w-xs"
+          />
           <div className="gold-rule my-5" />
           <p className="mb-4 text-center text-sm text-fog">
             Enter your name, then create a new room or join one with a code.
