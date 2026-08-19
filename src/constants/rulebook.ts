@@ -13,16 +13,15 @@ export interface RuleSection {
 }
 
 /** One-line hook shown at the top of the guide. */
-export const RULEBOOK_TAGLINE = 'Detectives vs. a criminal syndicate — race to the most Victory Points.';
+export const RULEBOOK_TAGLINE = 'Rookie Detectives vs. a Criminal Syndicate.';
 
 export const HOW_TO_PLAY: RuleSection[] = [
   {
     icon: '🎯',
     title: 'The Goal',
     points: [
-      'Two hidden teams fight over Nocturne City: Civilians (detectives) vs. Criminals (the syndicate).',
+      'Two teams fight over Nocturne City: Civilians (rookie detectives) vs. Criminals (the syndicate).',
       'The first team to reach the target number of Victory Points (VPs) — shown on the scoreboard — wins.',
-      'If both teams reach the target together, the Civilians win.',
     ],
   },
   {
@@ -31,7 +30,7 @@ export const HOW_TO_PLAY: RuleSection[] = [
     points: [
       'Civilians score a VP each time they EXPOSE or CAPTURE a Criminal.',
       'Criminals score a VP each time they win an ATTACK on a Civilian, or buy an Expand Network card.',
-      'You keep your role card; your team is fixed for the whole game.',
+      'Each player gets a unique role with a special ability.',
     ],
   },
   {
@@ -40,7 +39,7 @@ export const HOW_TO_PLAY: RuleSection[] = [
     points: [
       'Spend your 3 actions in any order on the options below.',
       'Draw a card · Play a card · Buy a perk/weapon (once per turn) · Sell for $1.',
-      'Use a role or perk action · Trade with a teammate.',
+      'Use a role or perk action · Trade with a teammate (cards, money, or weapons).',
       'Expose (Civilians) or Expand Network (Criminals).',
       'Attack a neighbor — this one costs 2 actions.',
     ],
@@ -60,11 +59,11 @@ export const HOW_TO_PLAY: RuleSection[] = [
     icon: '⚔️',
     title: 'Combat',
     points: [
-      'Attacking costs 2 actions and normally only hits a neighbor. Civilians may only attack Exposed Criminals.',
+      'You can only choose a neighbor unless otherwise specified. Civilians may only attack Exposed Criminals.',
       'Your Power Level = role base + weapons + perks. During the Power phase, both sides may play Power cards for more.',
       'Higher Power wins. The defender wins ties.',
-      'Criminal wins → the Civilian is injured (no ability/attacks until healed next turn).',
-      'Civilian wins → the Criminal is captured (out of combat, loses their ability).',
+      'Criminal wins → the Civilian is injured (no ability/attacks until healed next turn) but gets to shuffle 2 discarded Evidence cards.',
+      'Civilian wins → the Criminal is captured (out of combat, loses their ability, Expand Network costs +$1).',
       'Lose an attack and nothing happens — but you still spent 2 actions.',
     ],
   },
@@ -81,9 +80,9 @@ export const HOW_TO_PLAY: RuleSection[] = [
     icon: '🏆',
     title: 'Winning',
     points: [
-      'Race to the VP target on the scoreboard for your player count.',
-      'When the draw deck runs out, both teams score a VP.',
-      'Civilians usually win by capturing the Criminals; Criminals rush attacks and Expand Network.',
+      'Race to the VP target on the scoreboard.',
+      'When the draw deck runs out, shuffle the discard to create a new deck. Then, both teams score a VP.',
+      'If both teams reach the target together, the Civilians win.',
     ],
   },
 ];
