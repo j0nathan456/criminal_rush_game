@@ -1,4 +1,4 @@
-import type { ActionCard, MarketCard, EvidenceCategory } from './cards.js';
+import type { ActionCard, ActionCardType, MarketCard, EvidenceCategory } from './cards.js';
 
 export type Team = 'CRIMINAL' | 'CIVILIAN';
 
@@ -320,4 +320,18 @@ export interface GameState {
    * redactState hides it from everyone but the actor, same as pendingSheriff.
    */
   pendingEvidenceBurn?: { playerId: string; cardId: string } | null;
+
+  /**
+   * Recycling Bin's two-step resolution, live after the chosen hand card has
+   * already been discarded (see applyPerk): first TAKE offers a same-type
+   * card from the discard to recover (or, with none available, just an
+   * acknowledgement), then REWARD offers the card text's "$1 or draw 1"
+   * choice — mirrors pendingManipulate's KEEP/TOP phase split.
+   */
+  pendingRecyclingBin?: {
+    playerId: string;
+    discardedCardId: string;
+    discardedType: ActionCardType;
+    phase: 'TAKE' | 'REWARD';
+  } | null;
 }

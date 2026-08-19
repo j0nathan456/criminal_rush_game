@@ -58,6 +58,7 @@ export type GameAction =
   | { type: 'RESOLVE_BODYGUARD_SETUP'; targetId: string }
   | { type: 'RESOLVE_JOURNAL'; use: boolean; targetId?: string; options?: EventOptions }
   | { type: 'RESOLVE_EVIDENCE_BURN'; use: boolean }
+  | { type: 'RESOLVE_RECYCLING_BIN'; cardId?: string; mode?: 'MONEY' | 'DRAW' }
   | { type: 'END_TURN' };
 
 /**
@@ -178,6 +179,7 @@ export function emptyGameState(): GameState {
     pendingBodyguardSetup: null,
     pendingJournal: null,
     pendingEvidenceBurn: null,
+    pendingRecyclingBin: null,
   };
 }
 
@@ -299,6 +301,12 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
     return log(state, 'Resolve the Evidence burn offer before taking other actions.');
   }
 
+  // Recycling Bin already discarded the chosen card; the take-a-replacement
+  // and $1-or-draw choices that follow block everything else until answered.
+  if (state.pendingRecyclingBin && action.type !== 'RESOLVE_RECYCLING_BIN') {
+    return log(state, 'Resolve the Recycling Bin before taking other actions.');
+  }
+
   switch (action.type) {
     case 'DRAW_CARD':
       return drawCard(state, idx, player);
@@ -350,6 +358,8 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
       return resolveJournal(state, action.use, action.targetId, action.options);
     case 'RESOLVE_EVIDENCE_BURN':
       return resolveEvidenceBurn(state, action.use);
+    case 'RESOLVE_RECYCLING_BIN':
+      return resolveRecyclingBin(state, action.cardId, action.mode);
     case 'END_TURN':
       return endTurn(state, idx);
     default:
@@ -956,6 +966,46 @@ function resolveEvidenceBurn(state: GameState, use: boolean): GameState {
 
   const s = burnEvidence(state, idx, player, pending.cardId, { free: true });
   return { ...s, pendingEvidenceBurn: null };
+}
+
+/**
+ * Resolve one step of Recycling Bin (see pendingRecyclingBin). Two calls in
+ * sequence — mirrors Manipulate's KEEP/TOP phase split: TAKE picks a
+ * same-type card from the discard to recover (cardId omitted, or not a
+ * valid match, just acknowledges there's nothing to take — never blocks
+ * the follow-up reward), then REWARD picks $1 or a draw.
+ */
+function resolveRecyclingBin(state: GameState, cardId: string | undefined, mode: 'MONEY' | 'DRAW' | undefined): GameState {
+  const pending = state.pendingRecyclingBin;
+  if (!pending) return state;
+  const idx = playerIndexById(state, pending.playerId);
+  const player = state.players[idx];
+  if (!player) return { ...state, pendingRecyclingBin: null };
+
+  if (pending.phase === 'TAKE') {
+    const taken = cardId
+      ? state.discardPile.find((c) => c.id === cardId && c.id !== pending.discardedCardId && c.type === pending.discardedType)
+      : undefined;
+    let s = state;
+    if (taken) {
+      s = updatePlayer(s, idx, (p) => ({ ...p, hand: [...p.hand, taken] }));
+      s = { ...s, discardPile: s.discardPile.filter((c) => c.id !== taken.id) };
+      s = log(s, `${player.name}'s Recycling Bin recovers ${taken.name} from the discard.`);
+    } else {
+      s = log(s, `${player.name}'s Recycling Bin finds no matching card to recover.`);
+    }
+    return { ...s, pendingRecyclingBin: { ...pending, phase: 'REWARD' } };
+  }
+
+  // phase REWARD
+  if (mode !== 'MONEY' && mode !== 'DRAW') return log(state, 'Choose $1 or draw a card.');
+  let s: GameState;
+  if (mode === 'DRAW') {
+    s = log(gameReducerDraw(state), `${player.name}'s Recycling Bin draws a card.`);
+  } else {
+    s = log(updatePlayer(state, idx, (p) => ({ ...p, money: p.money + 1 })), `${player.name}'s Recycling Bin pays $1.`);
+  }
+  return { ...s, pendingRecyclingBin: null };
 }
 
 interface PurchaseOptions {
@@ -1672,16 +1722,18 @@ function applyPerk(
       return log(spend(s), `${player.name} uses a Credit Card for a $${discard ? 2 : 1} discount.`);
     }
     case 'Recycling Bin': {
+      // Discard the chosen card now; which same-type replacement to take (if
+      // any) and the $1-or-draw payout are the player's own follow-up
+      // choices — see pendingRecyclingBin/resolveRecyclingBin.
       const disc = player.hand.find((c) => c.id === payload.cardId);
       if (!disc) return log(state, 'Recycling Bin needs a card from your hand to discard.');
-      const fromTop = [...state.discardPile].reverse().findIndex((c) => c.type === disc.type);
-      if (fromTop < 0) return log(state, `No ${disc.type} card in the discard to recover.`);
-      const realIndex = state.discardPile.length - 1 - fromTop;
-      const taken = state.discardPile[realIndex];
       let s = updatePlayer(state, idx, (p) => ({ ...p, hand: p.hand.filter((c) => c.id !== disc.id) }));
-      s = { ...s, discardPile: [...state.discardPile.filter((_, i) => i !== realIndex), disc] };
-      s = updatePlayer(s, idx, (p) => ({ ...p, hand: [...p.hand, taken], money: p.money + 1 }));
-      return log(spend(s), `${player.name} recycles ${disc.name} for ${taken.name} and $1.`);
+      s = { ...s, discardPile: [...s.discardPile, disc] };
+      s = log(spend(s), `${player.name} discards ${disc.name} with the Recycling Bin.`);
+      return {
+        ...s,
+        pendingRecyclingBin: { playerId: player.id, discardedCardId: disc.id, discardedType: disc.type, phase: 'TAKE' },
+      };
     }
     case 'Hacked Passwords': {
       const ti = payload.targetId ? playerIndexById(state, payload.targetId) : -1;

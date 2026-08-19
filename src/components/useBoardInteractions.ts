@@ -277,6 +277,8 @@ export function useBoardInteractions(
     onDeclineJournal: () => dispatch({ type: 'RESOLVE_JOURNAL', use: false }),
     onUseEvidenceBurn: () => dispatch({ type: 'RESOLVE_EVIDENCE_BURN', use: true }),
     onDeclineEvidenceBurn: () => dispatch({ type: 'RESOLVE_EVIDENCE_BURN', use: false }),
+    onResolveRecyclingBin: (cardId: string | undefined, mode: 'MONEY' | 'DRAW' | undefined) =>
+      dispatch({ type: 'RESOLVE_RECYCLING_BIN', cardId, mode }),
   };
 
   return {

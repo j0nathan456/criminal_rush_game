@@ -36,6 +36,7 @@ import { TradePanel } from './TradePanel';
 import { ExpressShippingPanel } from './ExpressShippingPanel';
 import { JournalPanel } from './JournalPanel';
 import { EvidenceBurnPanel } from './EvidenceBurnPanel';
+import { RecyclingBinPanel } from './RecyclingBinPanel';
 import { MarketPickerPanel } from './MarketPickerPanel';
 import { TargetPicker } from './TargetPicker';
 
@@ -85,6 +86,7 @@ export interface GameBoardHandlers {
   onUseEvidenceBurn?: () => void;
   onDeclineEvidenceBurn?: () => void;
   onCancelBuy?: () => void;
+  onResolveRecyclingBin?: (cardId: string | undefined, mode: 'MONEY' | 'DRAW' | undefined) => void;
 }
 
 interface GameBoardProps extends GameBoardHandlers {
@@ -174,6 +176,7 @@ export function GameBoard({
   onUseEvidenceBurn,
   onDeclineEvidenceBurn,
   onCancelBuy,
+  onResolveRecyclingBin,
 }: GameBoardProps) {
   const viewer = state.players[viewerIndex];
   const isViewersTurn = viewerIndex === state.currentPlayerIndex;
@@ -343,7 +346,7 @@ export function GameBoard({
                 </button>
               )}
               {selectedCard && selectedCard.type === 'EVIDENCE' && viewer.team === 'CIVILIAN' && isViewersTurn &&
-                !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.winner && (
+                !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingRecyclingBin && !state.winner && (
                   <EvidencePlayPanel card={selectedCard} team={viewer.team} onPlay={onPlayEvidence} onCancel={onCancelEvidencePlay} />
               )}
 
@@ -351,10 +354,10 @@ export function GameBoard({
                   right under the viewer's own hand, rather than up at the top of
                   the page — this is their own decision, so it belongs next to the
                   hand they're making it from. */}
-              {targeting && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.winner && (
+              {targeting && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingRecyclingBin && !state.winner && (
                 <TargetPicker state={state} viewerIndex={viewerIndex} mode={targeting} onSelectTarget={onSelectTarget} onCancel={onCancelTargeting} />
               )}
-              {exposeTargetId && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.winner && (
+              {exposeTargetId && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingRecyclingBin && !state.winner && (
                 <ExposeEvidencePanel
                   state={state}
                   viewerIndex={viewerIndex}
@@ -363,31 +366,31 @@ export function GameBoard({
                   onCancel={onCancelExpose}
                 />
               )}
-              {buyOpen && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.winner && (
+              {buyOpen && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingRecyclingBin && !state.winner && (
                 <MarketPickerPanel state={state} viewerIndex={viewerIndex} onBuy={onBuy} onCancel={onCancelBuy} />
               )}
-              {roleAbilityOpen && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.winner && (
+              {roleAbilityOpen && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingRecyclingBin && !state.winner && (
                 <RoleAbilityPanel state={state} viewerIndex={viewerIndex} onSubmit={onSubmitRoleAbility} onCancel={onCancelRoleAbility} />
               )}
-              {perkPickerOpen && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.winner && (
+              {perkPickerOpen && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingRecyclingBin && !state.winner && (
                 <PerkPickerPanel viewer={viewer} onSelect={onSelectPerk} onCancel={onCancelPerkPicker} />
               )}
-              {activePerkId && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.winner && (
+              {activePerkId && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingRecyclingBin && !state.winner && (
                 <PerkActionPanel state={state} viewerIndex={viewerIndex} perkId={activePerkId} onSubmit={onSubmitPerk} onCancel={onCancelPerk} />
               )}
               {state.pendingManipulate && !state.combat && !state.winner && (
                 <ManipulatePanel state={state} viewerIndex={viewerIndex} onResolve={onResolveManipulate} />
               )}
-              {allySupportCardId && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.winner && (
+              {allySupportCardId && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingRecyclingBin && !state.winner && (
                 <AllySupportPanel state={state} viewerIndex={viewerIndex} onSubmit={onSubmitAllySupport} onCancel={onCancelAllySupport} />
               )}
-              {eventCardId && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.winner && (() => {
+              {eventCardId && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingRecyclingBin && !state.winner && (() => {
                 const eventCard = viewer.hand.find((c) => c.id === eventCardId);
                 return eventCard ? (
                   <EventPanel state={state} viewerIndex={viewerIndex} card={eventCard} onSubmit={onSubmitEvent} onCancel={onCancelEvent} />
                 ) : null;
               })()}
-              {state.pendingMarketDiscount?.playerId === viewer.id && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.winner && (
+              {state.pendingMarketDiscount?.playerId === viewer.id && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingRecyclingBin && !state.winner && (
                 <MarketDiscountPanel
                   state={state}
                   viewerIndex={viewerIndex}
@@ -414,6 +417,9 @@ export function GameBoard({
               )}
               {state.pendingEvidenceBurn && !state.pendingJournal && !state.combat && !state.winner && (
                 <EvidenceBurnPanel state={state} viewerIndex={viewerIndex} onUse={onUseEvidenceBurn} onDecline={onDeclineEvidenceBurn} />
+              )}
+              {state.pendingRecyclingBin && !state.combat && !state.winner && (
+                <RecyclingBinPanel state={state} viewerIndex={viewerIndex} onResolve={onResolveRecyclingBin} />
               )}
             </div>
 
