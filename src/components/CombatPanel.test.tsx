@@ -113,4 +113,32 @@ describe('<CombatPanel />', () => {
     fireEvent.click(screen.getByText('Surge (+2)'));
     expect(onPlayPower).toHaveBeenCalledWith('mir', 'ATTACKER', 'atk', 'surge1');
   });
+
+  it('Machine Gun offers each Money card as its own discard-for-+1 button', () => {
+    const onDiscardMoney = vi.fn();
+    const cash1: ActionCard = { id: 'm1', name: 'Cash', description: '', type: 'MONEY', value: 1 };
+    const cash2: ActionCard = { id: 'm2', name: 'Cash', description: '', type: 'MONEY', value: 2 };
+    const gun = { id: 'mg1', name: 'Machine Gun', description: '', cost: 5, source: 'PUBLIC' as const, type: 'WEAPON' as const, weaponType: 'RANGED' as const, power: 3 };
+    const attacker = mkPlayer({
+      id: 'atk', name: 'Mona', role: role('hitman', 'CRIMINAL', 3), hand: [cash1, cash2], inventory: [gun],
+    });
+    const defender = mkPlayer({ id: 'def', name: 'Dora', role: role('mayor', 'CIVILIAN', 2) });
+    const state: GameState = {
+      ...emptyGameState(),
+      players: [attacker, defender],
+      combat: {
+        attacker: { playerId: 'atk', basePower: 5, powerCardBonus: 0, passed: false, canPlayPower: true },
+        defender: { playerId: 'def', basePower: 2, powerCardBonus: 0, passed: false, canPlayPower: true },
+        turn: 'ATTACKER', played: [], actionCost: 2, playerCount: 2, phase: 'POWER', pending: [],
+      },
+    };
+    render(<CombatPanel state={state} viewerIndex={0} onDiscardMoney={onDiscardMoney} />);
+
+    const cashButtons = screen.getAllByText('Cash (+1)');
+    expect(cashButtons).toHaveLength(2); // one button per card, not one "discard all" button
+
+    fireEvent.click(cashButtons[0]);
+    expect(onDiscardMoney).toHaveBeenCalledWith('ATTACKER', ['m1']);
+    expect(onDiscardMoney).not.toHaveBeenCalledWith('ATTACKER', ['m1', 'm2']);
+  });
 });

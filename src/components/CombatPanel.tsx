@@ -139,13 +139,20 @@ export function CombatPanel({ state, viewerIndex, onPlayPower, onPassCombat, onD
         )}
 
         {hasMachineGun && money.length > 0 && (
-          <button
-            type="button"
-            className="cr-combat__play cr-combat__mg"
-            onClick={() => onDiscardMoney?.(side, money.map((c) => c.id))}
-          >
-            Machine Gun: discard {money.length} Money (+{money.length})
-          </button>
+          <div className="cr-combat__cards">
+            <span className="cr-combat__cards-owner">Machine Gun — discard Money for +1 power each</span>
+            {money.map((card) => (
+              <button
+                key={card.id}
+                type="button"
+                className="cr-combat__play cr-combat__mg"
+                onClick={() => onDiscardMoney?.(side, [card.id])}
+                disabled={allPassed}
+              >
+                {card.name} (+1)
+              </button>
+            ))}
+          </div>
         )}
 
         <button
