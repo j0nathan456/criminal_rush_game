@@ -1195,8 +1195,10 @@ describe('gameReducer — USE_PERK', () => {
     const s = stateWith([mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL'), inventory: [manip], isCaptured: true })], {
       drawPile: [c('a'), c('b'), c('cc')],
     });
-    const next = gameReducer(s, { type: 'USE_PERK', perkId: 'pk' });
-    expect(next.players[0].hand.map((x) => x.id)).toContain('a'); // perk worked despite being captured
+    const revealed = gameReducer(s, { type: 'USE_PERK', perkId: 'pk' });
+    expect(revealed.pendingManipulate?.cards.map((x) => x.id)).toEqual(['a', 'b', 'cc']); // perk worked despite being captured
+    const next = gameReducer(revealed, { type: 'RESOLVE_MANIPULATE', cardId: 'a' });
+    expect(next.players[0].hand.map((x) => x.id)).toContain('a');
   });
 
   it('Water Bottle is discarded for a free extra action', () => {
@@ -1343,16 +1345,70 @@ describe('gameReducer — remaining perks & events', () => {
     expect(bought.players[1].money).toBe(3); // 5 - (3 - 1)
   });
 
-  it('Manipulate takes the top card, discards the next, keeps the third', () => {
+  it('Manipulate reveals the top 3, lets the player choose which to keep and which goes back on top', () => {
     const c = (id: string): ActionCard => ({ id, name: id, description: '', type: 'MONEY', value: 1 });
     const manip = perk('pk', 'Manipulate', { source: 'BLACK_MARKET' });
     const s = stateWith([mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL'), inventory: [manip] })], {
       drawPile: [c('a'), c('b'), c('cc'), c('d')],
     });
+    const revealed = gameReducer(s, { type: 'USE_PERK', perkId: 'pk' });
+    expect(revealed.pendingManipulate).toEqual({ playerId: 'p0', cards: [c('a'), c('b'), c('cc')], phase: 'KEEP' });
+    expect(revealed.drawPile.map((x) => x.id)).toEqual(['d']); // pulled off the deck immediately
+    expect(revealed.players[0].actionsRemaining).toBe(2); // action spent up front
+
+    // Choosing DISCARD without a card yet doesn't resolve — still their turn to pick.
+    const notYet = gameReducer(revealed, { type: 'RESOLVE_MANIPULATE', cardId: 'nope' });
+    expect(notYet.pendingManipulate?.phase).toBe('KEEP');
+
+    // Keep 'b' (not the top card — proves it's a real choice, not automatic).
+    const kept = gameReducer(revealed, { type: 'RESOLVE_MANIPULATE', cardId: 'b' });
+    expect(kept.players[0].hand.map((x) => x.id)).toEqual(['b']);
+    expect(kept.pendingManipulate).toEqual({ playerId: 'p0', cards: [c('a'), c('cc')], phase: 'TOP' });
+
+    // Put 'cc' back on top — 'a' (the leftover) is discarded.
+    const done = gameReducer(kept, { type: 'RESOLVE_MANIPULATE', cardId: 'cc' });
+    expect(done.drawPile.map((x) => x.id)).toEqual(['cc', 'd']);
+    expect(done.discardPile.map((x) => x.id)).toEqual(['a']);
+    expect(done.pendingManipulate).toBeNull();
+  });
+
+  it('Manipulate with only 2 cards left in the deck: the leftover goes back on top, nothing to discard', () => {
+    const c = (id: string): ActionCard => ({ id, name: id, description: '', type: 'MONEY', value: 1 });
+    const manip = perk('pk', 'Manipulate', { source: 'BLACK_MARKET' });
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL'), inventory: [manip] })], {
+      drawPile: [c('a'), c('b')],
+    });
+    const revealed = gameReducer(s, { type: 'USE_PERK', perkId: 'pk' });
+    expect(revealed.pendingManipulate?.cards.map((x) => x.id)).toEqual(['a', 'b']);
+    const next = gameReducer(revealed, { type: 'RESOLVE_MANIPULATE', cardId: 'a' });
+    expect(next.players[0].hand.map((x) => x.id)).toEqual(['a']);
+    expect(next.drawPile.map((x) => x.id)).toEqual(['b']); // leftover auto-returns to top
+    expect(next.discardPile).toHaveLength(0);
+    expect(next.pendingManipulate).toBeNull();
+  });
+
+  it('Manipulate with only 1 card left in the deck: kept automatically, no pending choice', () => {
+    const c = (id: string): ActionCard => ({ id, name: id, description: '', type: 'MONEY', value: 1 });
+    const manip = perk('pk', 'Manipulate', { source: 'BLACK_MARKET' });
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL'), inventory: [manip] })], {
+      drawPile: [c('a')],
+    });
     const next = gameReducer(s, { type: 'USE_PERK', perkId: 'pk' });
-    expect(next.players[0].hand.map((x) => x.id)).toContain('a'); // took top
-    expect(next.discardPile.map((x) => x.id)).toContain('b'); // discarded second
-    expect(next.drawPile.map((x) => x.id)).toEqual(['cc', 'd']); // third kept on top
+    expect(next.players[0].hand.map((x) => x.id)).toEqual(['a']);
+    expect(next.drawPile).toHaveLength(0);
+    expect(next.pendingManipulate).toBeNull();
+    expect(next.players[0].actionsRemaining).toBe(2);
+  });
+
+  it('Manipulate with an empty deck wastes the action', () => {
+    const manip = perk('pk', 'Manipulate', { source: 'BLACK_MARKET' });
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL'), inventory: [manip] })], {
+      drawPile: [],
+    });
+    const next = gameReducer(s, { type: 'USE_PERK', perkId: 'pk' });
+    expect(next.pendingManipulate).toBeNull();
+    expect(next.players[0].actionsRemaining).toBe(2);
+    expect(next.gameLog.at(-1)).toMatch(/deck is empty/i);
   });
 
   it('Shady Press plays the chosen opponent Event card, not just the first one — for the presser', () => {

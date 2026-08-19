@@ -246,6 +246,19 @@ describe('viewFor redaction', () => {
     expect(viewFor(room, 't0').state?.pendingSheriff?.cards).toHaveLength(1); // the Sheriff (seat 0)
     expect(viewFor(room, 't1').state?.pendingSheriff).toBeNull(); // everyone else
   });
+
+  it("reveals Manipulate's peek only to whoever used it", () => {
+    const base = emptyGameState();
+    const state: GameState = {
+      ...base,
+      players: [playerStub('p0', 'A'), playerStub('p1', 'B')],
+      pendingManipulate: { playerId: 'p1', cards: [card('secret')], phase: 'KEEP' },
+    };
+    const room = startedRoomWithState(state);
+
+    expect(viewFor(room, 't1').state?.pendingManipulate?.cards).toHaveLength(1); // the user (seat 1)
+    expect(viewFor(room, 't0').state?.pendingManipulate).toBeNull(); // everyone else
+  });
 });
 
 describe('leaveRoom', () => {

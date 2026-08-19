@@ -250,6 +250,7 @@ export function useBoardInteractions(
     onResolveThreaten: (mode: 'MONEY' | 'DISCARD', cardId?: string) => dispatch({ type: 'RESOLVE_THREATEN', mode, cardId }),
     onResolveSheriff: (cardId: string, category?: EvidenceCategory) =>
       dispatch({ type: 'RESOLVE_SHERIFF', cardId, category }),
+    onResolveManipulate: (cardId: string) => dispatch({ type: 'RESOLVE_MANIPULATE', cardId }),
     onSubmitExpose: (targetId, evidenceChoices) => {
       dispatch({ type: 'EXPOSE', targetId, evidenceChoices });
       setExposeTargetId(null);

@@ -271,4 +271,15 @@ export interface GameState {
    * hand may keep changing); resolved via RESOLVE_SHERIFF.
    */
   pendingSheriff?: { sheriffId: string; targetId: string; cards: ActionCard[] } | null;
+
+  /**
+   * Manipulate's reveal: the top of the deck, taken off it the moment the
+   * perk is used (like Lottery) so nothing else can draw into it mid-choice.
+   * Two sequential decisions share this one record, distinguished by `phase`:
+   * first which card to keep (into hand), then — once `cards` is down to the
+   * remaining ones — which to put back on top of the deck (whatever's left
+   * over is discarded). Must survive online redaction like lastPeek/
+   * pendingSheriff, exempted the same way in redactState.
+   */
+  pendingManipulate?: { playerId: string; cards: ActionCard[]; phase: 'KEEP' | 'TOP' } | null;
 }

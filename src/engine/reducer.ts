@@ -54,6 +54,7 @@ export type GameAction =
   | { type: 'SKIP_MARKET_DISCOUNT' }
   | { type: 'RESOLVE_THREATEN'; mode: 'MONEY' | 'DISCARD'; cardId?: string }
   | { type: 'RESOLVE_SHERIFF'; cardId: string; category?: EvidenceCategory }
+  | { type: 'RESOLVE_MANIPULATE'; cardId: string }
   | { type: 'END_TURN' };
 
 /**
@@ -170,6 +171,7 @@ export function emptyGameState(): GameState {
     pendingTrade: null,
     pendingExpressShipping: null,
     pendingSheriff: null,
+    pendingManipulate: null,
   };
 }
 
@@ -265,6 +267,13 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
     return log(state, "Resolve the Sheriff's subpoena before taking other actions.");
   }
 
+  // Manipulate already pulled the top of the deck off it; the actor must
+  // finish choosing what to keep/top-deck/discard before anything else can
+  // touch the deck again.
+  if (state.pendingManipulate && action.type !== 'RESOLVE_MANIPULATE') {
+    return log(state, 'Finish using Manipulate before taking other actions.');
+  }
+
   switch (action.type) {
     case 'DRAW_CARD':
       return drawCard(state, idx, player);
@@ -308,6 +317,8 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
       return resolveThreaten(state, action.mode, action.cardId);
     case 'RESOLVE_SHERIFF':
       return resolveSheriff(state, action.cardId, action.category);
+    case 'RESOLVE_MANIPULATE':
+      return resolveManipulate(state, action.cardId);
     case 'END_TURN':
       return endTurn(state, idx);
     default:
@@ -782,6 +793,47 @@ function resolveSheriff(state: GameState, cardId: string, category?: EvidenceCat
   s = placeEvidence(s, card, resolvedCategory, sheriff);
   s = { ...s, pendingSheriff: null };
   return log(s, `${sheriff.name} (Sheriff) subpoenas ${target.name} and plays ${card.name} into ${resolvedCategory}.`);
+}
+
+/**
+ * Resolve one step of Manipulate (see pendingManipulate). Two calls in
+ * sequence: the first (phase KEEP) moves the chosen card into hand and, if
+ * more than one card remains, advances to phase TOP; the second (phase TOP)
+ * puts the chosen card back on top of the deck and discards whatever's left.
+ * A KEEP that leaves only one card skips straight to that placement — with
+ * nothing left to discard, there's no second choice to make.
+ */
+function resolveManipulate(state: GameState, cardId: string): GameState {
+  const pending = state.pendingManipulate;
+  if (!pending) return state;
+  const idx = playerIndexById(state, pending.playerId);
+  const player = state.players[idx];
+  if (!player) return { ...state, pendingManipulate: null };
+
+  const card = pending.cards.find((c) => c.id === cardId);
+  if (!card) return log(state, 'Choose one of the revealed cards.');
+
+  if (pending.phase === 'KEEP') {
+    const remaining = pending.cards.filter((c) => c.id !== cardId);
+    let s = updatePlayer(state, idx, (p) => ({ ...p, hand: [...p.hand, card] }));
+    if (remaining.length <= 1) {
+      s = { ...s, drawPile: [...remaining, ...s.drawPile], pendingManipulate: null };
+      const topNote = remaining.length ? ` ${remaining[0].name} goes back on top.` : '';
+      return log(s, `${player.name} keeps ${card.name} from Manipulate.${topNote}`);
+    }
+    s = { ...s, pendingManipulate: { ...pending, cards: remaining, phase: 'TOP' } };
+    return log(s, `${player.name} keeps ${card.name} from Manipulate.`);
+  }
+
+  const rest = pending.cards.filter((c) => c.id !== cardId);
+  const s: GameState = {
+    ...state,
+    drawPile: [card, ...state.drawPile],
+    discardPile: [...state.discardPile, ...rest],
+    pendingManipulate: null,
+  };
+  const discardNote = rest.length ? ` Discards ${rest.map((c) => c.name).join(', ')}.` : '';
+  return log(s, `${player.name} puts ${card.name} back on top of the deck.${discardNote}`);
 }
 
 interface PurchaseOptions {
@@ -1565,17 +1617,21 @@ function applyPerk(
       return log(spend(s), `${player.name} buys ${card.name} from the trash can for $${cost}.`);
     }
     case 'Manipulate': {
-      // Look at the top 3: take the top card, discard the next, keep the third on top.
-      if (state.drawPile.length === 0) return log(state, 'The deck is empty.');
-      const take = state.drawPile[0];
-      const drop = state.drawPile[1]; // undefined if the deck is nearly empty
-      let s: GameState = {
-        ...state,
-        drawPile: state.drawPile.slice(2),
-        discardPile: drop ? [...state.discardPile, drop] : state.discardPile,
-      };
-      s = updatePlayer(s, idx, (p) => ({ ...p, hand: [...p.hand, take] }));
-      return log(spend(s), `${player.name} uses Manipulate on the top of the deck.`);
+      // Look at the top 3, choose 1 to keep, 1 to put back on top, 1 to
+      // discard — two real choices (see pendingManipulate/resolveManipulate),
+      // not an automatic take/discard/keep.
+      const revealed = state.drawPile.slice(0, 3);
+      const spent = spend(state);
+      if (revealed.length === 0) {
+        return log(spent, `${player.name}'s deck is empty — Manipulate is wasted.`);
+      }
+      let s: GameState = { ...spent, drawPile: spent.drawPile.slice(revealed.length) };
+      if (revealed.length === 1) {
+        s = updatePlayer(s, idx, (p) => ({ ...p, hand: [...p.hand, revealed[0]] }));
+        return log(s, `${player.name} uses Manipulate — only 1 card left, kept automatically.`);
+      }
+      s = { ...s, pendingManipulate: { playerId: player.id, cards: revealed, phase: 'KEEP' } };
+      return log(s, `${player.name} uses Manipulate to look at the top ${revealed.length} cards.`);
     }
     case 'Shady Press': {
       // Choose an opponent, see all their Event cards, and force one to be
