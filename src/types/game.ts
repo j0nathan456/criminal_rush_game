@@ -293,4 +293,17 @@ export interface GameState {
    * it's answered.
    */
   pendingBodyguardSetup?: { bodyguardId: string } | null;
+
+  /**
+   * Journal's offer, live after any Event card resolves (see playCard):
+   * discard it to repeat that same Event's effect, gathering a fresh
+   * target/options if it needs one (rulebook: "discard this to repeat the
+   * effect") — a repeated Gain Influence, for instance, may target a
+   * different opponent than the original play, and a repeated Ally Support
+   * may copy a different teammate's Action. `card` is a snapshot of the
+   * played Event (it's already sitting in the discard pile by the time this
+   * is set). Free to use — costs no action — but still blocks other actions
+   * until answered via RESOLVE_JOURNAL, so the choice isn't missed.
+   */
+  pendingJournal?: { playerId: string; card: ActionCard } | null;
 }

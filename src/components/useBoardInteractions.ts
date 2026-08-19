@@ -264,6 +264,9 @@ export function useBoardInteractions(
     onResolveTradeReturn: (give: TradeItem | null) => dispatch({ type: 'RESOLVE_TRADE_RETURN', give }),
     onCancelTrade: () => setTradeOpen(false),
     onResolveExpressShipping: (mode: 'MONEY' | 'DRAW') => dispatch({ type: 'RESOLVE_EXPRESS_SHIPPING', mode }),
+    onUseJournal: (targetId: string | undefined, options: EventOptions) =>
+      dispatch({ type: 'RESOLVE_JOURNAL', use: true, targetId, options }),
+    onDeclineJournal: () => dispatch({ type: 'RESOLVE_JOURNAL', use: false }),
   };
 
   return {

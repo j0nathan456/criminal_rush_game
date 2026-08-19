@@ -955,6 +955,99 @@ describe('gameReducer — Event cards', () => {
   });
 });
 
+describe('gameReducer — Journal', () => {
+  const journal: MarketCard = { id: 'j1', name: 'Journal', description: '', cost: 1, source: 'PUBLIC', type: 'PERK' };
+
+  it('offers to repeat any Event just played, for free, even with 0 actions left', () => {
+    const evt: ActionCard = { id: 'e', name: 'Generational Wealth', description: '', type: 'EVENT' };
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 2, hand: [evt], inventory: [journal], actionsRemaining: 1 })]);
+
+    const next = gameReducer(s, { type: 'PLAY_CARD', cardId: 'e' });
+    expect(next.players[0].money).toBe(3); // event's own effect already applied
+    expect(next.players[0].actionsRemaining).toBe(0); // only the play itself cost an action
+    expect(next.pendingJournal).toEqual({ playerId: 'p0', card: evt });
+
+    // Other actions are blocked until the offer is answered.
+    const blocked = gameReducer(next, { type: 'DRAW_CARD' });
+    expect(blocked.pendingJournal).not.toBeNull();
+  });
+
+  it('does not offer to repeat when the player has no Journal', () => {
+    const evt: ActionCard = { id: 'e', name: 'Generational Wealth', description: '', type: 'EVENT' };
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 2, hand: [evt] })]);
+    const next = gameReducer(s, { type: 'PLAY_CARD', cardId: 'e' });
+    expect(next.pendingJournal).toBeNull();
+  });
+
+  it("offers to repeat Ally Support, and the repeat can copy a different teammate's Action", () => {
+    const evt: ActionCard = { id: 'e', name: 'Ally Support', description: '', type: 'EVENT' };
+    const coffee1: MarketCard = { id: 'cm1', name: 'Coffee Machine', description: '', cost: 3, source: 'PUBLIC', type: 'PERK' };
+    const coffee2: MarketCard = { id: 'cm2', name: 'Coffee Machine', description: '', cost: 3, source: 'PUBLIC', type: 'PERK' };
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), hand: [evt], inventory: [journal] }),
+      mkPlayer({ id: 'p1', role: role('sheriff', 'CIVILIAN'), inventory: [coffee1] }),
+      mkPlayer({ id: 'p2', role: role('bodyguard', 'CIVILIAN'), inventory: [coffee2] }),
+    ]);
+
+    const offered = gameReducer(s, {
+      type: 'PLAY_CARD', cardId: 'e', targetId: 'p1', options: { allyPerkId: 'cm1', allyPayload: {} },
+    });
+    expect(offered.pendingJournal).toEqual({ playerId: 'p0', card: evt });
+    expect(offered.gameLog.at(-2)).toBe("p0 uses Ally Support to copy p1's Coffee Machine.");
+    expect(offered.players[0].coffeeToken).toBe(true);
+
+    // Repeat copies p2's Action this time, not p1's.
+    const next = gameReducer(offered, {
+      type: 'RESOLVE_JOURNAL', use: true, targetId: 'p2', options: { allyPerkId: 'cm2', allyPayload: {} },
+    });
+    expect(next.pendingJournal).toBeNull();
+    // The repeat's own copy-log lands before the "discards their Journal" wrap-up log.
+    expect(next.gameLog.at(-2)).toBe("p0 uses Ally Support to copy p2's Coffee Machine.");
+    expect(next.gameLog.at(-1)).toBe('p0 discards their Journal to repeat Ally Support.');
+    expect(next.players[0].inventory).toHaveLength(0); // Journal discarded
+  });
+
+  it('declining leaves the Journal in inventory and does not repeat the effect', () => {
+    const evt: ActionCard = { id: 'e', name: 'Generational Wealth', description: '', type: 'EVENT' };
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 2, hand: [evt], inventory: [journal] })]);
+    const offered = gameReducer(s, { type: 'PLAY_CARD', cardId: 'e' });
+    const next = gameReducer(offered, { type: 'RESOLVE_JOURNAL', use: false });
+    expect(next.pendingJournal).toBeNull();
+    expect(next.players[0].money).toBe(3); // unchanged from the original play
+    expect(next.players[0].inventory.map((c) => c.id)).toEqual(['j1']); // Journal kept
+  });
+
+  it('using it on a no-input Event discards the Journal and repeats the effect immediately', () => {
+    const evt: ActionCard = { id: 'e', name: 'Generational Wealth', description: '', type: 'EVENT' };
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 2, hand: [evt], inventory: [journal] })]);
+    const offered = gameReducer(s, { type: 'PLAY_CARD', cardId: 'e' });
+    const next = gameReducer(offered, { type: 'RESOLVE_JOURNAL', use: true });
+    expect(next.pendingJournal).toBeNull();
+    expect(next.players[0].money).toBe(4); // +$1 twice
+    expect(next.players[0].inventory).toHaveLength(0); // Journal discarded
+  });
+
+  it("using it on Gain Influence lets the repeat target a different opponent than the original play", () => {
+    const evt: ActionCard = { id: 'e', name: 'Gain Influence', description: '', type: 'EVENT' };
+    const card1: ActionCard = { id: 'c1', name: 'c1', description: '', type: 'MONEY', value: 1 };
+    const card2: ActionCard = { id: 'c2', name: 'c2', description: '', type: 'MONEY', value: 1 };
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), hand: [evt], inventory: [journal] }),
+      mkPlayer({ id: 'p1', role: role('hitman', 'CRIMINAL'), team: 'CRIMINAL', hand: [card1] }),
+      mkPlayer({ id: 'p2', role: role('robber', 'CRIMINAL'), team: 'CRIMINAL', hand: [card2] }),
+    ]);
+    const offered = gameReducer(s, { type: 'PLAY_CARD', cardId: 'e', targetId: 'p1' });
+    expect(offered.players[0].hand.map((c) => c.id)).toEqual(['c1']); // original target's card taken
+
+    // Repeat targets p2 instead of p1.
+    const next = gameReducer(offered, { type: 'RESOLVE_JOURNAL', use: true, targetId: 'p2' });
+    expect(next.players[0].hand.map((c) => c.id).sort()).toEqual(['c1', 'c2']);
+    expect(next.players[1].hand).toHaveLength(0); // p1 untouched by the repeat
+    expect(next.players[2].hand).toHaveLength(0); // p2's card taken this time
+    expect(next.players[0].inventory).toHaveLength(0);
+  });
+});
+
 describe('gameReducer — USE_MARKET_DISCOUNT / SKIP_MARKET_DISCOUNT', () => {
   it('buys a Market card at the pending discount without spending an action', () => {
     const perk: MarketCard = { id: 'm1', name: 'Computer', description: '', cost: 3, source: 'PUBLIC', type: 'PERK' };

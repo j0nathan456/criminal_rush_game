@@ -56,6 +56,7 @@ export type GameAction =
   | { type: 'RESOLVE_SHERIFF'; cardId: string; category?: EvidenceCategory }
   | { type: 'RESOLVE_MANIPULATE'; cardId: string }
   | { type: 'RESOLVE_BODYGUARD_SETUP'; targetId: string }
+  | { type: 'RESOLVE_JOURNAL'; use: boolean; targetId?: string; options?: EventOptions }
   | { type: 'END_TURN' };
 
 /**
@@ -174,6 +175,7 @@ export function emptyGameState(): GameState {
     pendingSheriff: null,
     pendingManipulate: null,
     pendingBodyguardSetup: null,
+    pendingJournal: null,
   };
 }
 
@@ -282,6 +284,12 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
     return log(state, 'The Bodyguard must give the Protection token to a teammate before play begins.');
   }
 
+  // The Journal's repeat offer is free (no action cost) but still needs an
+  // answer before anything else, so it's never silently skipped past.
+  if (state.pendingJournal && action.type !== 'RESOLVE_JOURNAL') {
+    return log(state, 'Resolve the Journal offer before taking other actions.');
+  }
+
   switch (action.type) {
     case 'DRAW_CARD':
       return drawCard(state, idx, player);
@@ -329,6 +337,8 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
       return resolveManipulate(state, action.cardId);
     case 'RESOLVE_BODYGUARD_SETUP':
       return resolveBodyguardSetup(state, action.targetId);
+    case 'RESOLVE_JOURNAL':
+      return resolveJournal(state, action.use, action.targetId, action.options);
     case 'END_TURN':
       return endTurn(state, idx);
     default:
@@ -409,7 +419,8 @@ function playCard(
       }));
       s = { ...s, discardPile: [...s.discardPile, card] };
       s = resolveEvent(s, idx, card.name, targetId, options ?? {});
-      return log(s, `${player.name} played ${card.name}.`);
+      s = log(s, `${player.name} played ${card.name}.`);
+      return offerJournalRepeat(s, idx, card);
     }
     case 'POWER':
     default:
@@ -420,9 +431,9 @@ function playCard(
 /**
  * Resolve an Event's effect (rulebook p.11). The card has already been moved to
  * the discard and its action spent by the caller. Choices beyond `targetId`
- * arrive via `options`; missing choices fall back to sensible defaults. Only
- * Ally Support (copy a teammate's Action) remains manual — it needs a re-entrant
- * ability system this reducer doesn't have.
+ * arrive via `options`; missing choices fall back to sensible defaults —
+ * including Ally Support, whose `options.allyPerkId`/`allyPayload` describe
+ * which teammate Action to copy and with what inputs.
  */
 function resolveEvent(state: GameState, idx: number, name: string, targetId: string | undefined, options: EventOptions): GameState {
   const actor = state.players[idx];
@@ -868,6 +879,43 @@ function resolveBodyguardSetup(state: GameState, targetId: string): GameState {
 
   const s = updatePlayer(state, targetIndex, (p) => ({ ...p, hasBodyguardToken: true }));
   return log({ ...s, pendingBodyguardSetup: null }, `${bodyguard.name} (Bodyguard) gives the Protection token to ${target.name}.`);
+}
+
+/**
+ * Offer the Journal's repeat after an Event resolves (see pendingJournal).
+ * Only when the actor still owns a Journal. Works for every Event, including
+ * Ally Support — resolveEvent's 'Ally Support' case already re-runs generically
+ * off `targetId`/`options`, so a repeat can freely copy a different teammate's
+ * Action than the original play did.
+ */
+function offerJournalRepeat(state: GameState, idx: number, card: ActionCard): GameState {
+  const actor = state.players[idx];
+  if (!actor?.inventory.some((c) => c.name === 'Journal')) return state;
+  return { ...state, pendingJournal: { playerId: actor.id, card } };
+}
+
+/**
+ * Resolve the Journal's repeat offer (see pendingJournal/offerJournalRepeat).
+ * Declining just clears it. Using it discards the Journal (it's a one-shot
+ * perk, not an Action — no cost, no usedPerkIds entry) and replays the same
+ * Event's effect with whatever target/options were freshly gathered for the
+ * repeat, which may differ from the original play.
+ */
+function resolveJournal(state: GameState, use: boolean, targetId?: string, options?: EventOptions): GameState {
+  const pending = state.pendingJournal;
+  if (!pending) return state;
+  const idx = playerIndexById(state, pending.playerId);
+  const player = state.players[idx];
+  if (!player) return { ...state, pendingJournal: null };
+
+  if (!use) {
+    return log({ ...state, pendingJournal: null }, `${player.name} declines to repeat ${pending.card.name} with their Journal.`);
+  }
+
+  let s = updatePlayer(state, idx, (p) => ({ ...p, inventory: p.inventory.filter((c) => c.name !== 'Journal') }));
+  s = resolveEvent(s, idx, pending.card.name, targetId, options ?? {});
+  s = { ...s, pendingJournal: null };
+  return log(s, `${player.name} discards their Journal to repeat ${pending.card.name}.`);
 }
 
 interface PurchaseOptions {
@@ -1542,18 +1590,6 @@ function applyPerk(
       actionsRemaining: p.actionsRemaining + 1,
     }));
     return log(s, `${player.name} drinks a Water Bottle for an extra action.`);
-  }
-
-  // Journal: discard to repeat the most recently played Event (reactive, free).
-  if (perk.name === 'Journal') {
-    const fromTop = [...state.discardPile].reverse().findIndex((c) => c.type === 'EVENT');
-    if (fromTop < 0) return log(state, 'No Event has been played to repeat with the Journal.');
-    const evt = state.discardPile[state.discardPile.length - 1 - fromTop];
-    let s = ownsPerk
-      ? updatePlayer(state, idx, (p) => ({ ...p, inventory: p.inventory.filter((c) => c.id !== perk.id) }))
-      : state;
-    s = resolveEvent(s, idx, evt.name, payload.targetId, { marketCardId: payload.marketCardId });
-    return log(s, `${player.name} uses their Journal to repeat ${evt.name}.`);
   }
 
   if (!opts.free) {

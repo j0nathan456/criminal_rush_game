@@ -11,6 +11,8 @@ export interface EventPanelProps {
   card: ActionCard;
   onSubmit?: (targetId: string | undefined, options: EventOptions) => void;
   onCancel?: () => void;
+  /** Confirm button label (default "Play {card.name}"). */
+  submitLabel?: string;
 }
 
 const SPRING_CLEANING_DISCARDS = 3;
@@ -22,7 +24,7 @@ const SPRING_CLEANING_DISCARDS = 3;
  * Mirrors RoleAbilityPanel's "gather plausible inputs, let the engine
  * validate" approach.
  */
-export function EventPanel({ state, viewerIndex, card, onSubmit, onCancel }: EventPanelProps) {
+export function EventPanel({ state, viewerIndex, card, onSubmit, onCancel, submitLabel }: EventPanelProps) {
   const viewer = state.players[viewerIndex];
   const [targetId, setTargetId] = useState<string | undefined>();
   const [marketCardId, setMarketCardId] = useState<string | undefined>();
@@ -187,7 +189,7 @@ export function EventPanel({ state, viewerIndex, card, onSubmit, onCancel }: Eve
       <div className="cr-role__body">{body}</div>
       <div className="cr-role__actions">
         <button type="button" className="cr-role__use" disabled={!canSubmit} onClick={submit}>
-          Play {card.name}
+          {submitLabel ?? `Play ${card.name}`}
         </button>
         <button type="button" className="cr-role__cancel" onClick={onCancel}>Cancel</button>
       </div>
