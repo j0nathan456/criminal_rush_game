@@ -113,6 +113,29 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
           >
             📖 New here? How to Play
           </button>
+
+          <div className="gold-rule my-5" />
+          <div className="flex flex-col items-center gap-1 text-center text-xs text-fog/70">
+            <p>Game Design: Jonathan Cheng</p>
+            <p>Website Development: Jonathan Cheng and Aaron Wu</p>
+            <p>
+              ✉️{' '}
+              <a href="mailto:criminalrushbuilder@gmail.com" className="hover:text-fog">
+                criminalrushbuilder@gmail.com
+              </a>
+            </p>
+            <p>
+              📷{' '}
+              <a
+                href="https://www.instagram.com/criminalrushgame/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-fog"
+              >
+                @criminalrushgame
+              </a>
+            </p>
+          </div>
         </motion.div>
         {rules}
       </div>
