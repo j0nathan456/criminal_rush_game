@@ -60,6 +60,7 @@ export type GameAction =
   | { type: 'RESOLVE_EVIDENCE_BURN'; use: boolean }
   | { type: 'RESOLVE_RECYCLING_BIN'; cardId?: string; mode?: 'MONEY' | 'DRAW' }
   | { type: 'RESOLVE_GETAWAY_CAR_GIFT'; give: boolean; teammateId?: string; cardId?: string }
+  | { type: 'RESOLVE_BRIBERY'; targetId: string; category: EvidenceCategory; cardId: string }
   | { type: 'END_TURN' };
 
 /**
@@ -182,6 +183,7 @@ export function emptyGameState(): GameState {
     pendingEvidenceBurn: null,
     pendingRecyclingBin: null,
     pendingGetawayCarGift: null,
+    pendingBribery: null,
   };
 }
 
@@ -315,6 +317,12 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
     return log(state, 'Resolve the Getaway Car offer before taking other actions.');
   }
 
+  // Bribery's sell trigger has no "may" — once it fires it must be resolved
+  // before anything else, same as the Bodyguard's start-of-game token choice.
+  if (state.pendingBribery && action.type !== 'RESOLVE_BRIBERY') {
+    return log(state, 'Resolve Bribery before taking other actions.');
+  }
+
   switch (action.type) {
     case 'DRAW_CARD':
       return drawCard(state, idx, player);
@@ -370,6 +378,8 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
       return resolveRecyclingBin(state, action.cardId, action.mode);
     case 'RESOLVE_GETAWAY_CAR_GIFT':
       return resolveGetawayCarGift(state, action.give, action.teammateId, action.cardId);
+    case 'RESOLVE_BRIBERY':
+      return resolveBribery(state, action.targetId, action.category, action.cardId);
     case 'END_TURN':
       return endTurn(state, idx);
     default:
@@ -672,13 +682,28 @@ function sellItem(state: GameState, idx: number, player: Player, cardId: string)
   if (card.type === 'SPECIAL') return log(state, `${card.name} cannot be sold.`);
   if (card.name === 'Investment') return log(state, 'Investment cannot be sold.');
 
-  const s = updatePlayer(state, idx, (p) => ({
+  let s = updatePlayer(state, idx, (p) => ({
     ...p,
     inventory: p.inventory.filter((c) => c.id !== cardId),
     money: p.money + 1,
     actionsRemaining: p.actionsRemaining - 1,
   }));
-  return log(s, `${player.name} sold ${card.name} for $1.`);
+  s = log(s, `${player.name} sold ${card.name} for $1.`);
+
+  // Bribery: "When sold, pay $1 to a Civilian to discard 1 Evidence card from
+  // the grid." No "may" — but only triggers when there's actually a Civilian
+  // to pay and Evidence to take, else there's nothing to bribe with/for.
+  if (card.name === 'Bribery') {
+    const hasCivilian = s.players.some((p) => p.team === 'CIVILIAN' && p.id !== player.id);
+    const hasGridEvidence = (Object.keys(s.evidenceGrid) as EvidenceCategory[]).some(
+      (c) => s.evidenceGrid[c].cards.length > 0,
+    );
+    if (hasCivilian && hasGridEvidence) {
+      s = { ...s, pendingBribery: { playerId: player.id } };
+    }
+  }
+
+  return s;
 }
 
 function playEvidence(
@@ -1061,6 +1086,47 @@ function resolveGetawayCarGift(
   s = updatePlayer(s, mateIdx, (p) => ({ ...p, inventory: [...p.inventory, car], hand: [...p.hand, card] }));
   s = { ...s, pendingGetawayCarGift: null };
   return log(s, `${player.name} gives their Getaway Car and a card to ${mate.name}.`);
+}
+
+/**
+ * Resolve Bribery's sell trigger (see pendingBribery / sellItem): pay $1 to
+ * the chosen Civilian, discard the chosen grid Evidence card. Invalid picks
+ * (not a Civilian, paying yourself, no such grid card) log and stay pending
+ * so the player can retry, matching Getaway Car's/Trade's "stays pending"
+ * pattern — there's no decline here since the card text has no "may".
+ */
+function resolveBribery(
+  state: GameState,
+  targetId: string,
+  category: EvidenceCategory,
+  cardId: string,
+): GameState {
+  const pending = state.pendingBribery;
+  if (!pending) return state;
+  const idx = playerIndexById(state, pending.playerId);
+  const player = state.players[idx];
+  if (!player) return { ...state, pendingBribery: null };
+
+  const targetIdx = playerIndexById(state, targetId);
+  const target = state.players[targetIdx];
+  if (!target || target.team !== 'CIVILIAN' || target.id === player.id) {
+    return log(state, 'Choose a Civilian to bribe.');
+  }
+  const slot = state.evidenceGrid[category];
+  const removed = slot?.cards.find((c) => c.id === cardId);
+  if (!removed) {
+    return log(state, 'Choose an Evidence card in the grid to discard.');
+  }
+
+  let s = updatePlayer(state, idx, (p) => ({ ...p, money: p.money - 1 }));
+  s = updatePlayer(s, targetIdx, (p) => ({ ...p, money: p.money + 1 }));
+  s = {
+    ...s,
+    evidenceGrid: { ...s.evidenceGrid, [category]: { cards: slot.cards.filter((c) => c.id !== removed.id) } },
+    discardPile: [...s.discardPile, removed],
+    pendingBribery: null,
+  };
+  return log(s, `${player.name} bribes ${target.name} with $1 to discard ${removed.name} from ${category}.`);
 }
 
 interface PurchaseOptions {

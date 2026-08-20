@@ -343,4 +343,14 @@ export interface GameState {
    * a card to a teammate").
    */
   pendingGetawayCarGift?: { playerId: string } | null;
+
+  /**
+   * Bribery's sell trigger (see sellItem): the card text has no "may," so
+   * once triggered it must be resolved — a Civilian to pay and a grid
+   * Evidence card to discard, both public information so there's nothing to
+   * gather server-side first. Only set when a Civilian (not the seller) and
+   * at least one grid Evidence card both exist to choose from; otherwise the
+   * sale just proceeds normally with nothing to bribe.
+   */
+  pendingBribery?: { playerId: string } | null;
 }

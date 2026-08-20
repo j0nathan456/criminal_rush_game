@@ -360,6 +360,71 @@ describe('gameReducer — SELL', () => {
     expect(next.players[0].inventory).toHaveLength(1);
     expect(next.players[0].money).toBe(3);
   });
+
+  const bribery: MarketCard = { id: 'br', name: 'Bribery', description: '', cost: 1, source: 'BLACK_MARKET', type: 'PERK' };
+
+  it('selling Bribery offers to bribe a Civilian, blocking other actions until resolved', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('crime-lord', 'CRIMINAL'), money: 3, inventory: [bribery] }),
+      mkPlayer({ id: 'p1', role: role('mayor', 'CIVILIAN'), money: 2 }),
+    ], { evidenceGrid: { ...emptyGameState().evidenceGrid, MEANS: { cards: [evidence('e1', ['MEANS'])] } } });
+
+    const sold = gameReducer(s, { type: 'SELL', cardId: 'br' });
+    expect(sold.players[0].money).toBe(4); // still gets the normal $1 sale proceeds
+    expect(sold.pendingBribery).toEqual({ playerId: 'p0' });
+
+    const blocked = gameReducer(sold, { type: 'DRAW_CARD' });
+    expect(blocked.pendingBribery).toBeTruthy(); // still pending — draw refused
+  });
+
+  it('does not offer Bribery with no Civilian to pay, or no Evidence in the grid', () => {
+    const noCivilian = stateWith([mkPlayer({ id: 'p0', role: role('crime-lord', 'CRIMINAL'), money: 3, inventory: [bribery] })], {
+      evidenceGrid: { ...emptyGameState().evidenceGrid, MEANS: { cards: [evidence('e1', ['MEANS'])] } },
+    });
+    expect(gameReducer(noCivilian, { type: 'SELL', cardId: 'br' }).pendingBribery).toBeFalsy();
+
+    const noEvidence = stateWith([
+      mkPlayer({ id: 'p0', role: role('crime-lord', 'CRIMINAL'), money: 3, inventory: [bribery] }),
+      mkPlayer({ id: 'p1', role: role('mayor', 'CIVILIAN'), money: 2 }),
+    ]);
+    expect(gameReducer(noEvidence, { type: 'SELL', cardId: 'br' }).pendingBribery).toBeFalsy();
+  });
+
+  it('resolving Bribery pays the chosen Civilian $1 and discards the chosen grid card', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('crime-lord', 'CRIMINAL'), money: 3, inventory: [bribery] }),
+      mkPlayer({ id: 'p1', role: role('mayor', 'CIVILIAN'), money: 2 }),
+    ], { evidenceGrid: { ...emptyGameState().evidenceGrid, MEANS: { cards: [evidence('e1', ['MEANS'])] } } });
+    const sold = gameReducer(s, { type: 'SELL', cardId: 'br' });
+
+    const next = gameReducer(sold, { type: 'RESOLVE_BRIBERY', targetId: 'p1', category: 'MEANS', cardId: 'e1' });
+    expect(next.pendingBribery).toBeNull();
+    expect(next.players[0].money).toBe(3); // paid the $1 straight back out
+    expect(next.players[1].money).toBe(3); // Civilian receives it
+    expect(next.evidenceGrid.MEANS.cards).toHaveLength(0);
+    expect(next.discardPile.map((c) => c.id)).toContain('e1');
+  });
+
+  it('refuses an invalid Bribery target or card, staying pending for retry', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('crime-lord', 'CRIMINAL'), money: 3, inventory: [bribery] }),
+      mkPlayer({ id: 'p1', role: role('mayor', 'CIVILIAN'), money: 2 }),
+      mkPlayer({ id: 'p2', role: role('hitman', 'CRIMINAL'), money: 2 }),
+    ], { evidenceGrid: { ...emptyGameState().evidenceGrid, MEANS: { cards: [evidence('e1', ['MEANS'])] } } });
+    const sold = gameReducer(s, { type: 'SELL', cardId: 'br' });
+
+    // Not a Civilian.
+    const badTarget = gameReducer(sold, { type: 'RESOLVE_BRIBERY', targetId: 'p2', category: 'MEANS', cardId: 'e1' });
+    expect(badTarget.pendingBribery).not.toBeNull();
+
+    // Paying yourself.
+    const self = gameReducer(sold, { type: 'RESOLVE_BRIBERY', targetId: 'p0', category: 'MEANS', cardId: 'e1' });
+    expect(self.pendingBribery).not.toBeNull();
+
+    // No such grid card.
+    const badCard = gameReducer(sold, { type: 'RESOLVE_BRIBERY', targetId: 'p1', category: 'MEANS', cardId: 'nope' });
+    expect(badCard.pendingBribery).not.toBeNull();
+  });
 });
 
 describe('gameReducer — start-of-turn perks', () => {
