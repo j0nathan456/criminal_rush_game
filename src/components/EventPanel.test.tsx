@@ -20,6 +20,7 @@ function stateWith(players: Player[], over: Partial<GameState> = {}): GameState 
 }
 const taxCard: ActionCard = { id: 'e1', name: 'Tax Collection', description: '', type: 'EVENT' };
 const gainInfluenceCard: ActionCard = { id: 'e2', name: 'Gain Influence', description: '', type: 'EVENT' };
+const businessCard: ActionCard = { id: 'e3', name: 'Business Opportunity', description: '', type: 'EVENT' };
 const moneyCard: ActionCard = { id: 'm1', name: 'Profit', description: '', type: 'MONEY', value: 1 };
 
 describe('<EventPanel /> — Tax Collection', () => {
@@ -74,5 +75,49 @@ describe('<EventPanel /> — Gain Influence', () => {
     expect(screen.getByText('Ben')).toBeInTheDocument();
     expect(screen.queryByText('Cy')).not.toBeInTheDocument(); // opponent, but no cards to take
     expect(screen.queryByText('Dee')).not.toBeInTheDocument(); // has cards, but a teammate
+  });
+});
+
+describe('<EventPanel /> — Business Opportunity with nothing sellable', () => {
+  it('without forceDiscardIfImpossible, just leaves Play disabled (normal self-play — Cancel keeps the card)', () => {
+    const viewer = mkPlayer({ id: 'p0', name: 'Ana', role: role('crime-lord', 'CRIMINAL'), inventory: [] });
+    const s = stateWith([viewer]);
+
+    render(<EventPanel state={s} viewerIndex={0} card={businessCard} onSubmit={vi.fn()} onCancel={() => {}} />);
+    expect(screen.getByRole('button', { name: /Play Business Opportunity/ })).toBeDisabled();
+    expect(screen.queryByText(/Discard Business Opportunity/)).not.toBeInTheDocument();
+  });
+
+  it('with forceDiscardIfImpossible (Shady Press), offers to discard it instead of leaving the player stuck', () => {
+    const onSubmit = vi.fn();
+    const viewer = mkPlayer({ id: 'p0', name: 'Ana', role: role('crime-lord', 'CRIMINAL'), inventory: [] });
+    const s = stateWith([viewer]);
+
+    render(
+      <EventPanel state={s} viewerIndex={0} card={businessCard} onSubmit={onSubmit} onCancel={() => {}} forceDiscardIfImpossible />,
+    );
+    expect(screen.queryByRole('button', { name: /Play Business Opportunity/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText(/Discard Business Opportunity/));
+    expect(onSubmit).toHaveBeenCalledWith(undefined, {});
+  });
+
+  it('with forceDiscardIfImpossible but something sellable, behaves normally (no discard shortcut)', () => {
+    const onSubmit = vi.fn();
+    const perk = { id: 'pk', name: 'Radio', description: '', cost: 2, source: 'PUBLIC' as const, type: 'PERK' as const };
+    const viewer = mkPlayer({ id: 'p0', name: 'Ana', role: role('crime-lord', 'CRIMINAL'), inventory: [perk] });
+    const s = stateWith([viewer]);
+
+    render(
+      <EventPanel state={s} viewerIndex={0} card={businessCard} onSubmit={onSubmit} onCancel={() => {}} forceDiscardIfImpossible />,
+    );
+    expect(screen.queryByText(/Discard Business Opportunity — nothing to do/)).not.toBeInTheDocument();
+    const playButton = screen.getByRole('button', { name: /Play Business Opportunity/ });
+    expect(playButton).toBeDisabled();
+
+    fireEvent.click(screen.getByText('Radio'));
+    expect(playButton).toBeEnabled();
+    fireEvent.click(playButton);
+    expect(onSubmit).toHaveBeenCalledWith(undefined, { marketCardId: undefined, inventoryCardId: 'pk', takePerk: undefined, discardMarketIds: [] });
   });
 });

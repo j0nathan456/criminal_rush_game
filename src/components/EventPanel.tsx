@@ -13,6 +13,26 @@ export interface EventPanelProps {
   onCancel?: () => void;
   /** Confirm button label (default "Play {card.name}"). */
   submitLabel?: string;
+  /**
+   * Shady Press only: the card being configured isn't the viewer's own —
+   * it's an opponent's card being forced into play, and the engine discards
+   * it regardless of whether the effect actually applies (see reducer's
+   * Shady Press case). So when this card has no legal choice at all (e.g.
+   * Business Opportunity and the presser owns nothing sellable), offer to
+   * discard it outright instead of leaving the player stuck unable to
+   * submit — unlike playing your own Event, Cancel isn't a safe out here,
+   * since it's not the player's card to keep.
+   */
+  forceDiscardIfImpossible?: boolean;
+  /**
+   * Shady Press only: the id of the Shady Press perk itself, excluded from
+   * any "give up one of your own items" choice (Business Opportunity,
+   * Market Exchange) this forced card offers — selling or giving away the
+   * very perk whose ability is still resolving isn't a sensible choice to
+   * present, and would otherwise mask genuinely-impossible cases where it's
+   * the presser's only inventory item.
+   */
+  excludeInventoryCardId?: string;
 }
 
 const SPRING_CLEANING_DISCARDS = 3;
@@ -24,7 +44,9 @@ const SPRING_CLEANING_DISCARDS = 3;
  * Mirrors RoleAbilityPanel's "gather plausible inputs, let the engine
  * validate" approach.
  */
-export function EventPanel({ state, viewerIndex, card, onSubmit, onCancel, submitLabel }: EventPanelProps) {
+export function EventPanel({
+  state, viewerIndex, card, onSubmit, onCancel, submitLabel, forceDiscardIfImpossible, excludeInventoryCardId,
+}: EventPanelProps) {
   const viewer = state.players[viewerIndex];
   const [targetId, setTargetId] = useState<string | undefined>();
   const [marketCardId, setMarketCardId] = useState<string | undefined>();
@@ -75,6 +97,9 @@ export function EventPanel({ state, viewerIndex, card, onSubmit, onCancel, submi
 
   let body: React.ReactNode;
   let canSubmit: boolean;
+  // True when there's no legal choice at all (as opposed to just "not picked
+  // yet") — see forceDiscardIfImpossible above.
+  let impossible = false;
   const submit = () => onSubmit?.(targetId, { marketCardId, inventoryCardId, takePerk, discardMarketIds: discardIds });
 
   switch (card.name) {
@@ -86,6 +111,7 @@ export function EventPanel({ state, viewerIndex, card, onSubmit, onCancel, submi
         </>
       );
       canSubmit = !!marketCardId;
+      impossible = state.publicMarket.length === 0;
       break;
     }
     case 'Tax Collection': {
@@ -97,6 +123,7 @@ export function EventPanel({ state, viewerIndex, card, onSubmit, onCancel, submi
         </>
       );
       canSubmit = !!targetId;
+      impossible = taxable.length === 0;
       break;
     }
     case 'Gain Influence': {
@@ -108,10 +135,13 @@ export function EventPanel({ state, viewerIndex, card, onSubmit, onCancel, submi
         </>
       );
       canSubmit = !!targetId;
+      impossible = withCards.length === 0;
       break;
     }
     case 'Business Opportunity': {
-      const sellable = viewer.inventory.filter((c) => c.type !== 'SPECIAL' && c.name !== 'Investment');
+      const sellable = viewer.inventory.filter(
+        (c) => c.type !== 'SPECIAL' && c.name !== 'Investment' && c.id !== excludeInventoryCardId,
+      );
       body = (
         <>
           <p>Sell a perk or weapon for its cost + $1:</p>
@@ -119,12 +149,13 @@ export function EventPanel({ state, viewerIndex, card, onSubmit, onCancel, submi
         </>
       );
       canSubmit = !!inventoryCardId;
+      impossible = sellable.length === 0;
       break;
     }
     case 'Market Exchange': {
       const direction = takePerk === true ? 'TAKE' : takePerk === false ? 'GIVE' : undefined;
       const givableFrom = takePerk ? target?.inventory : viewer.inventory;
-      const perks = (givableFrom ?? []).filter((c) => c.type === 'PERK');
+      const perks = (givableFrom ?? []).filter((c) => c.type === 'PERK' && c.id !== excludeInventoryCardId);
       body = (
         <>
           <p>Choose a teammate to exchange a perk with:</p>
@@ -147,6 +178,7 @@ export function EventPanel({ state, viewerIndex, card, onSubmit, onCancel, submi
         </>
       );
       canSubmit = !!targetId && takePerk !== undefined && !!inventoryCardId;
+      impossible = teammates.length === 0;
       break;
     }
     case 'Spring Cleaning': {
@@ -160,6 +192,7 @@ export function EventPanel({ state, viewerIndex, card, onSubmit, onCancel, submi
         </>
       );
       canSubmit = discardIds.length === SPRING_CLEANING_DISCARDS;
+      impossible = state.publicMarket.length < SPRING_CLEANING_DISCARDS;
       break;
     }
     case 'Traffic Jam': {
@@ -170,6 +203,7 @@ export function EventPanel({ state, viewerIndex, card, onSubmit, onCancel, submi
         </>
       );
       canSubmit = !!targetId;
+      impossible = opponents.length === 0;
       break;
     }
     default: {
@@ -189,9 +223,15 @@ export function EventPanel({ state, viewerIndex, card, onSubmit, onCancel, submi
       <p className="cr-role__desc">{card.description}</p>
       <div className="cr-role__body">{body}</div>
       <div className="cr-role__actions">
-        <button type="button" className="cr-role__use" disabled={!canSubmit} onClick={submit}>
-          {submitLabel ?? `Play ${card.name}`}
-        </button>
+        {impossible && forceDiscardIfImpossible ? (
+          <button type="button" className="cr-role__use" onClick={() => onSubmit?.(undefined, {})}>
+            Discard {card.name} — nothing to do
+          </button>
+        ) : (
+          <button type="button" className="cr-role__use" disabled={!canSubmit} onClick={submit}>
+            {submitLabel ?? `Play ${card.name}`}
+          </button>
+        )}
         <button type="button" className="cr-role__cancel" onClick={onCancel}>Cancel</button>
       </div>
     </section>

@@ -57,6 +57,8 @@ export function PerkActionPanel({ state, viewerIndex, perkId, onSubmit, onCancel
             onSubmit?.(perkId, { targetId: target.id, cardId: forcedEvent.id, eventTargetId, eventOptions })
           }
           onCancel={() => setCardId(undefined)}
+          forceDiscardIfImpossible
+          excludeInventoryCardId={perk.id}
         />
       );
     }

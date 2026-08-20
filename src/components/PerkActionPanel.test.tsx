@@ -100,4 +100,23 @@ describe('<PerkActionPanel />', () => {
     fireEvent.click(screen.getByText('Use'));
     expect(onSubmit).toHaveBeenCalledWith('sp', expect.objectContaining({ targetId: 'p1', cardId: undefined }));
   });
+
+  it("Shady Press: the victim's only Event is Business Opportunity and the presser has nothing to sell — discards it instead of getting stuck", () => {
+    const onSubmit = vi.fn();
+    const evt: ActionCard = { id: 'e1', name: 'Business Opportunity', description: '', type: 'EVENT' };
+    const viewer = mkPlayer({ id: 'p0', name: 'Ana', team: 'CRIMINAL', inventory: [perk('sp', 'Shady Press')] }); // nothing else to sell
+    const victim = mkPlayer({ id: 'p1', name: 'Ben', team: 'CIVILIAN', hand: [evt] });
+    render(
+      <PerkActionPanel state={stateWith([viewer, victim])} viewerIndex={0} perkId="sp" onSubmit={onSubmit} onCancel={() => {}} />,
+    );
+
+    fireEvent.click(screen.getByText('Ben'));
+    fireEvent.click(screen.getByText('Business Opportunity'));
+
+    // No way to configure a sale (nothing sellable) — Play stays unreachable,
+    // but there's an explicit way forward instead of being stuck.
+    expect(screen.queryByRole('button', { name: /Play Business Opportunity/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText(/Discard Business Opportunity/));
+    expect(onSubmit).toHaveBeenCalledWith('sp', { targetId: 'p1', cardId: 'e1', eventTargetId: undefined, eventOptions: {} });
+  });
 });
