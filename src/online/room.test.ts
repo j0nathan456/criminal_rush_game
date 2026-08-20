@@ -38,6 +38,17 @@ function roomWith(names: string[]): Room {
   return room;
 }
 
+/**
+ * A player's room token, given only their engine `Player`. Tokens are always
+ * `t${lobbySeat}` in these fixtures (see roomWith) and ids `p${lobbySeat}`
+ * (see protocol.ts), so the numeric suffix carries over — but turn order no
+ * longer matches lobby seat (createGame shuffles it), so tests must derive
+ * the token from the actual player rather than assume `t${arrayIndex}`.
+ */
+function tokenFor(player: { id: string }): string {
+  return `t${player.id.slice(1)}`;
+}
+
 describe('generateCode', () => {
   it('produces a code of the requested length from the safe alphabet', () => {
     const code = generateCode(seeded(1), 4);
@@ -118,7 +129,7 @@ describe('chat', () => {
     const msg = after.chat[0];
     expect(msg).toMatchObject({ id: 'm1', seat: 1, name: 'B', sentAt: 123 });
     expect(msg.text).toHaveLength(MAX_CHAT_MESSAGE_LENGTH);
-    expect(msg.team).toBe(state.players[1].team);
+    expect(msg.team).toBe(state.players.find((p) => p.id === 'p1')!.team); // token t1 = lobby seat 1 = id p1 (Ben)
   });
 
   it('rejects a blank message', () => {
@@ -153,8 +164,8 @@ describe('applyAction', () => {
     const started = startRoom(roomWith(['A', 'B', 'C', 'D']), { token: 't0', newGame });
     const state = started.state as GameState;
     const currentSeat = state.currentPlayerIndex;
-    const currentToken = `t${currentSeat}`;
-    const otherToken = `t${(currentSeat + 1) % 4}`;
+    const currentToken = tokenFor(state.players[currentSeat]);
+    const otherToken = tokenFor(state.players[(currentSeat + 1) % 4]);
 
     expect(() => applyAction(started, { token: otherToken, action: { type: 'DRAW_CARD' }, reducer: gameReducer })).toThrow(
       /not your turn/,
@@ -192,12 +203,12 @@ describe('applyAction', () => {
     const choice = { type: 'COMBAT_CHOICE' as const, input: { kind: 'LEAVING_EVIDENCE' as const, evidenceIds: [] } };
 
     // Even the current-turn player (e.g. the attacker who just injured them) can't make this choice.
-    expect(() => applyAction(room, { token: `t${currentSeat}`, action: choice, reducer: gameReducer })).toThrow(
+    expect(() => applyAction(room, { token: tokenFor(state.players[currentSeat]), action: choice, reducer: gameReducer })).toThrow(
       /not your combat choice/,
     );
 
     // The actual decider succeeds, despite it not being "their turn".
-    const after = applyAction(room, { token: `t${deciderSeat}`, action: choice, reducer: gameReducer });
+    const after = applyAction(room, { token: tokenFor(state.players[deciderSeat]), action: choice, reducer: gameReducer });
     expect(after.state?.combat).toBeNull();
   });
 
@@ -220,11 +231,11 @@ describe('applyAction', () => {
 
     // The attacker (whose turn it nominally is) cannot pass for the defender.
     expect(() =>
-      applyAction(room, { token: `t${attackerSeat}`, action: { type: 'PASS_COMBAT', side: 'DEFENDER' }, reducer: gameReducer }),
+      applyAction(room, { token: tokenFor(state.players[attackerSeat]), action: { type: 'PASS_COMBAT', side: 'DEFENDER' }, reducer: gameReducer }),
     ).toThrow(/only pass for yourself/);
 
     // The defender can pass for themselves, despite it not being "their turn".
-    const after = applyAction(room, { token: `t${defenderSeat}`, action: { type: 'PASS_COMBAT', side: 'DEFENDER' }, reducer: gameReducer });
+    const after = applyAction(room, { token: tokenFor(state.players[defenderSeat]), action: { type: 'PASS_COMBAT', side: 'DEFENDER' }, reducer: gameReducer });
     expect(after.state?.combat?.defender.passed).toBe(true);
   });
 
@@ -237,9 +248,9 @@ describe('applyAction', () => {
     const action = { type: 'RESOLVE_THREATEN' as const, mode: 'MONEY' as const };
 
     // Even the current-turn player (the Arsonist who threatened them) can't resolve it.
-    expect(() => applyAction(room, { token: `t${currentSeat}`, action, reducer: gameReducer })).toThrow(/not your Threaten choice/);
+    expect(() => applyAction(room, { token: tokenFor(state.players[currentSeat]), action, reducer: gameReducer })).toThrow(/not your Threaten choice/);
 
-    const after = applyAction(room, { token: `t${targetSeat}`, action, reducer: gameReducer });
+    const after = applyAction(room, { token: tokenFor(state.players[targetSeat]), action, reducer: gameReducer });
     expect(after.state?.pendingThreaten).toBeNull();
   });
 
@@ -256,9 +267,9 @@ describe('applyAction', () => {
     const action = { type: 'RESOLVE_BODYGUARD_SETUP' as const, targetId: state.players[teammateSeat].id };
 
     // Even the current-turn player isn't necessarily the Bodyguard.
-    expect(() => applyAction(room, { token: `t${currentSeat}`, action, reducer: gameReducer })).toThrow(/not your Bodyguard choice/);
+    expect(() => applyAction(room, { token: tokenFor(state.players[currentSeat]), action, reducer: gameReducer })).toThrow(/not your Bodyguard choice/);
 
-    const after = applyAction(room, { token: `t${bodyguardSeat}`, action, reducer: gameReducer });
+    const after = applyAction(room, { token: tokenFor(state.players[bodyguardSeat]), action, reducer: gameReducer });
     expect(after.state?.pendingBodyguardSetup).toBeNull();
   });
 
@@ -274,9 +285,9 @@ describe('applyAction', () => {
     const action = { type: 'RESOLVE_TRADE_RETURN' as const, give: null };
 
     // The initiator (whose turn it nominally is) can't answer for the recipient.
-    expect(() => applyAction(room, { token: `t${initiatorSeat}`, action, reducer: gameReducer })).toThrow(/not your trade/);
+    expect(() => applyAction(room, { token: tokenFor(state.players[initiatorSeat]), action, reducer: gameReducer })).toThrow(/not your trade/);
 
-    const after = applyAction(room, { token: `t${recipientSeat}`, action, reducer: gameReducer });
+    const after = applyAction(room, { token: tokenFor(state.players[recipientSeat]), action, reducer: gameReducer });
     expect(after.state?.pendingTrade).toBeNull();
   });
 });

@@ -141,4 +141,36 @@ describe('<CombatPanel />', () => {
     expect(onDiscardMoney).toHaveBeenCalledWith('ATTACKER', ['m1']);
     expect(onDiscardMoney).not.toHaveBeenCalledWith('ATTACKER', ['m1', 'm2']);
   });
+
+  it("hides Machine Gun's discard-for-+1 buttons from anyone but the gun's own holder", () => {
+    const cash: ActionCard = { id: 'm1', name: 'Cash', description: '', type: 'MONEY', value: 1 };
+    const gun = { id: 'mg1', name: 'Machine Gun', description: '', cost: 5, source: 'PUBLIC' as const, type: 'WEAPON' as const, weaponType: 'RANGED' as const, power: 3 };
+    const attacker = mkPlayer({
+      id: 'atk', name: 'Mona', role: role('hitman', 'CRIMINAL', 3), hand: [cash], inventory: [gun],
+    });
+    const defender = mkPlayer({ id: 'def', name: 'Dora', role: role('mayor', 'CIVILIAN', 2) });
+    const bystander = mkPlayer({ id: 'by', name: 'Nia', role: role('attorney', 'CIVILIAN', 3) });
+    const state: GameState = {
+      ...emptyGameState(),
+      players: [attacker, defender, bystander],
+      combat: {
+        attacker: { playerId: 'atk', basePower: 5, powerCardBonus: 0, passed: false, canPlayPower: true },
+        defender: { playerId: 'def', basePower: 2, powerCardBonus: 0, passed: false, canPlayPower: true },
+        turn: 'ATTACKER', played: [], actionCost: 2, playerCount: 3, phase: 'POWER', pending: [],
+      },
+    };
+
+    // The attacker themselves sees it.
+    const { rerender } = render(<CombatPanel state={state} viewerIndex={0} />);
+    expect(screen.getByText('Cash (+1)')).toBeInTheDocument();
+
+    // The defender — a combat participant, but not the gun's holder — does not.
+    rerender(<CombatPanel state={state} viewerIndex={1} />);
+    expect(screen.queryByText('Cash (+1)')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Machine Gun — discard/)).not.toBeInTheDocument();
+
+    // A bystander not even in the fight does not either.
+    rerender(<CombatPanel state={state} viewerIndex={2} />);
+    expect(screen.queryByText('Cash (+1)')).not.toBeInTheDocument();
+  });
 });

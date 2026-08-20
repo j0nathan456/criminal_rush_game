@@ -48,4 +48,21 @@ describe('<PlayerSeat />', () => {
     expect(popover).toHaveClass('bottom-full');
     expect(popover).not.toHaveClass('top-full');
   });
+
+  it("gives every perk/weapon in another player's inventory the same name-plus-description tooltip a viewer gets on their own", () => {
+    Object.defineProperty(window, 'innerHeight', { value: 800, configurable: true });
+    stubButtonRect(100);
+    const player = mkPlayer({
+      id: 'p0', name: 'Ana',
+      inventory: [
+        { id: 'w1', name: 'Bat', description: '+2 power.', cost: 3, source: 'PUBLIC', type: 'WEAPON', weaponType: 'MELEE', power: 2 },
+        { id: 'pk1', name: 'Computer', description: 'Draw a card at the start of your turn.', cost: 2, source: 'PUBLIC', type: 'PERK' },
+      ],
+    });
+    render(<PlayerSeat player={player} />);
+
+    fireEvent.click(screen.getByTitle('Ana — details'));
+    expect(screen.getByText('Bat')).toHaveAttribute('title', 'Bat — +2 power.');
+    expect(screen.getByText('Computer')).toHaveAttribute('title', 'Computer — Draw a card at the start of your turn.');
+  });
 });

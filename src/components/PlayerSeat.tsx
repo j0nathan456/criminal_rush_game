@@ -150,11 +150,41 @@ export function PlayerSeat({ player, active, isSelf, isNeighbor, targetable, onC
               <div className="mt-2 border-t border-line/60 pt-2 text-[12px]">
                 <div className="text-fog">
                   <span className="font-semibold text-chalk">Perks ({perks.length})</span>
-                  {perks.length > 0 ? ` · ${perks.map((p) => p.name).join(', ')}` : ' · none'}
+                  {perks.length > 0 ? (
+                    <>
+                      {' · '}
+                      {perks.map((item, i) => (
+                        <span key={item.id}>
+                          {i > 0 && ', '}
+                          <span
+                            className="cursor-help underline decoration-dotted decoration-fog/50 underline-offset-2"
+                            title={`${item.name} — ${item.description}`}
+                          >
+                            {item.name}
+                          </span>
+                        </span>
+                      ))}
+                    </>
+                  ) : ' · none'}
                 </div>
                 <div className="mt-1 text-fog">
                   <span className="font-semibold text-chalk">Weapons ({weapons.length})</span>
-                  {weapons.length > 0 ? ` · ${weapons.map((w) => w.name).join(', ')}` : ' · none'}
+                  {weapons.length > 0 ? (
+                    <>
+                      {' · '}
+                      {weapons.map((item, i) => (
+                        <span key={item.id}>
+                          {i > 0 && ', '}
+                          <span
+                            className="cursor-help underline decoration-dotted decoration-fog/50 underline-offset-2"
+                            title={`${item.name} — ${item.description}`}
+                          >
+                            {item.name}
+                          </span>
+                        </span>
+                      ))}
+                    </>
+                  ) : ' · none'}
                 </div>
               </div>
             </motion.div>

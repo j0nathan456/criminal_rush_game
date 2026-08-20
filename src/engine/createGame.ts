@@ -31,10 +31,10 @@ export interface CreateGameOptions {
 }
 
 /**
- * Randomly assigns each seat to a team, using the player count's fixed split
- * (config.civilians/criminals, e.g. 2v2 at 4 players — rulebook, Civilians
- * >= Criminals). Shuffled independently of join order, so which team a
- * player lands on has nothing to do with when they joined the lobby.
+ * Randomly assigns each turn-order position to a team, using the player
+ * count's fixed split (config.civilians/criminals, e.g. 2v2 at 4 players —
+ * rulebook, Civilians >= Criminals). Shuffled independently of join order,
+ * so which team a player lands on has nothing to do with when they joined.
  */
 function assignTeams(config: GameConfig, rng: Rng): Team[] {
   const teams: Team[] = [
@@ -66,12 +66,21 @@ export function createGame(options: CreateGameOptions): GameState {
 
   const civRoles = shuffle(roles.filter((r) => r.team === 'CIVILIAN'), rng);
   const crimRoles = shuffle(roles.filter((r) => r.team === 'CRIMINAL'), rng);
+
+  // Three independent shuffles, in this order: (1) turn order, so seating —
+  // and therefore who's whose neighbor — doesn't depend on join order; (2)
+  // team, onto that shuffled order; (3) which specific role within a team
+  // (civRoles/crimRoles above). `id` stays `p${lobbySeat}` regardless of where
+  // that seat lands in turn order — the online room layer keys off lobby seat
+  // (see protocol.ts's RoomPlayer), so that identity has to stay stable even
+  // though array position (turn order) no longer matches it.
+  const turnOrder = shuffle(playerNames.map((_, lobbySeat) => lobbySeat), rng);
   const teams = assignTeams(config, rng);
 
   let drawPile = buildDrawPile(actionDefs, rng);
 
-  const players: Player[] = playerNames.map((name, seat) => {
-    const team = teams[seat];
+  const players: Player[] = turnOrder.map((lobbySeat, turnPos) => {
+    const team = teams[turnPos];
     const role = (team === 'CIVILIAN' ? civRoles : crimRoles).pop() as RoleIdentity;
     const setup = team === 'CIVILIAN' ? config.civSetup : config.crimSetup;
 
@@ -79,8 +88,8 @@ export function createGame(options: CreateGameOptions): GameState {
     drawPile = rest;
 
     return {
-      id: `p${seat}`,
-      name,
+      id: `p${lobbySeat}`,
+      name: playerNames[lobbySeat],
       team,
       role,
       hand: dealt,

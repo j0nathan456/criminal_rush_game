@@ -20,18 +20,20 @@ export function DiscardPilePanel({ cards, onClose }: DiscardPilePanelProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/70 p-4" onClick={onClose}>
       <section
-        className="cr-role max-h-[80vh] w-full max-w-md overflow-y-auto"
+        className="cr-role flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden"
         aria-label="Discard pile"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="cr-role__head flex items-center justify-between gap-3">
+        {/* Only the list below scrolls (see GameLog's same split) — the header,
+            and the Close button in it, always stay put and reachable. */}
+        <header className="cr-role__head flex shrink-0 items-center justify-between gap-3">
           <h2>🗑️ Discard Pile ({cards.length})</h2>
           <button type="button" className="cr-role__cancel" onClick={onClose}>Close</button>
         </header>
         {ordered.length === 0 ? (
           <p className="cr-role__empty">Nothing discarded yet.</p>
         ) : (
-          <ul className="mt-1 flex flex-col gap-1">
+          <ul className="mt-1 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pr-1">
             {ordered.map((card, i) => {
               const meta = CARD_TYPE_META[card.type];
               return (

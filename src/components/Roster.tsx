@@ -48,7 +48,10 @@ export function Roster({ players, currentPlayerIndex, viewerIndex, targeting, is
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.18 }}
-            className="overflow-hidden"
+            // Not overflow-hidden: each PlayerSeat's detail popover is an
+            // absolutely-positioned child meant to escape its row's bounds,
+            // and an overflow-hidden ancestor clips it regardless of z-index.
+            className="overflow-visible"
           >
             <div className="flex flex-col gap-2 px-3 pb-3">
               {targeting && (

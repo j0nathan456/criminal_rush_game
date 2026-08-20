@@ -138,7 +138,11 @@ export function CombatPanel({ state, viewerIndex, onPlayPower, onPassCombat, onD
           </div>
         )}
 
-        {hasMachineGun && money.length > 0 && (
+        {/* Only the Machine Gun's own holder sees this — everyone else's
+            money cards are otherwise redacted (see redactState), so showing
+            these buttons to a teammate/opponent/bystander would leak both
+            the card names and a way to discard on the holder's behalf. */}
+        {hasMachineGun && viewer?.id === combatant.id && money.length > 0 && (
           <div className="cr-combat__cards">
             <span className="cr-combat__cards-owner">Machine Gun — discard Money for +1 power each</span>
             {money.map((card) => (

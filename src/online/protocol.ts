@@ -10,7 +10,11 @@ import type { GameState, Team } from '../types/game.js';
 /** A seat in a room. `token` is a secret held only server-side. */
 export interface RoomPlayer {
   seat: number;
-  /** Engine player id, always `p${seat}` so it aligns with createGame. */
+  /**
+   * Engine player id, always `p${seat}`. This lobby `seat` (join order) is
+   * stable identity, not turn order — createGame shuffles turn order (and
+   * team) independently, so `state.players` may list this id at any index.
+   */
   id: string;
   name: string;
   token: string;
