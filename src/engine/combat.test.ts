@@ -206,6 +206,25 @@ describe('enterPowerPhase — weapon effect case-log entries', () => {
     const next = gameReducer(s, { type: 'ATTACK', targetId: 'b' });
     expect(next.gameLog).toContain("Pocket Knife scales with a's perks/weapons (+1 PL).");
   });
+
+  it('Robot Soldier counts the card Hammer draws — pre-combat effects resolve before base power', () => {
+    // A plain role (not Hitman/Bodyguard) so nothing but PL + the two
+    // weapons contributes to base power.
+    const self = mkPlayer({
+      id: 'a', role: role('robber', 'CRIMINAL', 3), hand: [junk('h1')],
+      inventory: [wpn('ham', 'Hammer', 'MELEE', 2), wpn('rs', 'Robot Soldier', 'TECH', 0)],
+    });
+    const foe = mkPlayer({ id: 'b', role: role('mayor', 'CIVILIAN', 2) });
+    const s = stateWith([self, foe], { currentPlayerIndex: 0, drawPile: [junk('d1')] });
+
+    const next = gameReducer(s, { type: 'ATTACK', targetId: 'b' });
+    const attacker = next.players.find((p) => p.id === 'a')!;
+    expect(attacker.hand).toHaveLength(2); // Hammer's draw landed before Robot Soldier was measured
+    expect(next.gameLog).toContain("Robot Soldier scales with a's hand size (+2 PL).");
+    // 3 (role PL) + 2 (Hammer) + 2 (Robot Soldier, post-draw) = 7 — would be 6 if base
+    // power were computed before Hammer's draw resolved.
+    expect(next.combat?.attacker.basePower).toBe(7);
+  });
 });
 
 describe('attackActionCost', () => {
