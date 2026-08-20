@@ -247,11 +247,11 @@ describe('applyAction', () => {
     const started = startRoom(roomWith(['A', 'B', 'C', 'D']), { token: 't0', newGame });
     const state = started.state as GameState;
     const currentSeat = state.currentPlayerIndex;
-    // +2 keeps the same team (seats alternate CIVILIAN/CRIMINAL) so the
-    // target is a legal same-team teammate, distinct from both the Bodyguard
-    // and (for this check) the current-turn player.
-    const bodyguardSeat = (currentSeat + 2) % 4;
-    const teammateSeat = currentSeat;
+    // Team is now assigned independently of seat, so find an actual same-team
+    // teammate for the (synthetic) Bodyguard rather than assuming an offset.
+    const bodyguardSeat = (currentSeat + 1) % 4;
+    const bodyguardTeam = state.players[bodyguardSeat].team;
+    const teammateSeat = state.players.findIndex((p, i) => i !== bodyguardSeat && p.team === bodyguardTeam);
     const room: Room = { ...started, state: { ...state, pendingBodyguardSetup: { bodyguardId: state.players[bodyguardSeat].id } } };
     const action = { type: 'RESOLVE_BODYGUARD_SETUP' as const, targetId: state.players[teammateSeat].id };
 

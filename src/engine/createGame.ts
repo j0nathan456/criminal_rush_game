@@ -30,10 +30,18 @@ export interface CreateGameOptions {
   rng?: Rng;
 }
 
-/** Civilians take even seats, Criminals odd — which alternates them and
- * matches every rulebook player-count split (Civilians >= Criminals). */
-function teamForSeat(seat: number): Team {
-  return seat % 2 === 0 ? 'CIVILIAN' : 'CRIMINAL';
+/**
+ * Randomly assigns each seat to a team, using the player count's fixed split
+ * (config.civilians/criminals, e.g. 2v2 at 4 players — rulebook, Civilians
+ * >= Criminals). Shuffled independently of join order, so which team a
+ * player lands on has nothing to do with when they joined the lobby.
+ */
+function assignTeams(config: GameConfig, rng: Rng): Team[] {
+  const teams: Team[] = [
+    ...Array<Team>(config.civilians).fill('CIVILIAN'),
+    ...Array<Team>(config.criminals).fill('CRIMINAL'),
+  ];
+  return shuffle(teams, rng);
 }
 
 /**
@@ -58,11 +66,12 @@ export function createGame(options: CreateGameOptions): GameState {
 
   const civRoles = shuffle(roles.filter((r) => r.team === 'CIVILIAN'), rng);
   const crimRoles = shuffle(roles.filter((r) => r.team === 'CRIMINAL'), rng);
+  const teams = assignTeams(config, rng);
 
   let drawPile = buildDrawPile(actionDefs, rng);
 
   const players: Player[] = playerNames.map((name, seat) => {
-    const team = teamForSeat(seat);
+    const team = teams[seat];
     const role = (team === 'CIVILIAN' ? civRoles : crimRoles).pop() as RoleIdentity;
     const setup = team === 'CIVILIAN' ? config.civSetup : config.crimSetup;
 
