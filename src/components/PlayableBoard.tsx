@@ -1,5 +1,6 @@
 import type { GameState } from '../types/game';
 import type { GameAction } from '../engine';
+import type { ChatMessage } from '../online/protocol';
 import { GameBoard } from './GameBoard';
 import { useBoardInteractions } from './useBoardInteractions';
 
@@ -7,13 +8,19 @@ interface PlayableBoardProps {
   state: GameState;
   viewerIndex: number;
   dispatch: (action: GameAction) => void;
+  /** Room chat, when the host has enabled it (online play only). */
+  chat?: ChatMessage[];
+  chatEnabled?: boolean;
+  onSendChat?: (text: string) => void;
 }
 
 /**
  * A GameBoard wired to a dispatch via the shared interaction hook. Chrome-free
- * so both the local and online drivers can frame it however they like.
+ * so both the local and online drivers can frame it however they like. Chat
+ * is passed straight through rather than via useBoardInteractions — it isn't
+ * a GameAction, so it has no business going through the engine dispatch.
  */
-export function PlayableBoard({ state, viewerIndex, dispatch }: PlayableBoardProps) {
+export function PlayableBoard({ state, viewerIndex, dispatch, chat, chatEnabled, onSendChat }: PlayableBoardProps) {
   const {
     selectedCardId, targeting, notice, roleAbilityOpen, activePerkId, perkPickerOpen, allySupportCardId, eventCardId,
     exposeTargetId, tradeOpen, buyOpen, handlers,
@@ -33,6 +40,9 @@ export function PlayableBoard({ state, viewerIndex, dispatch }: PlayableBoardPro
       exposeTargetId={exposeTargetId}
       tradeOpen={tradeOpen}
       buyOpen={buyOpen}
+      chat={chat}
+      chatEnabled={chatEnabled}
+      onSendChat={onSendChat}
       {...handlers}
     />
   );

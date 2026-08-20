@@ -10,10 +10,13 @@
 import type { GameState, Player } from '../types/game.js';
 import type { ActionCard } from '../types/cards.js';
 import type { GameAction } from '../engine/index.js';
-import type { Room, RoomView } from './protocol.js';
+import type { ChatMessage, Room, RoomView } from './protocol.js';
 
 export const MIN_PLAYERS = 4;
 export const MAX_PLAYERS = 8;
+export const MAX_CHAT_MESSAGE_LENGTH = 200;
+/** Oldest messages fall off once the room's chat history passes this length. */
+const MAX_CHAT_HISTORY = 200;
 
 /** Unambiguous code alphabet (no O/0/I/1). */
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -42,6 +45,8 @@ export function createRoom({ code, hostToken, hostName, now }: CreateRoomInput):
     started: false,
     players: [{ seat: 0, id: 'p0', name: hostName, token: hostToken }],
     state: null,
+    chatEnabled: false,
+    chat: [],
   };
 }
 
@@ -140,6 +145,50 @@ export function startRoom(room: Room, { token, newGame }: StartRoomInput): Room 
   return { ...room, started: true, state: newGame(names) };
 }
 
+export interface SetChatEnabledInput {
+  hostToken: string;
+  enabled: boolean;
+}
+
+/**
+ * Host-only, pre-game: turn the room's chat on or off. Deliberately not
+ * changeable mid-game — the chat box only ever appears once the game has
+ * started (see PostChatInput), so there's no case where players are mid-chat
+ * and need it pulled out from under them.
+ */
+export function setChatEnabled(room: Room, { hostToken, enabled }: SetChatEnabledInput): Room {
+  if (!isHost(room, hostToken)) throw new RoomError('Only the host can change the chat setting.');
+  if (room.started) throw new RoomError('Chat can only be turned on or off before the game starts.');
+  return { ...room, chatEnabled: enabled };
+}
+
+export interface PostChatInput {
+  token: string;
+  text: string;
+  now: number;
+  /** Caller-supplied so this stays a pure function (see createRoom's `now`). */
+  id: string;
+}
+
+/**
+ * Post a chat message. Requires the host to have enabled chat and the game to
+ * already be underway — the sender's team (for name coloring) comes from
+ * `room.state`, which doesn't exist before then. History is capped at
+ * MAX_CHAT_HISTORY so the room's Redis blob doesn't grow without bound.
+ */
+export function postChatMessage(room: Room, { token, text, now, id }: PostChatInput): Room {
+  if (!room.chatEnabled) throw new RoomError('Chat is not enabled for this room.');
+  if (!room.started || !room.state) throw new RoomError('Chat opens once the game starts.');
+  const me = room.players.find((p) => p.token === token);
+  if (!me) throw new RoomError('You are not in this room.');
+  const trimmed = text.trim().slice(0, MAX_CHAT_MESSAGE_LENGTH);
+  if (!trimmed) throw new RoomError('Message cannot be empty.');
+
+  const player = room.state.players.find((p) => p.id === me.id);
+  const message: ChatMessage = { id, seat: me.seat, name: me.name, team: player?.team ?? 'CIVILIAN', text: trimmed, sentAt: now };
+  return { ...room, chat: [...room.chat, message].slice(-MAX_CHAT_HISTORY) };
+}
+
 export interface ApplyActionInput {
   token: string;
   action: GameAction;
@@ -225,6 +274,8 @@ export function viewFor(room: Room, token: string): RoomView {
     isHost: isHost(room, token),
     state,
     winner: room.state?.winner ?? null,
+    chatEnabled: room.chatEnabled,
+    chat: room.chat,
   };
 }
 

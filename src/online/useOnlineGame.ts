@@ -83,6 +83,9 @@ export interface OnlineGame {
   start: () => Promise<void>;
   /** Host-only: remove another not-yet-started player by their lobby seat. */
   kick: (targetSeat: number) => Promise<void>;
+  /** Host-only, pre-game: turn the room's chat on or off. */
+  setChatEnabled: (enabled: boolean) => Promise<void>;
+  sendChat: (text: string) => Promise<void>;
   dispatch: (action: GameAction) => Promise<void>;
   leave: () => void;
 }
@@ -157,6 +160,32 @@ export function useOnlineGame(): OnlineGame {
           code: codeRef.current,
           token: tokenRef.current,
           targetSeat,
+        });
+        setView(v);
+      }),
+    [run],
+  );
+
+  const setChatEnabled = useCallback(
+    (enabled: boolean) =>
+      run(async () => {
+        const { view: v } = await postJson<{ view: RoomView }>('/api/chat-toggle', {
+          code: codeRef.current,
+          token: tokenRef.current,
+          enabled,
+        });
+        setView(v);
+      }),
+    [run],
+  );
+
+  const sendChat = useCallback(
+    (text: string) =>
+      run(async () => {
+        const { view: v } = await postJson<{ view: RoomView }>('/api/chat-send', {
+          code: codeRef.current,
+          token: tokenRef.current,
+          text,
         });
         setView(v);
       }),
@@ -271,5 +300,5 @@ export function useOnlineGame(): OnlineGame {
     };
   }, [view]);
 
-  return { view, error, connecting, createRoom, joinRoom, start, kick, dispatch, leave };
+  return { view, error, connecting, createRoom, joinRoom, start, kick, setChatEnabled, sendChat, dispatch, leave };
 }

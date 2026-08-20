@@ -4,6 +4,7 @@ import type { EvidenceCategory, AnyCard, MarketCard } from '../types/cards';
 import type { ActionMeta } from '../constants/theme';
 import type { RoleAbilityPayload, PerkPayload, EventOptions, TradeItem } from '../engine';
 import type { CombatChoiceInput } from '../types/game';
+import type { ChatMessage } from '../online/protocol';
 import { actionsForTurn, actionAvailability, handCardPlayable, neighborIds } from '../engine';
 import { TEAM_META } from '../constants/theme';
 
@@ -38,6 +39,7 @@ import { JournalPanel } from './JournalPanel';
 import { EvidenceBurnPanel } from './EvidenceBurnPanel';
 import { RecyclingBinPanel } from './RecyclingBinPanel';
 import { GetawayCarPanel } from './GetawayCarPanel';
+import { ChatPanel } from './ChatPanel';
 import { MarketPickerPanel } from './MarketPickerPanel';
 import { TargetPicker } from './TargetPicker';
 
@@ -89,6 +91,7 @@ export interface GameBoardHandlers {
   onCancelBuy?: () => void;
   onResolveRecyclingBin?: (cardId: string | undefined, mode: 'MONEY' | 'DRAW' | undefined) => void;
   onResolveGetawayCarGift?: (give: boolean, teammateId?: string, cardId?: string) => void;
+  onSendChat?: (text: string) => void;
 }
 
 interface GameBoardProps extends GameBoardHandlers {
@@ -115,6 +118,9 @@ interface GameBoardProps extends GameBoardHandlers {
   tradeOpen?: boolean;
   /** Whether the Market/Black Market buy picker is open for the viewer. */
   buyOpen?: boolean;
+  /** Room chat, when the host has enabled it (online play only); omit to hide the chat box entirely. */
+  chat?: ChatMessage[];
+  chatEnabled?: boolean;
 }
 
 /**
@@ -136,6 +142,8 @@ export function GameBoard({
   exposeTargetId = null,
   tradeOpen = false,
   buyOpen = false,
+  chat,
+  chatEnabled = false,
   onAction,
   onEndTurn,
   onSelectCard,
@@ -180,6 +188,7 @@ export function GameBoard({
   onCancelBuy,
   onResolveRecyclingBin,
   onResolveGetawayCarGift,
+  onSendChat,
 }: GameBoardProps) {
   const viewer = state.players[viewerIndex];
   const isViewersTurn = viewerIndex === state.currentPlayerIndex;
@@ -427,6 +436,11 @@ export function GameBoard({
               {state.pendingGetawayCarGift && !state.combat && !state.winner && (
                 <GetawayCarPanel state={state} viewerIndex={viewerIndex} onResolve={onResolveGetawayCarGift} />
               )}
+
+              {/* Sits after every action-resolution panel above, never between
+                  them, so an in-progress decision (combat, a trade, etc.)
+                  never gets pushed out of view by chat activity. */}
+              {chatEnabled && <ChatPanel messages={chat ?? []} onSend={onSendChat} />}
             </div>
 
             <div className="flex flex-col gap-2">

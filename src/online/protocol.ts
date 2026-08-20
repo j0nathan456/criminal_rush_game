@@ -16,6 +16,16 @@ export interface RoomPlayer {
   token: string;
 }
 
+/** A single chat message, as stored and broadcast to every room member. */
+export interface ChatMessage {
+  id: string;
+  seat: number;
+  name: string;
+  team: Team;
+  text: string;
+  sentAt: number;
+}
+
 /** Authoritative room record stored in the backend (Redis). */
 export interface Room {
   code: string;
@@ -24,6 +34,10 @@ export interface Room {
   players: RoomPlayer[];
   /** Null until the host starts; then the full authoritative game state. */
   state: GameState | null;
+  /** Host-only setting, toggled pre-game (see setChatEnabled). */
+  chatEnabled: boolean;
+  /** Public to every room member — no redaction needed. */
+  chat: ChatMessage[];
 }
 
 /** Public seat info (no tokens). */
@@ -46,4 +60,6 @@ export interface RoomView {
   isHost: boolean;
   state: GameState | null;
   winner: Team | null;
+  chatEnabled: boolean;
+  chat: ChatMessage[];
 }

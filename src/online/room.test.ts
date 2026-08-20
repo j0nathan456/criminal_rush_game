@@ -7,10 +7,13 @@ import {
   rejoinRoom,
   startRoom,
   applyAction,
+  setChatEnabled,
+  postChatMessage,
   viewFor,
   generateCode,
   RoomError,
   MIN_PLAYERS,
+  MAX_CHAT_MESSAGE_LENGTH,
 } from './room.js';
 import type { Room } from './protocol.js';
 import { emptyGameState, gameReducer } from '../engine/index.js';
@@ -79,6 +82,69 @@ describe('room lifecycle', () => {
     const started = startRoom(roomWith(['A', 'B', 'C', 'D']), { token: 't0', newGame });
     expect(started.started).toBe(true);
     expect(started.state?.players).toHaveLength(4);
+  });
+});
+
+describe('chat', () => {
+  it('defaults to disabled, and only the host can turn it on before the game starts', () => {
+    const room = roomWith(['A', 'B', 'C', 'D']);
+    expect(room.chatEnabled).toBe(false);
+
+    expect(() => setChatEnabled(room, { hostToken: 't1', enabled: true })).toThrow(/host/);
+
+    const enabled = setChatEnabled(room, { hostToken: 't0', enabled: true });
+    expect(enabled.chatEnabled).toBe(true);
+
+    const started = startRoom(enabled, { token: 't0', newGame });
+    expect(() => setChatEnabled(started, { hostToken: 't0', enabled: false })).toThrow(/before the game starts/);
+  });
+
+  it('refuses to post before chat is enabled or before the game has started', () => {
+    const room = roomWith(['A', 'B', 'C', 'D']);
+    expect(() => postChatMessage(room, { token: 't0', text: 'hi', now: 0, id: 'm1' })).toThrow(/not enabled/);
+
+    const enabled = setChatEnabled(room, { hostToken: 't0', enabled: true });
+    expect(() => postChatMessage(enabled, { token: 't0', text: 'hi', now: 0, id: 'm1' })).toThrow(/game starts/);
+  });
+
+  it('posts a message, trims it, caps it at MAX_CHAT_MESSAGE_LENGTH, and colors it by the sender\'s team', () => {
+    const enabled = setChatEnabled(roomWith(['A', 'B', 'C', 'D']), { hostToken: 't0', enabled: true });
+    const started = startRoom(enabled, { token: 't0', newGame });
+    const state = started.state as GameState;
+    const overLong = '!'.repeat(MAX_CHAT_MESSAGE_LENGTH + 50);
+
+    const after = postChatMessage(started, { token: 't1', text: `  ${overLong}  `, now: 123, id: 'm1' });
+    expect(after.chat).toHaveLength(1);
+    const msg = after.chat[0];
+    expect(msg).toMatchObject({ id: 'm1', seat: 1, name: 'B', sentAt: 123 });
+    expect(msg.text).toHaveLength(MAX_CHAT_MESSAGE_LENGTH);
+    expect(msg.team).toBe(state.players[1].team);
+  });
+
+  it('rejects a blank message', () => {
+    const enabled = setChatEnabled(roomWith(['A', 'B', 'C', 'D']), { hostToken: 't0', enabled: true });
+    const started = startRoom(enabled, { token: 't0', newGame });
+    expect(() => postChatMessage(started, { token: 't0', text: '   ', now: 0, id: 'm1' })).toThrow(/empty/);
+  });
+
+  it('caps history so the room record does not grow without bound', () => {
+    const enabled = setChatEnabled(roomWith(['A', 'B', 'C', 'D']), { hostToken: 't0', enabled: true });
+    let room = startRoom(enabled, { token: 't0', newGame });
+    for (let i = 0; i < 205; i++) {
+      room = postChatMessage(room, { token: 't0', text: `msg ${i}`, now: i, id: `m${i}` });
+    }
+    expect(room.chat.length).toBeLessThanOrEqual(200);
+    expect(room.chat.at(-1)?.text).toBe('msg 204'); // newest survives the cap
+  });
+
+  it('is public in viewFor for every player, unlike hands/draw pile', () => {
+    const enabled = setChatEnabled(roomWith(['A', 'B', 'C', 'D']), { hostToken: 't0', enabled: true });
+    const started = startRoom(enabled, { token: 't0', newGame });
+    const withMsg = postChatMessage(started, { token: 't0', text: 'hello table', now: 0, id: 'm1' });
+
+    expect(viewFor(withMsg, 't0').chat).toHaveLength(1);
+    expect(viewFor(withMsg, 't2').chat).toHaveLength(1); // any other seat sees it too
+    expect(viewFor(withMsg, 't2').chatEnabled).toBe(true);
   });
 });
 
@@ -217,7 +283,7 @@ describe('applyAction', () => {
 
 describe('viewFor redaction', () => {
   function startedRoomWithState(state: GameState): Room {
-    return { code: 'ABCD', createdAt: 0, started: true, players: roomWith(['A', 'B']).players, state };
+    return { code: 'ABCD', createdAt: 0, started: true, players: roomWith(['A', 'B']).players, state, chatEnabled: false, chat: [] };
   }
 
   it("hides other players' hands and the draw pile, but not your own hand", () => {

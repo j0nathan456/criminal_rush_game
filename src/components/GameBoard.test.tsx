@@ -34,4 +34,12 @@ describe('<GameBoard />', () => {
     rerender(<GameBoard state={MOCK_GAME} viewerIndex={1} />);
     expect(screen.getAllByText('Black Market').length).toBeGreaterThan(0);
   });
+
+  it('only shows the chat box once the host has enabled it', () => {
+    const { rerender } = render(<GameBoard state={MOCK_GAME} />);
+    expect(screen.queryByLabelText('Chat')).not.toBeInTheDocument();
+
+    rerender(<GameBoard state={MOCK_GAME} chatEnabled chat={[]} />);
+    expect(screen.getByLabelText('Chat')).toBeInTheDocument();
+  });
 });

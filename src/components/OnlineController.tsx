@@ -187,6 +187,20 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
             ))}
           </div>
 
+          {view.isHost ? (
+            <label className="mb-4 flex items-center gap-2 text-sm text-fog">
+              <input
+                type="checkbox"
+                checked={view.chatEnabled}
+                disabled={game.connecting}
+                onChange={(e) => game.setChatEnabled(e.target.checked)}
+              />
+              💬 Enable chat during the game
+            </label>
+          ) : (
+            <p className="mb-4 text-sm text-fog">💬 Chat is {view.chatEnabled ? 'enabled' : 'disabled'} for this game.</p>
+          )}
+
           <div className="flex flex-col gap-2">
             {view.isHost ? (
               <button
@@ -253,7 +267,14 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
         </span>
       </div>
 
-      <PlayableBoard state={view.state} viewerIndex={view.yourSeat} dispatch={game.dispatch} />
+      <PlayableBoard
+        state={view.state}
+        viewerIndex={view.yourSeat}
+        dispatch={game.dispatch}
+        chat={view.chat}
+        chatEnabled={view.chatEnabled}
+        onSendChat={game.sendChat}
+      />
       {game.error && <p className="px-4 text-sm text-crim">{game.error}</p>}
 
       {rules}

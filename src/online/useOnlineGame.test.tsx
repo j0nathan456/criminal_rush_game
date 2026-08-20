@@ -25,6 +25,8 @@ function fakeView(over: Partial<RoomView> = {}): RoomView {
     isHost: true,
     state: null,
     winner: null,
+    chatEnabled: false,
+    chat: [],
     ...over,
   };
 }
