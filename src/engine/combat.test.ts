@@ -250,6 +250,23 @@ describe('powerCardValue', () => {
     const played = [{ cardId: 'ua', name: 'Unexpected Allies', byPlayerId: 'z', side: 'DEFENDER' as const, power: 2, basePower: 2 }];
     expect(powerCardValue(pow('mir', 'Mirror', 0), plain, played)).toEqual({ basePower: 2, power: 2, copiedCardName: 'Unexpected Allies' });
   });
+
+  it('stacks Mafia Alliance on top of Mirror — Mirror is itself a Power card the holder played', () => {
+    // Mafia Alliance reads "All Power cards you play are worth +1 power," with
+    // no carve-out for Mirror, so playing Mirror while holding it gets both:
+    // the copied base PL, plus the holder's own +1 (not the original card's).
+    const mafioso = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [perk('ma', 'Mafia Alliance')] });
+    const played = [{ cardId: 's1', name: 'Surge', byPlayerId: 'z', side: 'DEFENDER' as const, power: 2, basePower: 2 }];
+    expect(powerCardValue(pow('mir', 'Mirror', 0), mafioso, played)).toEqual({ basePower: 2, power: 3, copiedCardName: 'Surge' });
+  });
+
+  it("Retreat costs -1 PL, netting 0 with Mafia Alliance's own +1", () => {
+    const plain = mkPlayer({ id: 'a', role: role('mayor', 'CIVILIAN', 2) });
+    expect(powerCardValue(pow('rt', 'Retreat', -1), plain, [])).toEqual({ basePower: -1, power: -1 });
+
+    const mafioso = mkPlayer({ id: 'b', role: role('hitman', 'CRIMINAL', 3), inventory: [perk('ma', 'Mafia Alliance')] });
+    expect(powerCardValue(pow('rt', 'Retreat', -1), mafioso, [])).toEqual({ basePower: -1, power: 0 });
+  });
 });
 
 describe('powerCardEligible', () => {
@@ -399,6 +416,23 @@ describe('interactive combat — rule guards', () => {
     expect(after.gameLog.at(-1)).toBe('atk used Mirror to copy Surge to get +2 PL.');
   });
 
+  it("Mirror copies a card's raw printed value, not the original player's own Mafia Alliance boost", () => {
+    const atk = mkPlayer({ id: 'atk', role: role('hitman', 'CRIMINAL', 3), hand: [pow('m', 'Mirror', 0)] });
+    const def = mkPlayer({
+      id: 'def', role: role('mayor', 'CIVILIAN', 2), hand: [pow('b', 'Boost', 1)],
+      inventory: [perk('ma', 'Mafia Alliance')],
+    });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+    let fight = gameReducer(s, { type: 'ATTACK', targetId: 'def' });
+
+    fight = gameReducer(fight, { type: 'PLAY_POWER', cardId: 'b', side: 'DEFENDER', byPlayerId: 'def' });
+    expect(fight.combat!.defender.powerCardBonus).toBe(2); // Boost's 1 + def's own Mafia Alliance +1
+    expect(fight.combat!.played.at(-1)).toMatchObject({ basePower: 1, power: 2 }); // raw base kept separate from the boosted total
+
+    const after = gameReducer(fight, { type: 'PLAY_POWER', cardId: 'm', side: 'ATTACKER', byPlayerId: 'atk', mirrorTargetCardId: 'b' });
+    expect(after.combat!.attacker.powerCardBonus).toBe(1); // copies Boost's raw +1, not def's boosted +2
+  });
+
   it('rejects an explicit mirrorTargetCardId that was not actually played by someone else', () => {
     const atk = mkPlayer({ id: 'atk', role: role('hitman', 'CRIMINAL', 3), hand: [pow('m', 'Mirror', 0), pow('b', 'Boost', 1)] });
     const def = mkPlayer({ id: 'def', role: role('mayor', 'CIVILIAN', 2) });
@@ -409,6 +443,55 @@ describe('interactive combat — rule guards', () => {
     const after = gameReducer(fight, { type: 'PLAY_POWER', cardId: 'm', side: 'ATTACKER', byPlayerId: 'atk', mirrorTargetCardId: 'b' });
     expect(after.combat!.attacker.powerCardBonus).toBe(1); // unchanged — still just Boost's +1
     expect(after.players.find((p) => p.id === 'atk')!.hand.some((c) => c.id === 'm')).toBe(true); // Mirror rejected, stays in hand
+  });
+
+  it('Retreat: attacking gets an Action Point back', () => {
+    const atk = mkPlayer({ id: 'atk', role: role('hitman', 'CRIMINAL', 3), hand: [pow('rt', 'Retreat', -1)] });
+    const def = mkPlayer({ id: 'def', role: role('mayor', 'CIVILIAN', 2) });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+    let fight = gameReducer(s, { type: 'ATTACK', targetId: 'def' });
+    fight = gameReducer(fight, { type: 'PLAY_POWER', cardId: 'rt', side: 'ATTACKER', byPlayerId: 'atk' });
+
+    expect(fight.combat!.attacker.powerCardBonus).toBe(-1);
+    expect(fight.players.find((p) => p.id === 'atk')!.actionsRemaining).toBe(2); // 1 (post-attack cost) + 1 back
+  });
+
+  it('Retreat: defending draws 2 cards instead', () => {
+    const atk = mkPlayer({ id: 'atk', role: role('hitman', 'CRIMINAL', 3) });
+    const def = mkPlayer({ id: 'def', role: role('mayor', 'CIVILIAN', 2), hand: [pow('rt', 'Retreat', -1)] });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0, drawPile: [junk('d1'), junk('d2')] });
+    let fight = gameReducer(s, { type: 'ATTACK', targetId: 'def' });
+    fight = gameReducer(fight, { type: 'PLAY_POWER', cardId: 'rt', side: 'DEFENDER', byPlayerId: 'def' });
+
+    expect(fight.combat!.defender.powerCardBonus).toBe(-1);
+    expect(fight.players.find((p) => p.id === 'def')!.hand).toHaveLength(2); // Retreat played away, 2 new cards drawn
+    expect(fight.drawPile).toHaveLength(0);
+  });
+
+  it('Retreat nets 0 power with Mafia Alliance, but still keeps its benefit', () => {
+    const atk = mkPlayer({
+      id: 'atk', role: role('hitman', 'CRIMINAL', 3), hand: [pow('rt', 'Retreat', -1)],
+      inventory: [perk('ma', 'Mafia Alliance')],
+    });
+    const def = mkPlayer({ id: 'def', role: role('mayor', 'CIVILIAN', 2) });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+    let fight = gameReducer(s, { type: 'ATTACK', targetId: 'def' });
+    fight = gameReducer(fight, { type: 'PLAY_POWER', cardId: 'rt', side: 'ATTACKER', byPlayerId: 'atk' });
+
+    expect(fight.combat!.attacker.powerCardBonus).toBe(0); // -1 base + Mafia Alliance's +1
+    expect(fight.players.find((p) => p.id === 'atk')!.actionsRemaining).toBe(2); // benefit still applies
+  });
+
+  it('Mirror copying Retreat gets the -1 PL but never the Action Point/draw benefit', () => {
+    const atk = mkPlayer({ id: 'atk', role: role('hitman', 'CRIMINAL', 3), hand: [pow('m', 'Mirror', 0)] });
+    const def = mkPlayer({ id: 'def', role: role('mayor', 'CIVILIAN', 2), hand: [pow('rt', 'Retreat', -1)] });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+    let fight = gameReducer(s, { type: 'ATTACK', targetId: 'def' });
+    fight = gameReducer(fight, { type: 'PLAY_POWER', cardId: 'rt', side: 'DEFENDER', byPlayerId: 'def' });
+    fight = gameReducer(fight, { type: 'PLAY_POWER', cardId: 'm', side: 'ATTACKER', byPlayerId: 'atk', mirrorTargetCardId: 'rt' });
+
+    expect(fight.combat!.attacker.powerCardBonus).toBe(-1); // copied Retreat's -1 PL
+    expect(fight.players.find((p) => p.id === 'atk')!.actionsRemaining).toBe(1); // no Action Point back
   });
 
   it('Machine Gun discards Money cards for +1 power each', () => {

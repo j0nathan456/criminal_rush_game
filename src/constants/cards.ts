@@ -55,11 +55,12 @@ export const EVIDENCE_CARDS: CardDef<ActionCard>[] = [
 ];
 
 export const POWER_CARDS: CardDef<ActionCard>[] = [
-  { name: 'Boost', description: '+1 PL during combat.', type: 'POWER', power: 1, copies: 7 },
+  { name: 'Boost', description: '+1 PL during combat.', type: 'POWER', power: 1, copies: 6 },
   { name: 'Surge', description: '+2 PL during combat.', type: 'POWER', power: 2, copies: 3 },
   { name: 'Shield', description: '+3 PL. Can only be played on defense.', type: 'POWER', power: 3, copies: 2 },
   { name: 'Unexpected Allies', description: '+2 PL. Can only be played for a teammate.', type: 'POWER', power: 2, copies: 3 },
   { name: 'Mirror', description: "Copies the PL of another player's Power card played earlier this combat.", type: 'POWER', power: 0, copies: 1 },
+  { name: 'Retreat', description: 'If attacking: -1 PL to gain 1 Action Point back. If defending: -1 PL to draw 2 cards.', type: 'POWER', power: -1, copies: 1 },
 ];
 
 export const EVENT_CARDS: CardDef<ActionCard>[] = [

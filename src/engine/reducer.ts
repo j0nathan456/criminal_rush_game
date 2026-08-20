@@ -1384,10 +1384,24 @@ function playPower(
     played: [...combat.played, { cardId, name: card.name, byPlayerId: by.id, side, power, basePower }],
   };
   s = { ...s, combat: newCombat };
+
+  // Retreat's own benefit (Action Point back / draw 2) — only for actually
+  // playing the printed card, never for Mirror copying its PL: Mirror's own
+  // branch below returns before this runs, and even if it didn't, `card` here
+  // is always the card physically played (Mirror itself when mirroring), so
+  // this check already excludes a Mirror copy without needing a special case.
+  if (card.name === 'Retreat') {
+    s = side === 'ATTACKER'
+      ? updatePlayer(s, byIdx, (p) => ({ ...p, actionsRemaining: p.actionsRemaining + 1 }))
+      : drawForPlayer(drawForPlayer(s, byIdx), byIdx);
+  }
+
   const message =
     card.name === 'Mirror' && copiedCardName
       ? `${by.name} used Mirror to copy ${copiedCardName} to get +${power} PL.`
-      : `${by.name} plays ${card.name} for ${power} power on ${side === 'ATTACKER' ? 'attack' : 'defence'}.`;
+      : card.name === 'Retreat'
+        ? `${by.name} plays Retreat for ${power} power, ${side === 'ATTACKER' ? 'gaining an action back' : 'drawing 2 cards'}.`
+        : `${by.name} plays ${card.name} for ${power} power on ${side === 'ATTACKER' ? 'attack' : 'defence'}.`;
   return log(s, message);
 }
 

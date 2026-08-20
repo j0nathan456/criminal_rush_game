@@ -82,7 +82,7 @@ export function CombatPanel({ state, viewerIndex, onPlayPower, onPassCombat, onD
           <span className="cr-combat__total-num">{total}</span>
           <span className="cr-combat__total-detail">
             base {part.basePower}
-            {part.powerCardBonus > 0 && <> +{part.powerCardBonus}</>}
+            {part.powerCardBonus !== 0 && <> {part.powerCardBonus > 0 ? `+${part.powerCardBonus}` : part.powerCardBonus}</>}
           </span>
         </div>
 
@@ -128,7 +128,7 @@ export function CombatPanel({ state, viewerIndex, onPlayPower, onPassCombat, onD
                       setMirrorPending(null);
                     }}
                   >
-                    {played.name} (+{played.basePower})
+                    {played.name} ({played.basePower >= 0 ? `+${played.basePower}` : played.basePower})
                   </button>
                 ))}
             </div>
@@ -189,7 +189,7 @@ export function CombatPanel({ state, viewerIndex, onPlayPower, onPassCombat, onD
         <ul className="cr-combat__log">
           {combat.played.map((p, i) => (
             <li key={i}>
-              {p.name} → {p.side === 'ATTACKER' ? attacker.name : defender.name} (+{p.power})
+              {p.name} → {p.side === 'ATTACKER' ? attacker.name : defender.name} ({p.power >= 0 ? `+${p.power}` : p.power})
             </li>
           ))}
         </ul>

@@ -56,7 +56,7 @@ export function DiscardPilePanel({ cards, onClose }: DiscardPilePanelProps) {
                     <span className="text-[11px] text-fog">${card.value}</span>
                   )}
                   {card.type === 'POWER' && card.power !== undefined && (
-                    <span className="text-[11px] text-fog">+{card.power} PL</span>
+                    <span className="text-[11px] text-fog">{card.power >= 0 ? `+${card.power}` : card.power} PL</span>
                   )}
                 </li>
               );

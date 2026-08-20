@@ -173,4 +173,25 @@ describe('<CombatPanel />', () => {
     rerender(<CombatPanel state={state} viewerIndex={2} />);
     expect(screen.queryByText('Cash (+1)')).not.toBeInTheDocument();
   });
+
+  it("shows a negative power modifier (Retreat) as '-1', never '+-1'", () => {
+    const attacker = mkPlayer({ id: 'atk', name: 'Mona', role: role('hitman', 'CRIMINAL', 3) });
+    const defender = mkPlayer({ id: 'def', name: 'Dora', role: role('mayor', 'CIVILIAN', 2) });
+    const state: GameState = {
+      ...emptyGameState(),
+      players: [attacker, defender],
+      combat: {
+        attacker: { playerId: 'atk', basePower: 5, powerCardBonus: -1, passed: false, canPlayPower: true },
+        defender: { playerId: 'def', basePower: 2, powerCardBonus: 0, passed: false, canPlayPower: true },
+        turn: 'ATTACKER',
+        played: [{ cardId: 'rt1', name: 'Retreat', byPlayerId: 'atk', side: 'ATTACKER', power: -1, basePower: -1 }],
+        actionCost: 2, playerCount: 2, phase: 'POWER', pending: [],
+      },
+    };
+    render(<CombatPanel state={state} viewerIndex={0} />);
+
+    expect(screen.getByText(/base 5/)).toHaveTextContent('base 5 -1');
+    expect(screen.getByText(/Retreat → Mona/)).toHaveTextContent('Retreat → Mona (-1)');
+    expect(screen.queryByText(/\+-1/)).not.toBeInTheDocument();
+  });
 });
