@@ -59,18 +59,21 @@ export function RoleCard({
       <div
         key={item.id}
         style={{ borderColor: typeMeta.color }}
-        className="flex items-center justify-between gap-2 rounded-lg border-l-[3px] bg-panel-2/70 px-2.5 py-1.5 text-[13px]"
+        // Stacked, not a single row with the name truncated next to Sell —
+        // these slots are only half the card's width (2-column grid), so a
+        // longer item name plus a fixed-width "Sell $1" button left almost
+        // nothing for the name itself. Wrapping instead of truncating means
+        // the full name is always readable.
+        className="flex flex-col gap-1 rounded-lg border-l-[3px] bg-panel-2/70 px-2.5 py-1.5 text-[13px]"
       >
-        <span className="truncate" title={`${item.name} — ${item.description}`}>
+        <span title={`${item.name} — ${item.description}`}>
           <span aria-hidden="true">{typeMeta.icon}</span> {item.name}
         </span>
-        <span className="flex shrink-0 gap-1.5">
-          {canManageItems && onSell && isSellable(item) && (
-            <button type="button" className="btn px-2 py-0.5 text-[11px]" onClick={() => onSell(item)}>
-              Sell $1
-            </button>
-          )}
-        </span>
+        {canManageItems && onSell && isSellable(item) && (
+          <button type="button" className="btn self-start px-2 py-0.5 text-[11px]" onClick={() => onSell(item)}>
+            Sell $1
+          </button>
+        )}
       </div>
     );
   };

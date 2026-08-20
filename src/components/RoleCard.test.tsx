@@ -39,4 +39,17 @@ describe('<RoleCard />', () => {
     fireEvent.click(screen.getByText('Sell $1'));
     expect(onSell).toHaveBeenCalledWith(item);
   });
+
+  it('does not truncate a long item name even with the Sell button present — it wraps to its own line instead', () => {
+    const weapon: MarketCard = {
+      id: 'w', name: 'Corrosion Cannisters', description: 'desc', cost: 4, source: 'PUBLIC',
+      type: 'WEAPON', weaponType: 'CHEMICAL', power: 2,
+    };
+    const player = mkPlayer({ id: 'p0', name: 'Ana', inventory: [weapon] });
+    render(<RoleCard player={player} canManageItems onSell={vi.fn()} />);
+
+    const nameSpan = screen.getByText(/Corrosion Cannisters/);
+    expect(nameSpan).not.toHaveClass('truncate');
+    expect(screen.getByText('Sell $1')).toBeInTheDocument();
+  });
 });
