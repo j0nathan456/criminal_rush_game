@@ -77,3 +77,53 @@ describe('createGame — Bodyguard Protection token', () => {
     expect(next.players.filter((p) => p.hasBodyguardToken)).toHaveLength(1);
   });
 });
+
+describe('createGame — turn order alternates by team', () => {
+  function rolesFor(n: number): RoleIdentity[] {
+    return [
+      ...Array.from({ length: n }, (_, i) => role(`civ${i}`, 'CIVILIAN')),
+      ...Array.from({ length: n }, (_, i) => role(`crim${i}`, 'CRIMINAL')),
+    ];
+  }
+
+  it('strictly alternates teams, including the wrap-around, at every even player count', () => {
+    for (const n of [4, 6, 8]) {
+      for (let seed = 1; seed <= 15; seed++) {
+        const names = Array.from({ length: n }, (_, i) => `P${i}`);
+        const state = createGame(options(names, rolesFor(n), seeded(seed * 1000 + n)));
+        const teams = state.players.map((p) => p.team);
+        for (let i = 0; i < n; i++) {
+          expect(teams[i]).not.toBe(teams[(i + 1) % n]);
+        }
+      }
+    }
+  });
+
+  it('allows exactly one adjacent same-team pair — the extra Civilian — at every odd player count', () => {
+    for (const n of [5, 7]) {
+      for (let seed = 1; seed <= 15; seed++) {
+        const names = Array.from({ length: n }, (_, i) => `P${i}`);
+        const state = createGame(options(names, rolesFor(n), seeded(seed * 1000 + n)));
+        const teams = state.players.map((p) => p.team);
+        let sameTeamAdjacentPairs = 0;
+        for (let i = 0; i < n; i++) {
+          if (teams[i] === teams[(i + 1) % n]) {
+            sameTeamAdjacentPairs++;
+            expect(teams[i]).toBe('CIVILIAN'); // the larger team, never the Criminals
+          }
+        }
+        expect(sameTeamAdjacentPairs).toBe(1);
+      }
+    }
+  });
+
+  it("team no longer tracks lobby join order — the host isn't always the same team", () => {
+    const names = ['A', 'B', 'C', 'D'];
+    const hostTeams = new Set<Team>();
+    for (let seed = 1; seed <= 30; seed++) {
+      const state = createGame(options(names, rolesFor(4), seeded(seed)));
+      hostTeams.add(state.players.find((p) => p.name === 'A')!.team);
+    }
+    expect(hostTeams).toEqual(new Set(['CIVILIAN', 'CRIMINAL'])); // both seen across enough seeds
+  });
+});

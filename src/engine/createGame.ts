@@ -31,17 +31,32 @@ export interface CreateGameOptions {
 }
 
 /**
- * Randomly assigns each turn-order position to a team, using the player
- * count's fixed split (config.civilians/criminals, e.g. 2v2 at 4 players —
- * rulebook, Civilians >= Criminals). Shuffled independently of join order,
- * so which team a player lands on has nothing to do with when they joined.
+ * Randomly splits the lobby seats into the two teams (sized per
+ * config.civilians/criminals — rulebook, Civilians >= Criminals) and
+ * interleaves them into a strictly-alternating turn order: Civilian,
+ * Criminal, Civilian, Criminal, … A flat shuffle of team labels would only
+ * randomize who's on which team — it wouldn't stop two same-team players
+ * from landing back to back in turn order, which is exactly the alternation
+ * the rulebook calls for. The only exception is an odd player count, where
+ * the teams are uneven by one and the extra Civilian necessarily lands next
+ * to another Civilian — see startingCivilian below, which expects exactly
+ * that.
  */
-function assignTeams(config: GameConfig, rng: Rng): Team[] {
-  const teams: Team[] = [
-    ...Array<Team>(config.civilians).fill('CIVILIAN'),
-    ...Array<Team>(config.criminals).fill('CRIMINAL'),
-  ];
-  return shuffle(teams, rng);
+function assignTurnOrder(lobbySeatCount: number, config: GameConfig, rng: Rng): { lobbySeat: number; team: Team }[] {
+  const shuffledSeats = shuffle(
+    Array.from({ length: lobbySeatCount }, (_, lobbySeat) => lobbySeat),
+    rng,
+  );
+  const civSeats = shuffledSeats.slice(0, config.civilians);
+  const crimSeats = shuffledSeats.slice(config.civilians);
+
+  const order: { lobbySeat: number; team: Team }[] = [];
+  const rounds = Math.max(civSeats.length, crimSeats.length);
+  for (let i = 0; i < rounds; i++) {
+    if (i < civSeats.length) order.push({ lobbySeat: civSeats[i], team: 'CIVILIAN' });
+    if (i < crimSeats.length) order.push({ lobbySeat: crimSeats[i], team: 'CRIMINAL' });
+  }
+  return order;
 }
 
 /**
@@ -67,20 +82,17 @@ export function createGame(options: CreateGameOptions): GameState {
   const civRoles = shuffle(roles.filter((r) => r.team === 'CIVILIAN'), rng);
   const crimRoles = shuffle(roles.filter((r) => r.team === 'CRIMINAL'), rng);
 
-  // Three independent shuffles, in this order: (1) turn order, so seating —
-  // and therefore who's whose neighbor — doesn't depend on join order; (2)
-  // team, onto that shuffled order; (3) which specific role within a team
-  // (civRoles/crimRoles above). `id` stays `p${lobbySeat}` regardless of where
-  // that seat lands in turn order — the online room layer keys off lobby seat
-  // (see protocol.ts's RoomPlayer), so that identity has to stay stable even
-  // though array position (turn order) no longer matches it.
-  const turnOrder = shuffle(playerNames.map((_, lobbySeat) => lobbySeat), rng);
-  const teams = assignTeams(config, rng);
+  // Turn order and team, decided together (assignTurnOrder), then which
+  // specific role within a team (civRoles/crimRoles above). `id` stays
+  // `p${lobbySeat}` regardless of where that seat lands in turn order — the
+  // online room layer keys off lobby seat (see protocol.ts's RoomPlayer), so
+  // that identity has to stay stable even though array position (turn order)
+  // no longer matches it.
+  const turnOrder = assignTurnOrder(playerNames.length, config, rng);
 
   let drawPile = buildDrawPile(actionDefs, rng);
 
-  const players: Player[] = turnOrder.map((lobbySeat, turnPos) => {
-    const team = teams[turnPos];
+  const players: Player[] = turnOrder.map(({ lobbySeat, team }) => {
     const role = (team === 'CIVILIAN' ? civRoles : crimRoles).pop() as RoleIdentity;
     const setup = team === 'CIVILIAN' ? config.civSetup : config.crimSetup;
 
