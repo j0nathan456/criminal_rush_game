@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import type { GameState, Player, RoleIdentity } from '../types/game';
-import type { ActionCard } from '../types/cards';
+import type { ActionCard, MarketCard } from '../types/cards';
 import { emptyGameState } from '../engine';
 import { RoleAbilityPanel } from './RoleAbilityPanel';
 
@@ -16,6 +16,10 @@ function mkPlayer(over: Partial<Player> & { id: string; name: string; role: Role
   };
 }
 const evidence = (id: string): ActionCard => ({ id, name: `Ev-${id}`, description: '', type: 'EVIDENCE', evidenceCategories: ['MEANS'] });
+const expand = (id: string, cost: number): MarketCard => ({ id, name: 'Expand Network', description: '', cost, source: 'BLACK_MARKET', type: 'SPECIAL', vpValue: 1 });
+const weapon = (id: string, name: string, cost: number): MarketCard => ({
+  id, name, description: '', cost, source: 'PUBLIC', type: 'WEAPON', weaponType: 'TECH', power: 2,
+});
 
 function stateWith(players: Player[], over: Partial<GameState> = {}): GameState {
   return { ...emptyGameState(), players, ...over };
@@ -101,6 +105,32 @@ describe('<RoleAbilityPanel />', () => {
     render(<RoleAbilityPanel state={s} viewerIndex={0} onSubmit={() => {}} onCancel={() => {}} />);
     expect(screen.queryByText('Broke')).not.toBeInTheDocument();
     expect(screen.getByText('No eligible players.')).toBeInTheDocument();
+  });
+
+  it('Crime Lord: the Expand Network button shows the $1-off price, not the base cost', () => {
+    const s = stateWith([mkPlayer({ id: 'p0', name: 'Ben', role: role('crime-lord', 'Crime Lord', 'CRIMINAL') })], {
+      blackMarket: [expand('en', 5)],
+    });
+    render(<RoleAbilityPanel state={s} viewerIndex={0} onSubmit={() => {}} onCancel={() => {}} />);
+    expect(screen.queryByText('Expand Network ($5)')).not.toBeInTheDocument();
+    expect(screen.getByText('Expand Network ($4)')).toBeInTheDocument();
+  });
+
+  it('Evil Scientist: the Tech/Chemical weapon buttons show the $1-off price, not the base cost', () => {
+    const s = stateWith([mkPlayer({ id: 'p0', name: 'Eve', role: role('evil-scientist', 'Evil Scientist', 'CRIMINAL') })], {
+      publicMarket: [weapon('w1', 'Robot Soldier', 4)],
+    });
+    render(<RoleAbilityPanel state={s} viewerIndex={0} onSubmit={() => {}} onCancel={() => {}} />);
+    expect(screen.queryByText('Robot Soldier ($4)')).not.toBeInTheDocument();
+    expect(screen.getByText('Robot Soldier ($3)')).toBeInTheDocument();
+  });
+
+  it("Collector: buys at full price — no discount applies to what's shown here", () => {
+    const s = stateWith([mkPlayer({ id: 'p0', name: 'Cole', role: role('collector', 'Collector', 'CIVILIAN') })], {
+      publicMarket: [weapon('w1', 'Bat', 3)],
+    });
+    render(<RoleAbilityPanel state={s} viewerIndex={0} onSubmit={() => {}} onCancel={() => {}} />);
+    expect(screen.getByText('Bat ($3)')).toBeInTheDocument();
   });
 
   it('shows a passive message and no Use button for passive roles', () => {

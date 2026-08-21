@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import type { GameState, Player, RoleIdentity } from '../types/game';
-import type { ActionCard } from '../types/cards';
+import type { ActionCard, MarketCard } from '../types/cards';
 import { emptyGameState } from '../engine';
 import { EventPanel } from './EventPanel';
 
@@ -21,6 +21,8 @@ function stateWith(players: Player[], over: Partial<GameState> = {}): GameState 
 const taxCard: ActionCard = { id: 'e1', name: 'Tax Collection', description: '', type: 'EVENT' };
 const gainInfluenceCard: ActionCard = { id: 'e2', name: 'Gain Influence', description: '', type: 'EVENT' };
 const businessCard: ActionCard = { id: 'e3', name: 'Business Opportunity', description: '', type: 'EVENT' };
+const marketAccessCard: ActionCard = { id: 'e4', name: 'Market Access', description: '', type: 'EVENT' };
+const perkCard = (id: string, name: string, cost: number): MarketCard => ({ id, name, description: '', cost, source: 'PUBLIC', type: 'PERK' });
 const moneyCard: ActionCard = { id: 'm1', name: 'Profit', description: '', type: 'MONEY', value: 1 };
 
 describe('<EventPanel /> — Tax Collection', () => {
@@ -59,6 +61,25 @@ describe('<EventPanel /> — Tax Collection', () => {
     render(<EventPanel state={s} viewerIndex={0} card={taxCard} onSubmit={vi.fn()} onCancel={() => {}} />);
     expect(screen.queryByText('Cy')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Play Tax Collection/ })).toBeDisabled();
+  });
+});
+
+describe('<EventPanel /> — Market Access', () => {
+  it('shows the $1-off price on the button, not the base cost', () => {
+    const viewer = mkPlayer({ id: 'p0', name: 'Ana', role: role('mayor', 'CIVILIAN') });
+    const s = stateWith([viewer], { publicMarket: [perkCard('m1', 'Computer', 2)] });
+
+    render(<EventPanel state={s} viewerIndex={0} card={marketAccessCard} onSubmit={vi.fn()} onCancel={() => {}} />);
+    expect(screen.queryByText('Computer ($2)')).not.toBeInTheDocument();
+    expect(screen.getByText('Computer ($1)')).toBeInTheDocument();
+  });
+
+  it('clamps at $0 rather than going negative', () => {
+    const viewer = mkPlayer({ id: 'p0', name: 'Ana', role: role('mayor', 'CIVILIAN') });
+    const s = stateWith([viewer], { publicMarket: [perkCard('m1', 'Free Sample', 0)] });
+
+    render(<EventPanel state={s} viewerIndex={0} card={marketAccessCard} onSubmit={vi.fn()} onCancel={() => {}} />);
+    expect(screen.getByText('Free Sample ($0)')).toBeInTheDocument();
   });
 });
 

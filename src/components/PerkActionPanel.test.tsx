@@ -40,15 +40,19 @@ describe('<PerkActionPanel />', () => {
     expect(onSubmit).toHaveBeenCalledWith('wb', expect.objectContaining({}));
   });
 
-  it('Credit Card: picks a Market card to buy at a discount', () => {
+  it('Credit Card: the button shows the discounted price, not the base cost, and updates when the $2-off box is checked', () => {
     const onSubmit = vi.fn();
     const p = mkPlayer({ id: 'p0', name: 'Ana', inventory: [perk('cc', 'Credit Card')] });
     render(
       <PerkActionPanel state={stateWith([p], { publicMarket: [perk('shop', 'Computer')] })} viewerIndex={0} perkId="cc" onSubmit={onSubmit} onCancel={() => {}} />,
     );
-    fireEvent.click(screen.getByText('Computer ($3)'));
+    expect(screen.queryByText('Computer ($3)')).not.toBeInTheDocument(); // never the raw cost
+    fireEvent.click(screen.getByText('Computer ($2)')); // $3 base - $1 off
     fireEvent.click(screen.getByText('Use'));
     expect(onSubmit).toHaveBeenCalledWith('cc', expect.objectContaining({ marketCardId: 'shop', discardForBonus: false }));
+
+    fireEvent.click(screen.getByRole('checkbox'));
+    expect(screen.getByText('Computer ($1)')).toBeInTheDocument(); // $3 base - $2 off
   });
 
   it('Shady Press: pick an opponent, then one of their (no-input) Event cards', () => {

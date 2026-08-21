@@ -65,10 +65,14 @@ export function RoleAbilityPanel({
     </div>
   );
 
-  const marketRow = (cards: MarketCard[]) => (
+  // `discount` is 0 for collector/smuggler (no discount applies to what's
+  // shown here — collector buys at full price, smuggler isn't buying at
+  // all) and 1 for evil-scientist/crime-lord, so the button always shows
+  // what doPurchase will actually charge.
+  const marketRow = (cards: MarketCard[], discount = 0) => (
     <div className="cr-role__chips">
       {cards.length === 0 && <span className="cr-role__empty">Nothing available.</span>}
-      {cards.map((c) => chip(`${c.name} ($${c.cost})`, cardId === c.id, () => setCardId(c.id), c.id))}
+      {cards.map((c) => chip(`${c.name} ($${Math.max(0, c.cost - discount)})`, cardId === c.id, () => setCardId(c.id), c.id))}
     </div>
   );
 
@@ -102,13 +106,13 @@ export function RoleAbilityPanel({
       const weapons = [...state.publicMarket, ...state.blackMarket].filter(
         (c) => c.type === 'WEAPON' && (c.weaponType === 'TECH' || c.weaponType === 'CHEMICAL'),
       );
-      body = (<><p>Buy a Tech/Chemical weapon at a $1 discount (then draw):</p>{marketRow(weapons)}</>);
+      body = (<><p>Buy a Tech/Chemical weapon at a $1 discount (then draw):</p>{marketRow(weapons, 1)}</>);
       canSubmit = !!cardId;
       break;
     }
     case 'crime-lord': {
       const expand = state.blackMarket.filter((c) => c.type === 'SPECIAL');
-      body = (<><p>Purchase Expand Network for $1 less:</p>{marketRow(expand)}</>);
+      body = (<><p>Purchase Expand Network for $1 less:</p>{marketRow(expand, 1)}</>);
       canSubmit = !!cardId;
       break;
     }

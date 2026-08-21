@@ -73,10 +73,12 @@ export function EventPanel({
     </div>
   );
 
+  // Only used by Market Access below, which is always a flat $1 off — the
+  // button's price already reflects what doPurchase will actually charge.
   const marketRow = (cards: MarketCard[], selected: string | undefined, onPick: (id: string) => void) => (
     <div className="cr-role__chips">
       {cards.length === 0 && <span className="cr-role__empty">Nothing available.</span>}
-      {cards.map((c) => chip(`${c.name} ($${c.cost})`, selected === c.id, () => onPick(c.id), c.id))}
+      {cards.map((c) => chip(`${c.name} ($${Math.max(0, c.cost - 1)})`, selected === c.id, () => onPick(c.id), c.id))}
     </div>
   );
 

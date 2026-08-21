@@ -96,13 +96,14 @@ export function PerkActionPanel({ state, viewerIndex, perkId, onSubmit, onCancel
       body = (<><p>Play an Event card (then draw and gain $1):</p>{cardRow(viewer.hand.filter((c) => c.type === 'EVENT'), 'No Event cards in hand.')}</>);
       canSubmit = !!cardId;
       break;
-    case 'Credit Card':
+    case 'Credit Card': {
+      const discount = discardForBonus ? 2 : 1;
       body = (
         <>
           <p>Buy from the Market at a discount:</p>
           <div className="cr-role__chips">
             {market.length === 0 && <span className="cr-role__empty">Nothing available.</span>}
-            {market.map((c) => chip(`${c.name} ($${c.cost})`, marketCardId === c.id, () => setMarketCardId(c.id), c.id))}
+            {market.map((c) => chip(`${c.name} ($${Math.max(0, c.cost - discount)})`, marketCardId === c.id, () => setMarketCardId(c.id), c.id))}
           </div>
           <label className="cr-perk__toggle">
             <input type="checkbox" checked={discardForBonus} onChange={(e) => setDiscardForBonus(e.target.checked)} />
@@ -112,6 +113,7 @@ export function PerkActionPanel({ state, viewerIndex, perkId, onSubmit, onCancel
       );
       canSubmit = !!marketCardId;
       break;
+    }
     case 'Hacked Passwords':
       body = (
         <>
