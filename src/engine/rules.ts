@@ -37,6 +37,17 @@ export function isGridComplete(grid: GameState['evidenceGrid']): boolean {
   return (Object.keys(grid) as EvidenceCategory[]).every((c) => grid[c].cards.length > 0);
 }
 
+/**
+ * True once every Criminal has been dealt with — currently exposed, or
+ * already captured (capturing un-exposes them, so "exposed OR captured"
+ * is what "caught" actually means once combat has run its course). Gates
+ * cashing in an Evidence card for $2 instead of playing it into the grid —
+ * once nobody's left to expose, extra grid cards stop being worth as much.
+ */
+export function allCriminalsExposed(state: GameState): boolean {
+  return state.players.filter((p) => p.team === 'CRIMINAL').every((p) => p.isExposed || p.isCaptured);
+}
+
 /** Append a message to the game log (returns a new state). */
 export function log(state: GameState, message: string): GameState {
   return { ...state, gameLog: [...state.gameLog, message] };

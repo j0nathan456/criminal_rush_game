@@ -7,6 +7,9 @@ export interface EvidencePlayPanelProps {
   team: Team;
   onPlay?: (category: EvidenceCategory) => void;
   onCancel?: () => void;
+  /** Every Criminal has been exposed (or captured) — cashing in is on the table. */
+  canCashIn?: boolean;
+  onCashIn?: () => void;
 }
 
 /**
@@ -16,8 +19,12 @@ export interface EvidencePlayPanelProps {
  * single-category card is one click ("Play X into Y"), a wild card offers its
  * few valid categories to choose from. The grid itself still accepts clicks
  * too; this is just the faster path.
+ *
+ * Once every Criminal has been exposed, there's nobody left to Expose with a
+ * fuller grid, so `canCashIn` offers the alternative: discard the card for
+ * $2 instead of playing it in.
  */
-export function EvidencePlayPanel({ card, team, onPlay, onCancel }: EvidencePlayPanelProps) {
+export function EvidencePlayPanel({ card, team, onPlay, onCancel, canCashIn, onCashIn }: EvidencePlayPanelProps) {
   const [category, setCategory] = useState<EvidenceCategory | undefined>();
   const categories = card.evidenceCategories ?? [];
   const isWild = categories.length > 1;
@@ -51,6 +58,9 @@ export function EvidencePlayPanel({ card, team, onPlay, onCancel }: EvidencePlay
           Play {card.name} into {single ? CATEGORY_META[single].label : 'a category'}?
         </p>
       )}
+      {canCashIn && (
+        <p className="cr-role__sub">Every Criminal is already exposed — you may cash this in instead.</p>
+      )}
       <div className="cr-role__actions">
         <button
           type="button"
@@ -63,6 +73,11 @@ export function EvidencePlayPanel({ card, team, onPlay, onCancel }: EvidencePlay
         >
           {single ? `Play into ${CATEGORY_META[single].label}` : 'Play'}
         </button>
+        {canCashIn && (
+          <button type="button" className="cr-role__use" onClick={onCashIn}>
+            Cash in for $2
+          </button>
+        )}
         <button type="button" className="cr-role__cancel" onClick={onCancel}>Cancel</button>
       </div>
     </section>

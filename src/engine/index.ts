@@ -17,6 +17,7 @@ export {
   ACTIONS_PER_TURN,
   ACTIONABLE_PERKS,
   actionsForTurn,
+  allCriminalsExposed,
   isGridComplete,
   neighborIds,
 } from './rules.js';

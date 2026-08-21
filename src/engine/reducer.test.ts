@@ -112,6 +112,49 @@ describe('gameReducer — PLAY_EVIDENCE', () => {
   });
 });
 
+describe('gameReducer — CASH_IN_EVIDENCE', () => {
+  it('refuses until every Criminal has been exposed (or captured)', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('sheriff', 'CIVILIAN'), hand: [evidence('e1', ['MEANS'])] }),
+      mkPlayer({ id: 'p1', role: role('hitman', 'CRIMINAL') }), // not exposed
+    ]);
+    const next = gameReducer(s, { type: 'CASH_IN_EVIDENCE', cardId: 'e1' });
+    expect(next.players[0].hand).toHaveLength(1); // still in hand
+    expect(next.players[0].money).toBe(5); // unchanged
+  });
+
+  it('discards the card for $2 once every Criminal is exposed', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('sheriff', 'CIVILIAN'), hand: [evidence('e1', ['MEANS'])], money: 3 }),
+      mkPlayer({ id: 'p1', role: role('hitman', 'CRIMINAL'), isExposed: true }),
+    ]);
+    const next = gameReducer(s, { type: 'CASH_IN_EVIDENCE', cardId: 'e1' });
+    expect(next.players[0].hand).toHaveLength(0);
+    expect(next.players[0].money).toBe(5); // +$2
+    expect(next.players[0].actionsRemaining).toBe(2); // costs 1 action
+    expect(next.discardPile.map((c) => c.id)).toEqual(['e1']);
+    expect(next.evidenceGrid.MEANS.cards).toHaveLength(0); // never touches the grid
+  });
+
+  it('also counts an already-captured Criminal as dealt with (capturing un-exposes them)', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('sheriff', 'CIVILIAN'), hand: [evidence('e1', ['MEANS'])] }),
+      mkPlayer({ id: 'p1', role: role('hitman', 'CRIMINAL'), isExposed: false, isCaptured: true }),
+    ]);
+    const next = gameReducer(s, { type: 'CASH_IN_EVIDENCE', cardId: 'e1' });
+    expect(next.players[0].hand).toHaveLength(0); // allowed
+  });
+
+  it('refuses when the actor is a Criminal, even with every Criminal exposed', () => {
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL'), hand: [evidence('e1', ['MEANS'])], isExposed: true }),
+      mkPlayer({ id: 'p1', role: role('mayor', 'CIVILIAN') }),
+    ]);
+    const next = gameReducer(s, { type: 'CASH_IN_EVIDENCE', cardId: 'e1' });
+    expect(next.players[0].hand).toHaveLength(1); // still in hand — Criminals can't cash in
+  });
+});
+
 describe('gameReducer — EXPOSE', () => {
   it('exposes a Criminal, drops their PL, discards 1 card per category, and scores a VP', () => {
     const s = stateWith(

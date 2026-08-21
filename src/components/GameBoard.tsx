@@ -5,7 +5,7 @@ import type { ActionMeta } from '../constants/theme';
 import type { RoleAbilityPayload, PerkPayload, EventOptions, TradeItem } from '../engine';
 import type { CombatChoiceInput } from '../types/game';
 import type { ChatMessage } from '../online/protocol';
-import { actionsForTurn, actionAvailability, handCardPlayable, neighborIds } from '../engine';
+import { actionsForTurn, actionAvailability, allCriminalsExposed, handCardPlayable, neighborIds } from '../engine';
 import { TEAM_META } from '../constants/theme';
 
 import { ScoreBoard } from './ScoreBoard';
@@ -52,6 +52,7 @@ export interface GameBoardHandlers {
   onEndTurn?: () => void;
   onSelectCard?: (card: AnyCard) => void;
   onPlayEvidence?: (category: EvidenceCategory) => void;
+  onCashInEvidence?: () => void;
   onCancelEvidencePlay?: () => void;
   onPlaySelected?: () => void;
   onBuy?: (card: AnyCard) => void;
@@ -150,6 +151,7 @@ export function GameBoard({
   onEndTurn,
   onSelectCard,
   onPlayEvidence,
+  onCashInEvidence,
   onCancelEvidencePlay,
   onPlaySelected,
   onBuy,
@@ -362,7 +364,14 @@ export function GameBoard({
               )}
               {selectedCard && selectedCard.type === 'EVIDENCE' && viewer.team === 'CIVILIAN' && isViewersTurn &&
                 !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingRecyclingBin && !state.pendingGetawayCarGift && !state.pendingBribery && !state.winner && (
-                  <EvidencePlayPanel card={selectedCard} team={viewer.team} onPlay={onPlayEvidence} onCancel={onCancelEvidencePlay} />
+                  <EvidencePlayPanel
+                    card={selectedCard}
+                    team={viewer.team}
+                    onPlay={onPlayEvidence}
+                    onCancel={onCancelEvidencePlay}
+                    canCashIn={allCriminalsExposed(state)}
+                    onCashIn={onCashInEvidence}
+                  />
               )}
 
               {/* Ability/perk/event/target "gather more input" panels render here,

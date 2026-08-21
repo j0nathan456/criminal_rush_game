@@ -178,6 +178,15 @@ export function useBoardInteractions(
     }
   };
 
+  const onCashInEvidence = () => {
+    if (selectedCard && selectedCard.type === 'EVIDENCE') {
+      dispatch({ type: 'CASH_IN_EVIDENCE', cardId: selectedCard.id });
+      setSelectedCardId(null);
+    } else {
+      setNotice('Select an Evidence card in your hand first.');
+    }
+  };
+
   const onCancelEvidencePlay = () => setSelectedCardId(null);
 
   const onPlaySelected = () => {
@@ -205,6 +214,7 @@ export function useBoardInteractions(
     },
     onSelectCard,
     onPlayEvidence,
+    onCashInEvidence,
     onCancelEvidencePlay,
     onPlaySelected,
     onBuy: (card) => {

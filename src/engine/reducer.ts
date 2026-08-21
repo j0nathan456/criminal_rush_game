@@ -12,6 +12,7 @@ import { determineWinner } from './scoring.js';
 import type { Rng } from './deck.js';
 import {
   actionsForTurn,
+  allCriminalsExposed,
   applyScore,
   isGridComplete,
   log,
@@ -36,6 +37,7 @@ export type GameAction =
   | { type: 'DRAW_CARD' }
   | { type: 'PLAY_CARD'; cardId: string; category?: EvidenceCategory; targetId?: string; options?: EventOptions }
   | { type: 'PLAY_EVIDENCE'; cardId: string; category: EvidenceCategory }
+  | { type: 'CASH_IN_EVIDENCE'; cardId: string }
   | { type: 'PURCHASE'; cardId: string }
   | { type: 'SELL'; cardId: string }
   | { type: 'EXPOSE'; targetId: string; evidenceChoices?: Partial<Record<EvidenceCategory, string>> }
@@ -330,6 +332,8 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
       return playCard(state, idx, player, action.cardId, action.category, action.targetId, action.options);
     case 'PLAY_EVIDENCE':
       return playEvidence(state, idx, player, action.cardId, action.category);
+    case 'CASH_IN_EVIDENCE':
+      return cashInEvidence(state, idx, player, action.cardId);
     case 'PURCHASE':
       return purchase(state, idx, player, action.cardId);
     case 'SELL':
@@ -761,6 +765,31 @@ function placeEvidence(
     return acc;
   }, s);
   return s;
+}
+
+/**
+ * Once every Criminal has been exposed (or captured — see allCriminalsExposed),
+ * an Evidence card in a Civilian's hand has nowhere useful left to go: the
+ * grid still accepts cards, but nobody's left to Expose with them. Cashing
+ * it in for $2 instead is the alternative to playEvidence — same cost (1
+ * action), but the card goes to the discard pile rather than the grid.
+ */
+function cashInEvidence(state: GameState, idx: number, player: Player, cardId: string): GameState {
+  if (player.team !== 'CIVILIAN') return log(state, 'Only Civilians can cash in evidence.');
+  if (player.actionsRemaining < 1) return log(state, `${player.name} has no actions left.`);
+  if (!allCriminalsExposed(state)) return log(state, 'Every Criminal must be exposed first.');
+
+  const card = player.hand.find((c) => c.id === cardId);
+  if (!card || card.type !== 'EVIDENCE') return log(state, 'That card is not evidence.');
+
+  let s = updatePlayer(state, idx, (p) => ({
+    ...p,
+    hand: p.hand.filter((c) => c.id !== cardId),
+    money: p.money + 2,
+    actionsRemaining: p.actionsRemaining - 1,
+  }));
+  s = { ...s, discardPile: [...s.discardPile, card] };
+  return log(s, `${player.name} cashes in ${card.name} for $2.`);
 }
 
 /**
