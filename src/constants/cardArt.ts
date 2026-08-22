@@ -54,7 +54,7 @@ const DECK_ART = new Set([
   'spring-cleaning', 'traffic-jam', 'market-exchange', 'gain-influence', 'ally-power',
   'lottery', 'business-opportunity', 'tax-collection', 'generational-wealth',
   'receive-package', 'market-access', 'boost', 'surge', 'shield', 'unexpected-allies',
-  'mirror', 'spare-change', 'profit', 'collection', 'forensic-files',
+  'mirror', 'retreat', 'spare-change', 'profit', 'collection', 'forensic-files',
   // Themed Evidence cards (single-category)
   'sunrise', 'evening', 'eclipse', 'college-campus', 'grocery-store', 'movie-theater',
   'bullet-shell', 'metal-chain', 'bomb-fragment', 'greed', 'power', 'envy',
