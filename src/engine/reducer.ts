@@ -1170,6 +1170,8 @@ interface PurchaseOptions {
   requireWeaponType?: WeaponType[];
   /** If set, the card's type must be one of these (Spring Cleaning: perks only). */
   requireType?: MarketCard['type'][];
+  /** If set, the card must be in the public Market, not the Black Market (Credit Card). */
+  requirePublicMarket?: boolean;
   /**
    * Coffee Machine: who the brewed token goes to (rulebook p.13 — the buyer
    * or a teammate). Ignored for every other card; defaults to the buyer when
@@ -1200,6 +1202,7 @@ function doPurchase(
   const card = inPublic ?? inBlack;
   if (!card) return fail('That card is not available in a market.');
   if (inBlack && player.team !== 'CRIMINAL') return fail('Only Criminals may buy from the Black Market.');
+  if (opts.requirePublicMarket && inBlack) return fail(`${card.name} is only available in the Market, not the Black Market.`);
   if (opts.requireWeaponType && (card.type !== 'WEAPON' || !card.weaponType || !opts.requireWeaponType.includes(card.weaponType))) {
     return fail(`${card.name} is not a ${opts.requireWeaponType.join('/')} weapon.`);
   }
@@ -1911,6 +1914,7 @@ function applyPerk(
         spendAction: false,
         setPurchaseFlag: false,
         costDelta,
+        requirePublicMarket: true,
       });
       if (!ok) return s;
       return log(spend(s), `${player.name} uses a Credit Card for a $${discard ? 2 : 1} discount.`);

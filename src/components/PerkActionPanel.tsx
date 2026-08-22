@@ -39,7 +39,6 @@ export function PerkActionPanel({ state, viewerIndex, perkId, onSubmit, onCancel
   const others = state.players.filter((p) => p.id !== viewer.id);
   const opponents = state.players.filter((p) => p.team !== viewer.team);
   const target = targetId ? state.players.find((p) => p.id === targetId) : undefined;
-  const market: MarketCard[] = viewer.team === 'CRIMINAL' ? [...state.publicMarket, ...state.blackMarket] : state.publicMarket;
 
   // Shady Press, once a configurable Event card is chosen: gather that
   // card's own target/options from the presser (the actor who'll benefit),
@@ -102,15 +101,8 @@ export function PerkActionPanel({ state, viewerIndex, perkId, onSubmit, onCancel
         <>
           <p>Buy from the Market at a discount:</p>
           <div className="cr-role__chips">
-            {market.length === 0 && <span className="cr-role__empty">Nothing available.</span>}
-            {market.map((c) => {
-              // Weakened Network (rulebook p.16): a captured Criminal pays
-              // $1 more for Expand Network, on top of any discount — the
-              // Black Market is in this pool too, so Expand Network can
-              // show up here.
-              const surcharge = c.type === 'SPECIAL' && viewer.isCaptured ? 1 : 0;
-              return chip(`${c.name} ($${Math.max(0, c.cost + surcharge - discount)})`, marketCardId === c.id, () => setMarketCardId(c.id), c.id);
-            })}
+            {state.publicMarket.length === 0 && <span className="cr-role__empty">Nothing available.</span>}
+            {state.publicMarket.map((c) => chip(`${c.name} ($${Math.max(0, c.cost - discount)})`, marketCardId === c.id, () => setMarketCardId(c.id), c.id))}
           </div>
           <label className="cr-perk__toggle">
             <input type="checkbox" checked={discardForBonus} onChange={(e) => setDiscardForBonus(e.target.checked)} />

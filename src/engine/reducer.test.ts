@@ -1660,6 +1660,18 @@ describe('gameReducer — USE_PERK', () => {
     expect(next.players[0].inventory.some((c) => c.id === 'm1')).toBe(true);
   });
 
+  it('Credit Card refuses a Black Market card, even for a Criminal', () => {
+    const cc = perk('pk', 'Credit Card');
+    const expand: MarketCard = { id: 'en', name: 'Expand Network', description: '', cost: 5, source: 'BLACK_MARKET', type: 'SPECIAL', vpValue: 1 };
+    const s = stateWith(
+      [mkPlayer({ id: 'p0', role: role('crime-lord', 'CRIMINAL'), money: 9, inventory: [cc] })],
+      { blackMarket: [expand] },
+    );
+    const next = gameReducer(s, { type: 'USE_PERK', perkId: 'pk', payload: { marketCardId: 'en' } });
+    expect(next.players[0].money).toBe(9); // unchanged — purchase refused
+    expect(next.players[0].inventory).toHaveLength(1); // still just the Credit Card
+  });
+
   it('Recycling Bin discards the chosen card immediately, then offers a same-type card to take', () => {
     const bin = perk('pk', 'Recycling Bin');
     const junkCard: ActionCard = { id: 'h1', name: 'Boost', description: '', type: 'POWER', power: 1 };

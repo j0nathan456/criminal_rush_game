@@ -55,16 +55,21 @@ describe('<PerkActionPanel />', () => {
     expect(screen.getByText('Computer ($1)')).toBeInTheDocument(); // $3 base - $2 off
   });
 
-  it('Credit Card: a captured Criminal sees the Weakened Network surcharge on Expand Network stack with the discount', () => {
+  it('Credit Card: only offers the public Market — a Criminal never sees Black Market cards here', () => {
     const crimRole: RoleIdentity = { id: 'crime-lord', name: 'Crime Lord', team: 'CRIMINAL', powerlevel: 4, abilityName: '', abilityDescription: '' };
     const expandNetwork: MarketCard = { id: 'en', name: 'Expand Network', description: '', cost: 5, source: 'BLACK_MARKET', type: 'SPECIAL', vpValue: 1 };
-    const p = mkPlayer({ id: 'p0', name: 'Ben', team: 'CRIMINAL', role: crimRole, isCaptured: true, inventory: [perk('cc', 'Credit Card')] });
+    const p = mkPlayer({ id: 'p0', name: 'Ben', team: 'CRIMINAL', role: crimRole, inventory: [perk('cc', 'Credit Card')] });
     render(
-      <PerkActionPanel state={stateWith([p], { blackMarket: [expandNetwork] })} viewerIndex={0} perkId="cc" onSubmit={vi.fn()} onCancel={() => {}} />,
+      <PerkActionPanel
+        state={stateWith([p], { publicMarket: [perk('shop', 'Computer')], blackMarket: [expandNetwork] })}
+        viewerIndex={0}
+        perkId="cc"
+        onSubmit={vi.fn()}
+        onCancel={() => {}}
+      />,
     );
-    // $5 base + $1 surcharge (captured) - $1 discount (Credit Card) = $5, not the naive $4.
-    expect(screen.queryByText('Expand Network ($4)')).not.toBeInTheDocument();
-    expect(screen.getByText('Expand Network ($5)')).toBeInTheDocument();
+    expect(screen.getByText('Computer ($2)')).toBeInTheDocument();
+    expect(screen.queryByText(/Expand Network/)).not.toBeInTheDocument();
   });
 
   it('Shady Press: pick an opponent, then one of their (no-input) Event cards', () => {
