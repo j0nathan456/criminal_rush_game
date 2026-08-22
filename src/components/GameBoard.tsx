@@ -55,7 +55,7 @@ export interface GameBoardHandlers {
   onCashInEvidence?: () => void;
   onCancelEvidencePlay?: () => void;
   onPlaySelected?: () => void;
-  onBuy?: (card: AnyCard) => void;
+  onBuy?: (card: AnyCard, coffeeRecipientId?: string) => void;
   onSell?: (card: MarketCard) => void;
   onSelectTarget?: (playerId: string) => void;
   onCancelTargeting?: () => void;

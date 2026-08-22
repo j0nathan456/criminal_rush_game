@@ -6,7 +6,7 @@ import { TEAM_META } from '../constants/theme';
 export interface MarketPickerPanelProps {
   state: GameState;
   viewerIndex: number;
-  onBuy?: (card: AnyCard) => void;
+  onBuy?: (card: AnyCard, coffeeRecipientId?: string) => void;
   onCancel?: () => void;
 }
 
@@ -21,8 +21,55 @@ export function MarketPickerPanel({ state, viewerIndex, onBuy, onCancel }: Marke
   const viewer = state.players[viewerIndex];
   const isCriminal = viewer?.team === 'CRIMINAL';
   const [source, setSource] = useState<'public' | 'black' | null>(isCriminal ? null : 'public');
+  const [pendingCoffee, setPendingCoffee] = useState<MarketCard | null>(null);
+  const [coffeeRecipientId, setCoffeeRecipientId] = useState<string | undefined>();
 
   if (!viewer) return null;
+
+  const teammates = state.players.filter((p) => p.team === viewer.team && p.id !== viewer.id);
+
+  if (pendingCoffee) {
+    const recipientId = coffeeRecipientId ?? viewer.id;
+    return (
+      <section className="cr-role" aria-label="Buy from a Market">
+        <header className="cr-role__head" style={{ color: TEAM_META[viewer.team].color }}>
+          <h2>☕ {pendingCoffee.name}</h2>
+        </header>
+        <p className="cr-role__desc">Give the Coffee token to:</p>
+        <div className="cr-role__chips">
+          <button
+            type="button"
+            className={`cr-role__chip${recipientId === viewer.id ? ' is-selected' : ''}`}
+            onClick={() => setCoffeeRecipientId(viewer.id)}
+          >
+            {viewer.name} (you)
+          </button>
+          {teammates.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              className={`cr-role__chip${recipientId === p.id ? ' is-selected' : ''}`}
+              onClick={() => setCoffeeRecipientId(p.id)}
+            >
+              {p.name}
+            </button>
+          ))}
+        </div>
+        <div className="cr-role__actions">
+          <button
+            type="button"
+            className="cr-role__use"
+            onClick={() => onBuy?.(pendingCoffee, recipientId)}
+          >
+            Buy (${pendingCoffee.cost})
+          </button>
+          <button type="button" className="cr-role__cancel" onClick={() => { setPendingCoffee(null); setCoffeeRecipientId(undefined); }}>
+            Back
+          </button>
+        </div>
+      </section>
+    );
+  }
 
   if (source === null) {
     return (
@@ -60,7 +107,7 @@ export function MarketPickerPanel({ state, viewerIndex, onBuy, onCancel }: Marke
               className="cr-role__chip"
               disabled={c.cost > viewer.money}
               title={c.cost > viewer.money ? `${c.name} — you can't afford this ($${c.cost}).` : `${c.name} — ${c.description}`}
-              onClick={() => onBuy?.(c)}
+              onClick={() => (c.name === 'Coffee Machine' ? setPendingCoffee(c) : onBuy?.(c))}
             >
               {c.name} (${c.cost})
             </button>

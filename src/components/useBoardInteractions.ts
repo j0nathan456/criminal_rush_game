@@ -217,8 +217,8 @@ export function useBoardInteractions(
     onCashInEvidence,
     onCancelEvidencePlay,
     onPlaySelected,
-    onBuy: (card) => {
-      dispatch({ type: 'PURCHASE', cardId: card.id });
+    onBuy: (card, coffeeRecipientId) => {
+      dispatch({ type: 'PURCHASE', cardId: card.id, coffeeRecipientId });
       setSelectedCardId(null);
       setBuyOpen(false);
     },

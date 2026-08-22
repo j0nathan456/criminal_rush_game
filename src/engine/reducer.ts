@@ -38,7 +38,7 @@ export type GameAction =
   | { type: 'PLAY_CARD'; cardId: string; category?: EvidenceCategory; targetId?: string; options?: EventOptions }
   | { type: 'PLAY_EVIDENCE'; cardId: string; category: EvidenceCategory }
   | { type: 'CASH_IN_EVIDENCE'; cardId: string }
-  | { type: 'PURCHASE'; cardId: string }
+  | { type: 'PURCHASE'; cardId: string; coffeeRecipientId?: string }
   | { type: 'SELL'; cardId: string }
   | { type: 'EXPOSE'; targetId: string; evidenceChoices?: Partial<Record<EvidenceCategory, string>> }
   | { type: 'ATTACK'; targetId: string }
@@ -335,7 +335,7 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
     case 'CASH_IN_EVIDENCE':
       return cashInEvidence(state, idx, player, action.cardId);
     case 'PURCHASE':
-      return purchase(state, idx, player, action.cardId);
+      return purchase(state, idx, player, action.cardId, action.coffeeRecipientId);
     case 'SELL':
       return sellItem(state, idx, player, action.cardId);
     case 'EXPOSE':
@@ -814,12 +814,13 @@ function burnEvidence(state: GameState, idx: number, player: Player, cardId: str
   return log(s, `${player.name} burned ${card.name} and drew 2 cards.`);
 }
 
-function purchase(state: GameState, idx: number, player: Player, cardId: string): GameState {
+function purchase(state: GameState, idx: number, player: Player, cardId: string, coffeeRecipientId?: string): GameState {
   if (player.hasPurchasedFromMarket) return log(state, `${player.name} already bought this turn.`);
   if (player.actionsRemaining < 1) return log(state, `${player.name} has no actions left.`);
   const { state: next, ok } = doPurchase(state, idx, player, cardId, {
     spendAction: true,
     setPurchaseFlag: true,
+    coffeeRecipientId,
   });
   return ok ? next : log(state, next.gameLog[next.gameLog.length - 1] ?? 'Purchase failed.');
 }
@@ -1169,6 +1170,12 @@ interface PurchaseOptions {
   requireWeaponType?: WeaponType[];
   /** If set, the card's type must be one of these (Spring Cleaning: perks only). */
   requireType?: MarketCard['type'][];
+  /**
+   * Coffee Machine: who the brewed token goes to (rulebook p.13 — the buyer
+   * or a teammate). Ignored for every other card; defaults to the buyer when
+   * omitted or when it doesn't resolve to the buyer/a teammate.
+   */
+  coffeeRecipientId?: string;
 }
 
 /**
@@ -1230,10 +1237,16 @@ function doPurchase(
     s = drawForPlayer(s, idx);
     s = log(s, `${player.name} draws 2 cards from the Disguise.`);
   }
-  // Coffee Machine: hands its buyer an active Coffee token (rulebook p.13).
+  // Coffee Machine: hands its buyer (or a chosen teammate) an active Coffee
+  // token (rulebook p.13).
   if (card.name === 'Coffee Machine') {
-    s = updatePlayer(s, idx, (p) => ({ ...p, coffeeToken: true }));
-    s = log(s, `${player.name} brews a Coffee token.`);
+    const recipientIdx = s.players.findIndex(
+      (p) => p.id === opts.coffeeRecipientId && (p.id === player.id || p.team === player.team),
+    );
+    const holderIdx = recipientIdx >= 0 ? recipientIdx : idx;
+    s = updatePlayer(s, holderIdx, (p) => ({ ...p, coffeeToken: true }));
+    const holderName = s.players[holderIdx].name;
+    s = log(s, holderIdx === idx ? `${player.name} brews a Coffee token.` : `${player.name} brews a Coffee token for ${holderName}.`);
   }
 
   // Expand Network (and any vp-bearing card) scores instantly for the buyer's team.

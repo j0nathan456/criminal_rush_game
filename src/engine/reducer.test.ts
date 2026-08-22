@@ -279,6 +279,43 @@ describe('gameReducer — PURCHASE', () => {
     expect(next.blackMarket.find((c) => c.type === 'SPECIAL')?.cost).toBe(6);
     expect(next.expandNetworkPile).toHaveLength(0);
   });
+
+  describe('Coffee Machine', () => {
+    const coffee: MarketCard = { id: 'cm', name: 'Coffee Machine', description: '', cost: 3, source: 'PUBLIC', type: 'PERK' };
+
+    it('defaults the brewed token to the buyer when no recipient is given', () => {
+      const s = stateWith([mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 5 })], { publicMarket: [coffee] });
+      const next = gameReducer(s, { type: 'PURCHASE', cardId: 'cm' });
+      expect(next.players[0].coffeeToken).toBe(true);
+    });
+
+    it('gives the token to a chosen teammate instead of the buyer', () => {
+      const s = stateWith(
+        [
+          mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 5 }),
+          mkPlayer({ id: 'p1', role: role('attorney', 'CIVILIAN') }),
+        ],
+        { publicMarket: [coffee] },
+      );
+      const next = gameReducer(s, { type: 'PURCHASE', cardId: 'cm', coffeeRecipientId: 'p1' });
+      expect(next.players[0].coffeeToken).toBeUndefined();
+      expect(next.players[1].coffeeToken).toBe(true);
+      expect(next.gameLog.at(-1)).toContain('for');
+    });
+
+    it('ignores a coffeeRecipientId that is an opponent, falling back to the buyer', () => {
+      const s = stateWith(
+        [
+          mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 5 }),
+          mkPlayer({ id: 'p1', role: role('hitman', 'CRIMINAL') }),
+        ],
+        { publicMarket: [coffee] },
+      );
+      const next = gameReducer(s, { type: 'PURCHASE', cardId: 'cm', coffeeRecipientId: 'p1' });
+      expect(next.players[0].coffeeToken).toBe(true);
+      expect(next.players[1].coffeeToken).toBeUndefined();
+    });
+  });
 });
 
 describe('gameReducer — ATTACK (interactive combat)', () => {
