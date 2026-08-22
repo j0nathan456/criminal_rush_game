@@ -13,7 +13,7 @@ export const GAME_CONFIGS: Record<number, GameConfig> = {
   5: {
     civilians: 3,
     criminals: 2,
-    vpTargets: { CIVILIAN: 5, CRIMINAL: 5 },
+    vpTargets: { CIVILIAN: 4, CRIMINAL: 4 },
     civSetup: { startingCards: 3, startingMoney: 2 },
     crimSetup: { startingCards: 3, startingMoney: 2 }
   },
