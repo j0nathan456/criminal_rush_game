@@ -61,6 +61,13 @@ export interface RoomView {
   seats: LobbySeat[];
   /** The requesting player's seat, or -1 if their token is unknown. */
   yourSeat: number;
+  /**
+   * The requesting player's index into `state.players`, or -1 if their token
+   * is unknown or the game hasn't started. `yourSeat` is lobby join order and
+   * is NOT this index — createGame reorders `state.players` into turn order,
+   * so use this field (not `yourSeat`) whenever indexing into `state.players`.
+   */
+  yourPlayerIndex: number;
   isHost: boolean;
   state: GameState | null;
   winner: Team | null;

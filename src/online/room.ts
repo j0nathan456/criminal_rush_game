@@ -265,12 +265,14 @@ export function viewFor(room: Room, token: string): RoomView {
   const me = room.players.find((p) => p.token === token);
   const yourSeat = me ? me.seat : -1;
   const state = me && room.state ? redactState(room.state, me.id) : room.state;
+  const yourPlayerIndex = me && state ? state.players.findIndex((p) => p.id === me.id) : -1;
 
   return {
     code: room.code,
     started: room.started,
     seats: room.players.map((p) => ({ seat: p.seat, name: p.name })),
     yourSeat,
+    yourPlayerIndex,
     isHost: isHost(room, token),
     state,
     winner: room.state?.winner ?? null,

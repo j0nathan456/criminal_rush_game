@@ -22,6 +22,7 @@ function fakeView(over: Partial<RoomView> = {}): RoomView {
     started: false,
     seats: [{ seat: 0, name: 'Ava' }],
     yourSeat: 0,
+    yourPlayerIndex: -1,
     isHost: true,
     state: null,
     winner: null,

@@ -236,7 +236,7 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
 
   // --- Phase 3: live game ---
   const current = view.state.players[view.state.currentPlayerIndex];
-  const yourTurn = view.state.currentPlayerIndex === view.yourSeat;
+  const yourTurn = view.state.currentPlayerIndex === view.yourPlayerIndex;
   const winner = view.state.winner ?? view.winner;
 
   return (
@@ -269,7 +269,7 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
 
       <PlayableBoard
         state={view.state}
-        viewerIndex={view.yourSeat}
+        viewerIndex={view.yourPlayerIndex}
         dispatch={game.dispatch}
         chat={view.chat}
         chatEnabled={view.chatEnabled}
@@ -307,7 +307,7 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
                 {TEAM_META[winner].label} win!
               </h2>
               <p className="mt-2 text-fog">
-                {view.yourSeat >= 0 && view.state.players[view.yourSeat]?.team === winner
+                {view.yourPlayerIndex >= 0 && view.state.players[view.yourPlayerIndex]?.team === winner
                   ? 'Victory — your team took it.'
                   : 'Better luck next time.'}
               </p>

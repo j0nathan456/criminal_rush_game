@@ -317,6 +317,28 @@ describe('viewFor redaction', () => {
     expect(view.state?.drawPile.every((c) => c.name === 'Hidden')).toBe(true);
   });
 
+  it('yourPlayerIndex tracks id, not array position — createGame reorders state.players into turn order, which need not match lobby seat', () => {
+    const base = emptyGameState();
+    // Lobby seat 0 (token t0, id p0) landed second in turn order here — the
+    // exact "seat != state.players index" case that broke the online client
+    // before yourPlayerIndex existed (it used to index state.players with
+    // the raw lobby seat).
+    const state: GameState = {
+      ...base,
+      players: [
+        { ...playerStub('p1', 'B'), hand: [card('b1')] },
+        { ...playerStub('p0', 'A'), hand: [card('a1'), card('a2')] },
+      ],
+    };
+    const room = startedRoomWithState(state);
+
+    const view = viewFor(room, 't0'); // seat 0 = p0, sitting at state.players[1]
+    expect(view.yourSeat).toBe(0);
+    expect(view.yourPlayerIndex).toBe(1);
+    expect(view.state?.players[1].hand.map((c) => c.id)).toEqual(['a1', 'a2']); // own hand intact
+    expect(view.state?.players[0].hand.every((c) => c.name === 'Hidden')).toBe(true); // not-me, hidden
+  });
+
   it('reveals the Spy peek only to its owner', () => {
     const base = emptyGameState();
     const state: GameState = {
