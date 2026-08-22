@@ -97,6 +97,23 @@ export function useOnlineGame(): OnlineGame {
   const codeRef = useRef<string | null>(null);
   const tokenRef = useRef<string | null>(null);
 
+  // The poll loop and any in-flight dispatch/action can both be waiting on a
+  // response at once, and on a flaky connection (mobile data, weak signal)
+  // responses can land out of send order. Without ordering, an older response
+  // — e.g. a poll that started before a dispatch — can land after and
+  // overwrite the newer one, regressing the visible state to "it's my turn"
+  // when the server has already moved on. Tag every request with a sequence
+  // number at send time and only ever apply a response at or after the
+  // highest one already applied, so a stale response can never win.
+  const requestSeqRef = useRef(0);
+  const appliedSeqRef = useRef(0);
+  const beginRequest = () => ++requestSeqRef.current;
+  const applyView = (id: number, v: RoomView) => {
+    if (id < appliedSeqRef.current) return;
+    appliedSeqRef.current = id;
+    setView(v);
+  };
+
   const run = useCallback(async (fn: () => Promise<void>) => {
     setError(null);
     setConnecting(true);
@@ -109,46 +126,49 @@ export function useOnlineGame(): OnlineGame {
     }
   }, []);
 
-  const enter = (code: string, token: string, v: RoomView) => {
+  const enter = useCallback((id: number, code: string, token: string, v: RoomView) => {
     codeRef.current = code;
     tokenRef.current = token;
     saveSession({ code, token });
-    setView(v);
-  };
+    applyView(id, v);
+  }, []);
 
   const createRoom = useCallback(
     (name: string) =>
       run(async () => {
+        const id = beginRequest();
         const { code, token, view: v } = await postJson<{ code: string; token: string; view: RoomView }>(
           '/api/create',
           { name },
         );
-        enter(code, token, v);
+        enter(id, code, token, v);
       }),
-    [run],
+    [run, enter],
   );
 
   const joinRoom = useCallback(
     (code: string, name: string) =>
       run(async () => {
+        const id = beginRequest();
         const normalized = code.trim().toUpperCase();
         const { token, view: v } = await postJson<{ token: string; view: RoomView }>('/api/join', {
           code: normalized,
           name,
         });
-        enter(normalized, token, v);
+        enter(id, normalized, token, v);
       }),
-    [run],
+    [run, enter],
   );
 
   const start = useCallback(
     () =>
       run(async () => {
+        const id = beginRequest();
         const { view: v } = await postJson<{ view: RoomView }>('/api/start', {
           code: codeRef.current,
           token: tokenRef.current,
         });
-        setView(v);
+        applyView(id, v);
       }),
     [run],
   );
@@ -156,12 +176,13 @@ export function useOnlineGame(): OnlineGame {
   const kick = useCallback(
     (targetSeat: number) =>
       run(async () => {
+        const id = beginRequest();
         const { view: v } = await postJson<{ view: RoomView }>('/api/kick', {
           code: codeRef.current,
           token: tokenRef.current,
           targetSeat,
         });
-        setView(v);
+        applyView(id, v);
       }),
     [run],
   );
@@ -169,12 +190,13 @@ export function useOnlineGame(): OnlineGame {
   const setChatEnabled = useCallback(
     (enabled: boolean) =>
       run(async () => {
+        const id = beginRequest();
         const { view: v } = await postJson<{ view: RoomView }>('/api/chat-toggle', {
           code: codeRef.current,
           token: tokenRef.current,
           enabled,
         });
-        setView(v);
+        applyView(id, v);
       }),
     [run],
   );
@@ -182,12 +204,13 @@ export function useOnlineGame(): OnlineGame {
   const sendChat = useCallback(
     (text: string) =>
       run(async () => {
+        const id = beginRequest();
         const { view: v } = await postJson<{ view: RoomView }>('/api/chat-send', {
           code: codeRef.current,
           token: tokenRef.current,
           text,
         });
-        setView(v);
+        applyView(id, v);
       }),
     [run],
   );
@@ -195,12 +218,13 @@ export function useOnlineGame(): OnlineGame {
   const dispatch = useCallback(
     (action: GameAction) =>
       run(async () => {
+        const id = beginRequest();
         const { view: v } = await postJson<{ view: RoomView }>('/api/action', {
           code: codeRef.current,
           token: tokenRef.current,
           action,
         });
-        setView(v);
+        applyView(id, v);
       }),
     [run],
   );
@@ -221,6 +245,9 @@ export function useOnlineGame(): OnlineGame {
     codeRef.current = null;
     tokenRef.current = null;
     clearSession();
+    // Any request issued before this point (a poll tick, an in-flight
+    // dispatch) must not be allowed to resurrect the view once it resolves.
+    appliedSeqRef.current = requestSeqRef.current;
     setView(null);
     setError(null);
   }, []);
@@ -235,6 +262,7 @@ export function useOnlineGame(): OnlineGame {
 
     codeRef.current = session.code;
     tokenRef.current = session.token;
+    const id = beginRequest();
     let cancelled = false;
     fetch(stateUrl(session.code, session.token))
       .then(async (res) => {
@@ -250,7 +278,7 @@ export function useOnlineGame(): OnlineGame {
           leave();
           return;
         }
-        setView(v);
+        applyView(id, v);
       })
       .catch(() => {
         /* offline — keep the session and let the poll retry */
@@ -267,6 +295,7 @@ export function useOnlineGame(): OnlineGame {
     const tick = async () => {
       const code = codeRef.current;
       if (!code) return;
+      const reqId = beginRequest();
       try {
         const res = await fetch(stateUrl(code, tokenRef.current));
         if (cancelled) return;
@@ -274,6 +303,7 @@ export function useOnlineGame(): OnlineGame {
           clearSession();
           codeRef.current = null;
           tokenRef.current = null;
+          appliedSeqRef.current = Math.max(appliedSeqRef.current, reqId);
           setView(null);
           setError('The room was closed.');
           return;
@@ -284,19 +314,20 @@ export function useOnlineGame(): OnlineGame {
           clearSession();
           codeRef.current = null;
           tokenRef.current = null;
+          appliedSeqRef.current = Math.max(appliedSeqRef.current, reqId);
           setView(null);
           setError('You were removed from the room by the host.');
           return;
         }
-        setView(v);
+        applyView(reqId, v);
       } catch {
         /* transient network error — keep the last view and retry next tick */
       }
     };
-    const id = setInterval(tick, POLL_MS);
+    const intervalId = setInterval(tick, POLL_MS);
     return () => {
       cancelled = true;
-      clearInterval(id);
+      clearInterval(intervalId);
     };
   }, [view]);
 

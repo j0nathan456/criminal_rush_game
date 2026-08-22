@@ -105,3 +105,41 @@ describe('useOnlineGame — session persistence', () => {
     unmount();
   });
 });
+
+describe('useOnlineGame — out-of-order responses', () => {
+  it("a request issued first but resolving last never clobbers a later request's response (e.g. a slow poll landing after a dispatch)", async () => {
+    // First call (started as turn 1) resolves slowly; second call (started
+    // as turn 2) resolves fast. On a flaky connection the network can
+    // reorder these — the hook must keep whichever was *issued* last, not
+    // whichever *arrived* last, or a stale response can regress the visible
+    // game state (e.g. showing "your turn" again after it's already moved on).
+    let call = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        call += 1;
+        const mine = call;
+        const view = fakeView({ code: 'ABCD', started: true, seats: [{ seat: 0, name: `turn-${mine}` }] });
+        const delayMs = mine === 1 ? 40 : 0; // first-issued call resolves last
+        await new Promise((r) => setTimeout(r, delayMs));
+        return { ok: true, status: 200, json: async () => ({ view }) };
+      }) as unknown as typeof fetch,
+    );
+
+    const { result, unmount } = renderHook(() => useOnlineGame());
+    let first: Promise<void>;
+    let second: Promise<void>;
+    act(() => {
+      first = result.current.dispatch({ type: 'DRAW_CARD' });
+    });
+    act(() => {
+      second = result.current.dispatch({ type: 'DRAW_CARD' });
+    });
+    await act(async () => {
+      await Promise.all([first, second]);
+    });
+
+    expect(result.current.view?.seats[0].name).toBe('turn-2');
+    unmount();
+  });
+});
