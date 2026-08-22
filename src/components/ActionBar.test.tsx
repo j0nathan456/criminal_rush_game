@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import type { Player, RoleIdentity } from '../types/game';
 import type { Team } from '../types/cards';
 import { ActionBar } from './ActionBar';
@@ -62,15 +62,44 @@ describe('<ActionBar />', () => {
     expect(screen.getByText('Draw').closest('button')).not.toBeDisabled();
   });
 
-  it('fires onAction with the chosen action and onEndTurn on end turn', () => {
+  it('fires onAction with the chosen action', () => {
     const onAction = vi.fn();
-    const onEndTurn = vi.fn();
-    render(<ActionBar player={makePlayer('CIVILIAN', 3)} onAction={onAction} onEndTurn={onEndTurn} />);
+    render(<ActionBar player={makePlayer('CIVILIAN', 3)} onAction={onAction} onEndTurn={() => {}} />);
 
     fireEvent.click(screen.getByText('Draw').closest('button')!);
     expect(onAction).toHaveBeenCalledWith(expect.objectContaining({ type: 'DRAW_CARD', cost: 1 }));
+  });
+
+  it('ends the turn immediately, with no confirmation, once every action is spent', () => {
+    const onEndTurn = vi.fn();
+    render(<ActionBar player={makePlayer('CIVILIAN', 0)} onEndTurn={onEndTurn} />);
 
     fireEvent.click(screen.getByText(/End Turn/).closest('button')!);
     expect(onEndTurn).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('asks for confirmation before ending a turn with unspent actions, and only ends it once confirmed', async () => {
+    const onEndTurn = vi.fn();
+    render(<ActionBar player={makePlayer('CIVILIAN', 2)} onEndTurn={onEndTurn} />);
+
+    fireEvent.click(screen.getByText(/End Turn/).closest('button')!);
+    expect(onEndTurn).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText(/You still have 2 actions left/)).toBeInTheDocument();
+
+    fireEvent.click(within(screen.getByRole('dialog')).getByText('End Turn'));
+    expect(onEndTurn).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('Cancel backs out of the confirmation without ending the turn', async () => {
+    const onEndTurn = vi.fn();
+    render(<ActionBar player={makePlayer('CIVILIAN', 1)} onEndTurn={onEndTurn} />);
+
+    fireEvent.click(screen.getByText(/End Turn/).closest('button')!);
+    fireEvent.click(screen.getByText('Cancel'));
+    expect(onEndTurn).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 });

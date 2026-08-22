@@ -1,8 +1,12 @@
+import { useState } from 'react';
+import { createPortal } from 'react-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import type { Player, PlayerActionType } from '../types/game';
 import type { ActionAvailability } from '../engine';
 import { TURN_ACTIONS, TEAM_META, BASE_ACTIONS_PER_TURN } from '../constants/theme';
 import type { ActionMeta } from '../constants/theme';
 import { PASSIVE_ROLES } from './panelConstants';
+import { backdrop, panelIn } from '../ui/motion';
 
 interface ActionBarProps {
   player: Player;
@@ -44,12 +48,25 @@ function Pips({ total, filled, color }: { total: number; filled: number; color: 
  * Action is omitted entirely rather than shown as a live, costed option.
  */
 export function ActionBar({ player, maxActions = BASE_ACTIONS_PER_TURN, availability = {}, onAction, onEndTurn }: ActionBarProps) {
+  const [confirmEndTurn, setConfirmEndTurn] = useState(false);
   const actions = TURN_ACTIONS.filter(
     (a) => (!a.team || a.team === player.team) && (a.type !== 'ROLE_ABILITY' || !PASSIVE_ROLES.has(player.role.id)),
   );
   const teamColor = TEAM_META[player.team].color;
 
+  // Ending with unspent actions is usually a misclick, not a real choice — ask
+  // first rather than silently burning them. Nothing left to spend needs no
+  // confirmation.
+  const handleEndTurnClick = () => {
+    if (player.actionsRemaining >= 1) {
+      setConfirmEndTurn(true);
+    } else {
+      onEndTurn?.();
+    }
+  };
+
   return (
+    <>
     <section
       className="panel flex flex-col gap-3 border-l-4"
       style={{
@@ -137,9 +154,53 @@ export function ActionBar({ player, maxActions = BASE_ACTIONS_PER_TURN, availabi
         })}
       </div>
 
-      <button type="button" className="btn btn-primary w-full py-3 text-base" onClick={onEndTurn} disabled={!onEndTurn}>
+      <button type="button" className="btn btn-primary w-full py-3 text-base" onClick={handleEndTurnClick} disabled={!onEndTurn}>
         End Turn ⏭
       </button>
     </section>
+
+    {/* Portaled to <body>: this section (and most panels) sit under a
+        backdrop-blur ancestor, which — like `filter` — creates a new
+        containing block for `position: fixed`, so an in-place overlay would
+        be clipped to this panel instead of covering the viewport. */}
+    {createPortal(
+      <AnimatePresence>
+        {confirmEndTurn && (
+          <motion.div
+            variants={backdrop}
+            initial="hidden"
+            animate="show"
+            exit="exit"
+            className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-5 backdrop-blur-sm"
+            role="dialog"
+            aria-label="Confirm end turn"
+          >
+            <motion.div variants={panelIn} className="panel w-full max-w-sm border-2 p-6 text-center" style={{ borderColor: teamColor }}>
+              <h2 className="text-xl font-extrabold text-chalk">End your turn?</h2>
+              <p className="mt-2 text-fog">
+                You still have {player.actionsRemaining} action{player.actionsRemaining === 1 ? '' : 's'} left.
+              </p>
+              <div className="mt-6 flex gap-2">
+                <button
+                  type="button"
+                  className="btn btn-primary flex-1 py-3"
+                  onClick={() => {
+                    setConfirmEndTurn(false);
+                    onEndTurn?.();
+                  }}
+                >
+                  End Turn
+                </button>
+                <button type="button" className="btn flex-1 py-3" onClick={() => setConfirmEndTurn(false)}>
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>,
+      document.body,
+    )}
+    </>
   );
 }
