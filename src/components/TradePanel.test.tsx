@@ -152,3 +152,42 @@ describe('<TradePanel /> — the pending return', () => {
     expect(onResolveReturn).toHaveBeenCalledWith({ kind: 'WEAPON', cardId: 'w1' });
   });
 });
+
+describe('<TradePanel /> — AP cost note', () => {
+  const radio = (id: string): MarketCard => ({ id, name: 'Radio', description: '', cost: 2, source: 'PUBLIC', type: 'PERK' });
+
+  it('shows the Radio discount before a teammate is even picked', () => {
+    const viewer = mkPlayer({ id: 'p0', name: 'Ana', inventory: [radio('r1')] });
+    const mate = mkPlayer({ id: 'p1', name: 'Ben' });
+    render(<TradePanel state={stateWith([viewer, mate])} viewerIndex={0} />);
+
+    expect(screen.getByText(/This trade costs 0 AP — Radio −1 AP \(your first trade this turn\)\./)).toBeInTheDocument();
+  });
+
+  it('says nothing once the Radio has already been used this turn', () => {
+    const viewer = mkPlayer({ id: 'p0', name: 'Ana', inventory: [radio('r1')], hasUsedRadio: true });
+    const mate = mkPlayer({ id: 'p1', name: 'Ben' });
+    render(<TradePanel state={stateWith([viewer, mate])} viewerIndex={0} />);
+
+    expect(screen.queryByText(/This trade costs/)).not.toBeInTheDocument();
+  });
+
+  it('shows the Traffic token surcharge once a snarled teammate is picked', () => {
+    const viewer = mkPlayer({ id: 'p0', name: 'Ana' });
+    const mate = mkPlayer({ id: 'p1', name: 'Ben', trafficToken: true });
+    render(<TradePanel state={stateWith([viewer, mate])} viewerIndex={0} />);
+
+    expect(screen.queryByText(/This trade costs/)).not.toBeInTheDocument(); // no teammate picked yet
+    fireEvent.click(screen.getByText('Ben 🚧'));
+    expect(screen.getByText(/This trade costs 2 AP — Traffic token \+1 AP\./)).toBeInTheDocument();
+  });
+
+  it('nets Radio against a Traffic token — costs 1 AP, not 2', () => {
+    const viewer = mkPlayer({ id: 'p0', name: 'Ana', inventory: [radio('r1')] });
+    const mate = mkPlayer({ id: 'p1', name: 'Ben', trafficToken: true });
+    render(<TradePanel state={stateWith([viewer, mate])} viewerIndex={0} />);
+
+    fireEvent.click(screen.getByText('Ben 🚧'));
+    expect(screen.getByText(/This trade costs 1 AP — Radio −1 AP \(your first trade this turn\), Traffic token \+1 AP\./)).toBeInTheDocument();
+  });
+});

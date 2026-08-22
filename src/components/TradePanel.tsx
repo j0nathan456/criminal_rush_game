@@ -161,6 +161,13 @@ export function TradePanel({ state, viewerIndex, onInitiate, onResolveReturn, on
   // token already shows on the action bar; a token on the chosen teammate
   // only becomes knowable once picked, so it's called out here instead.
   const trafficSnarled = Boolean(target && (viewer.trafficToken || target.trafficToken));
+  // Radio's discount doesn't depend on who the teammate is, so it's knowable
+  // (and worth showing) before a target is even picked — mirrors initiateTrade's cost formula.
+  const usesRadio = viewer.inventory.some((c) => c.name === 'Radio') && !viewer.hasUsedRadio;
+  const tradeCost = Math.max(0, 1 + (trafficSnarled ? 1 : 0) - (usesRadio ? 1 : 0));
+  const costModifiers: string[] = [];
+  if (usesRadio) costModifiers.push('Radio −1 AP (your first trade this turn)');
+  if (trafficSnarled) costModifiers.push('Traffic token +1 AP');
 
   return (
     <section className="cr-role" aria-label="Trade">
@@ -175,9 +182,9 @@ export function TradePanel({ state, viewerIndex, onInitiate, onResolveReturn, on
             chip(p.trafficToken ? `${p.name} 🚧` : p.name, targetId === p.id, () => { setTargetId(p.id); setMode(undefined); setItemId(undefined); }, p.id),
           )}
         </div>
-        {trafficSnarled && (
+        {costModifiers.length > 0 && (
           <p className="cr-role__sub" style={{ color: 'var(--color-amber)' }}>
-            🚧 +1 AP more — a Traffic token is involved.
+            {usesRadio ? '📻' : '🚧'} This trade costs {tradeCost} AP — {costModifiers.join(', ')}.
           </p>
         )}
         {target && giftPicker(viewer, target, (item) => onInitiate?.(target.id, item), undefined, false, true)}
