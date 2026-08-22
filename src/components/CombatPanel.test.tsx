@@ -88,6 +88,28 @@ describe('<CombatPanel />', () => {
     expect(screen.queryByText("Nia's Power cards")).not.toBeInTheDocument();
   });
 
+  it("a Signal Jammer hides the jammed defender's own Power cards but still offers their active Bodyguard's", () => {
+    const attacker = mkPlayer({ id: 'atk', name: 'Mona', role: role('hitman', 'CRIMINAL', 3) });
+    const defOwn: ActionCard = { id: 'b1', name: 'Boost', description: '', type: 'POWER', power: 1 };
+    const defender = mkPlayer({ id: 'def', name: 'Dora', role: role('mayor', 'CIVILIAN', 2), hasBodyguardToken: true, hand: [defOwn] });
+    const guardCard: ActionCard = { id: 'b2', name: 'Boost', description: '', type: 'POWER', power: 1 };
+    const guard = mkPlayer({ id: 'grd', name: 'Gia', role: role('bodyguard', 'CIVILIAN', 3), hand: [guardCard] });
+    const state: GameState = {
+      ...emptyGameState(),
+      players: [attacker, defender, guard],
+      combat: {
+        attacker: { playerId: 'atk', basePower: 5, powerCardBonus: 0, passed: false, canPlayPower: true },
+        defender: { playerId: 'def', basePower: 2, powerCardBonus: 0, passed: false, canPlayPower: false },
+        turn: 'DEFENDER', played: [], actionCost: 2, playerCount: 3, phase: 'POWER', pending: [],
+      },
+    };
+    render(<CombatPanel state={state} viewerIndex={1} />);
+
+    expect(screen.getByText('Signal Jammer: Dora cannot personally play Power cards.')).toBeInTheDocument();
+    expect(screen.queryByText('Your Power cards')).not.toBeInTheDocument(); // Dora's own hand, jammed
+    expect(screen.getByText("Gia's Power cards")).toBeInTheDocument(); // active Bodyguard, unaffected
+  });
+
   it('only offers Mirror once someone else has played a Power card this combat, and opens a target picker', () => {
     const onPlayPower = vi.fn();
     const mirror: ActionCard = { id: 'mir', name: 'Mirror', description: '', type: 'POWER', power: 0 };

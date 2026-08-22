@@ -1394,7 +1394,6 @@ function playPower(
   if (combat.phase !== 'POWER') return log(state, 'Resolve the pre-combat choices first.');
 
   const { self, other } = sideParts(combat, side);
-  if (!self.canPlayPower) return log(state, 'A Signal Jammer prevents this side from playing Power cards.');
 
   const combatantIdx = playerIndexById(state, self.playerId);
   const combatant = state.players[combatantIdx];
@@ -1402,6 +1401,14 @@ function playPower(
   const byIdx = playerIndexById(state, byId);
   const by = state.players[byIdx];
   if (!by) return log(state, 'No such player.');
+
+  // A Signal Jammer stops the combatant from personally playing Power cards
+  // — it doesn't reach a teammate playing on their behalf (Bodyguard,
+  // Unexpected Allies), since that's a different player "playing", not the
+  // jammed one.
+  if (!self.canPlayPower && by.id === combatant.id) {
+    return log(state, 'A Signal Jammer prevents this side from playing Power cards.');
+  }
 
   const card = by.hand.find((c) => c.id === cardId);
   if (!card || card.type !== 'POWER') return log(state, 'That is not a Power card in that hand.');

@@ -86,31 +86,34 @@ export function CombatPanel({ state, viewerIndex, onPlayPower, onPassCombat, onD
           </span>
         </div>
 
-        {!part.canPlayPower && <p className="cr-combat__jammed">Signal Jammer: cannot play Power cards.</p>}
+        {/* A Signal Jammer only stops the combatant from personally playing
+            Power cards — a teammate (Bodyguard, Unexpected Allies) playing on
+            their behalf is unaffected, so their cards still show below. */}
+        {!part.canPlayPower && <p className="cr-combat__jammed">Signal Jammer: {combatant.name} cannot personally play Power cards.</p>}
 
-        {part.canPlayPower &&
-          contributors(state.players, combatant).map((p) => {
-            const powers = p.hand
-              .filter((c) => c.type === 'POWER')
-              .filter((c) => powerCardEligible(c, p, combatant, side, combat.played).enabled);
-            if (powers.length === 0) return null;
-            return (
-              <div className="cr-combat__cards" key={p.id}>
-                <span className="cr-combat__cards-owner">{p.id === combatant.id ? 'Your Power cards' : `${p.name}'s Power cards`}</span>
-                {powers.map((card) => (
-                  <button
-                    key={card.id}
-                    type="button"
-                    className="cr-combat__play"
-                    onClick={() => playCard(side, p.id, p.name, card.id, card.name)}
-                    disabled={allPassed}
-                  >
-                    {card.name}
-                  </button>
-                ))}
-              </div>
-            );
-          })}
+        {contributors(state.players, combatant).map((p) => {
+          const powers = p.hand
+            .filter((c) => c.type === 'POWER')
+            .filter((c) => powerCardEligible(c, p, combatant, side, combat.played).enabled)
+            .filter(() => p.id !== combatant.id || part.canPlayPower);
+          if (powers.length === 0) return null;
+          return (
+            <div className="cr-combat__cards" key={p.id}>
+              <span className="cr-combat__cards-owner">{p.id === combatant.id ? 'Your Power cards' : `${p.name}'s Power cards`}</span>
+              {powers.map((card) => (
+                <button
+                  key={card.id}
+                  type="button"
+                  className="cr-combat__play"
+                  onClick={() => playCard(side, p.id, p.name, card.id, card.name)}
+                  disabled={allPassed}
+                >
+                  {card.name}
+                </button>
+              ))}
+            </div>
+          );
+        })}
 
         {mirrorPending?.side === side && (
           <div className="cr-combat__cards cr-choice__block">

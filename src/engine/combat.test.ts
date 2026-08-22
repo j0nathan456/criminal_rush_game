@@ -372,6 +372,21 @@ describe('interactive combat — rule guards', () => {
     expect(after.combat!.defender.powerCardBonus).toBe(0); // rejected
   });
 
+  it("a Signal Jammer stops the jammed defender personally, but not their active Bodyguard", () => {
+    const atk = mkPlayer({ id: 'atk', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('sj', 'Signal Jammer', 'TECH', 2)] });
+    const def = mkPlayer({ id: 'def', role: role('mayor', 'CIVILIAN', 2), hasBodyguardToken: true, hand: [pow('b1', 'Boost', 1)] });
+    const guard = mkPlayer({ id: 'grd', role: role('bodyguard', 'CIVILIAN', 3), hand: [pow('b2', 'Boost', 1)] });
+    const s = stateWith([atk, def, guard], { currentPlayerIndex: 0 });
+    const fight = gameReducer(s, { type: 'ATTACK', targetId: 'def' });
+    expect(fight.combat!.defender.canPlayPower).toBe(false);
+
+    const selfPlay = gameReducer(fight, { type: 'PLAY_POWER', cardId: 'b1', side: 'DEFENDER', byPlayerId: 'def' });
+    expect(selfPlay.combat!.defender.powerCardBonus).toBe(0); // jammed — the defender can't play for themselves
+
+    const guardPlay = gameReducer(fight, { type: 'PLAY_POWER', cardId: 'b2', side: 'DEFENDER', byPlayerId: 'grd' });
+    expect(guardPlay.combat!.defender.powerCardBonus).toBe(1); // the Bodyguard is unaffected by the jam
+  });
+
   it('rejects Shield played on the attacker (defence only)', () => {
     const fight = setupFight({ atkHand: [pow('sh', 'Shield', 3)] });
     const after = gameReducer(fight, { type: 'PLAY_POWER', cardId: 'sh', side: 'ATTACKER', byPlayerId: 'atk' });
