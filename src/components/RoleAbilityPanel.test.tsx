@@ -116,6 +116,16 @@ describe('<RoleAbilityPanel />', () => {
     expect(screen.getByText('Expand Network ($4)')).toBeInTheDocument();
   });
 
+  it('Crime Lord: a captured Crime Lord sees the Weakened Network surcharge cancel out the $1 discount', () => {
+    const s = stateWith(
+      [mkPlayer({ id: 'p0', name: 'Ben', role: role('crime-lord', 'Crime Lord', 'CRIMINAL'), isCaptured: true })],
+      { blackMarket: [expand('en', 5)] },
+    );
+    render(<RoleAbilityPanel state={s} viewerIndex={0} onSubmit={() => {}} onCancel={() => {}} />);
+    expect(screen.queryByText('Expand Network ($4)')).not.toBeInTheDocument();
+    expect(screen.getByText('Expand Network ($5)')).toBeInTheDocument(); // +$1 surcharge - $1 discount = base cost
+  });
+
   it('Evil Scientist: the Tech/Chemical weapon buttons show the $1-off price, not the base cost', () => {
     const s = stateWith([mkPlayer({ id: 'p0', name: 'Eve', role: role('evil-scientist', 'Evil Scientist', 'CRIMINAL') })], {
       publicMarket: [weapon('w1', 'Robot Soldier', 4)],

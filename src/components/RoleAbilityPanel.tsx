@@ -68,11 +68,16 @@ export function RoleAbilityPanel({
   // `discount` is 0 for collector/smuggler (no discount applies to what's
   // shown here — collector buys at full price, smuggler isn't buying at
   // all) and 1 for evil-scientist/crime-lord, so the button always shows
-  // what doPurchase will actually charge.
+  // what doPurchase will actually charge. Weakened Network (rulebook p.16)
+  // stacks on top: a captured Criminal pays $1 more for Expand Network
+  // regardless of any discount, exactly like doPurchase's own surcharge.
   const marketRow = (cards: MarketCard[], discount = 0) => (
     <div className="cr-role__chips">
       {cards.length === 0 && <span className="cr-role__empty">Nothing available.</span>}
-      {cards.map((c) => chip(`${c.name} ($${Math.max(0, c.cost - discount)})`, cardId === c.id, () => setCardId(c.id), c.id))}
+      {cards.map((c) => {
+        const surcharge = c.type === 'SPECIAL' && viewer.isCaptured ? 1 : 0;
+        return chip(`${c.name} ($${Math.max(0, c.cost + surcharge - discount)})`, cardId === c.id, () => setCardId(c.id), c.id);
+      })}
     </div>
   );
 

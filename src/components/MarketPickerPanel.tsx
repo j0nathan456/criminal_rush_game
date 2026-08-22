@@ -100,18 +100,25 @@ export function MarketPickerPanel({ state, viewerIndex, onBuy, onCancel }: Marke
       <div className="cr-role__body">
         <div className="cr-role__chips">
           {cards.length === 0 && <span className="cr-role__empty">Nothing available.</span>}
-          {cards.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              className="cr-role__chip"
-              disabled={c.cost > viewer.money}
-              title={c.cost > viewer.money ? `${c.name} — you can't afford this ($${c.cost}).` : `${c.name} — ${c.description}`}
-              onClick={() => (c.name === 'Coffee Machine' ? setPendingCoffee(c) : onBuy?.(c))}
-            >
-              {c.name} (${c.cost})
-            </button>
-          ))}
+          {cards.map((c) => {
+            // Weakened Network (rulebook p.16): a captured Criminal pays $1
+            // more for Expand Network — mirrors doPurchase's own surcharge,
+            // so the button always shows what buying will actually cost.
+            const surcharge = c.type === 'SPECIAL' && viewer.isCaptured ? 1 : 0;
+            const cost = c.cost + surcharge;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                className="cr-role__chip"
+                disabled={cost > viewer.money}
+                title={cost > viewer.money ? `${c.name} — you can't afford this ($${cost}).` : `${c.name} — ${c.description}`}
+                onClick={() => (c.name === 'Coffee Machine' ? setPendingCoffee(c) : onBuy?.(c))}
+              >
+                {c.name} (${cost})
+              </button>
+            );
+          })}
         </div>
       </div>
       <div className="cr-role__actions">

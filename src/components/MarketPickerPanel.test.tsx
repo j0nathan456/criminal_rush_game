@@ -21,6 +21,7 @@ function stateWith(players: Player[], over: Partial<GameState> = {}): GameState 
 const computer: MarketCard = { id: 'm1', name: 'Computer', description: '', cost: 3, source: 'PUBLIC', type: 'PERK' };
 const pistol: MarketCard = { id: 'b1', name: 'Pistol', description: '', cost: 2, source: 'BLACK_MARKET', type: 'WEAPON', weaponType: 'RANGED', power: 3 };
 const coffeeMachine: MarketCard = { id: 'cm', name: 'Coffee Machine', description: '', cost: 3, source: 'PUBLIC', type: 'PERK' };
+const expandNetwork: MarketCard = { id: 'en', name: 'Expand Network', description: '', cost: 5, source: 'BLACK_MARKET', type: 'SPECIAL', vpValue: 1 };
 
 describe('<MarketPickerPanel /> — Civilian', () => {
   it('goes straight to the public Market, skipping the source choice', () => {
@@ -75,6 +76,23 @@ describe('<MarketPickerPanel /> — Criminal', () => {
     expect(screen.getByText('Computer ($3)')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Back'));
     expect(screen.getByText('Which Market?')).toBeInTheDocument();
+  });
+
+  it('shows the Weakened Network surcharge on Expand Network for a captured Criminal', () => {
+    const viewer = mkPlayer({ id: 'p0', name: 'Ben', role: role('crime-lord', 'CRIMINAL'), money: 9, isCaptured: true });
+    const s = stateWith([viewer], { blackMarket: [expandNetwork] });
+    render(<MarketPickerPanel state={s} viewerIndex={0} onBuy={vi.fn()} onCancel={vi.fn()} />);
+    fireEvent.click(screen.getByText('Black Market'));
+    expect(screen.queryByText('Expand Network ($5)')).not.toBeInTheDocument();
+    expect(screen.getByText('Expand Network ($6)')).toBeInTheDocument();
+  });
+
+  it('shows the base price on Expand Network for a Criminal who is not captured', () => {
+    const viewer = mkPlayer({ id: 'p0', name: 'Ben', role: role('crime-lord', 'CRIMINAL'), money: 9 });
+    const s = stateWith([viewer], { blackMarket: [expandNetwork] });
+    render(<MarketPickerPanel state={s} viewerIndex={0} onBuy={vi.fn()} onCancel={vi.fn()} />);
+    fireEvent.click(screen.getByText('Black Market'));
+    expect(screen.getByText('Expand Network ($5)')).toBeInTheDocument();
   });
 });
 
