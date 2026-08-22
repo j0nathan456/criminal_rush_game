@@ -4,6 +4,7 @@ import {
   TEAM_META,
   STATUS_META,
   MARKET_TYPE_META,
+  WEAPON_TYPE_LABEL,
   BASE_ACTIONS_PER_TURN,
   MAX_PERKS,
   MAX_WEAPONS,
@@ -66,7 +67,7 @@ export function RoleCard({
         // the full name is always readable.
         className="flex flex-col gap-1 rounded-lg border-l-[3px] bg-panel-2/70 px-2.5 py-1.5 text-[13px]"
       >
-        <span title={`${item.name} — ${item.description}`}>
+        <span title={`${item.name}${item.weaponType ? ` (${WEAPON_TYPE_LABEL[item.weaponType]})` : ''} — ${item.description}`}>
           <span aria-hidden="true">{typeMeta.icon}</span> {item.name}
         </span>
         {canManageItems && onSell && isSellable(item) && (

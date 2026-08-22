@@ -7,7 +7,7 @@
  * so components can render without knowing the rules.
  */
 
-import type { Team, EvidenceCategory, ActionCardType, MarketCardType } from '../types/cards.js';
+import type { Team, EvidenceCategory, ActionCardType, MarketCardType, WeaponType } from '../types/cards.js';
 import type { PlayerActionType } from '../types/game.js';
 
 /** Team identity colors. Civilians are the blue detectives, Criminals the red syndicate. */
@@ -39,6 +39,14 @@ export const MARKET_TYPE_META: Record<MarketCardType, { label: string; color: st
   PERK: { label: 'Perk', color: '#65a30d', icon: '🧰' },
   WEAPON: { label: 'Weapon', color: '#b45309', icon: '⚔️' },
   SPECIAL: { label: 'Special', color: '#7c3aed', icon: '🌐' },
+};
+
+/** Readable label for a weapon's type, shown alongside its name/description. */
+export const WEAPON_TYPE_LABEL: Record<WeaponType, string> = {
+  MELEE: 'Melee',
+  RANGED: 'Ranged',
+  TECH: 'Tech',
+  CHEMICAL: 'Chemical',
 };
 
 /** Player status badges. Keys line up with boolean flags on the Player type. */

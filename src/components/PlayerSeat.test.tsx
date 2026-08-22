@@ -62,7 +62,9 @@ describe('<PlayerSeat />', () => {
     render(<PlayerSeat player={player} />);
 
     fireEvent.click(screen.getByTitle('Ana — details'));
-    expect(screen.getByText('Bat')).toHaveAttribute('title', 'Bat — +2 power.');
+    // Weapons additionally surface their type (Melee/Ranged/Tech/Chemical) —
+    // perks have no weaponType, so theirs stays name-plus-description only.
+    expect(screen.getByText('Bat')).toHaveAttribute('title', 'Bat (Melee) — +2 power.');
     expect(screen.getByText('Computer')).toHaveAttribute('title', 'Computer — Draw a card at the start of your turn.');
   });
 });

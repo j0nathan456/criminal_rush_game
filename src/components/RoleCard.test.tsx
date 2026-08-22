@@ -24,6 +24,16 @@ describe('<RoleCard />', () => {
     );
   });
 
+  it('includes the weapon type in the tooltip, unlike a perk which has none', () => {
+    const weapon: MarketCard = {
+      id: 'w', name: 'Bat', description: '+2 power.', cost: 3, source: 'PUBLIC',
+      type: 'WEAPON', weaponType: 'MELEE', power: 2,
+    };
+    const player = mkPlayer({ id: 'p0', name: 'Ana', inventory: [weapon] });
+    render(<RoleCard player={player} />);
+    expect(screen.getByText(/Bat/).closest('span')).toHaveAttribute('title', 'Bat (Melee) — +2 power.');
+  });
+
   it('no longer shows an inline "Use" button — perks are activated via the Action Bar instead', () => {
     const player = mkPlayer({ id: 'p0', name: 'Ana', inventory: [perk('b', 'Bank', 'desc')] });
     render(<RoleCard player={player} canManageItems onSell={vi.fn()} />);

@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Player } from '../types/game';
-import { TEAM_META, STATUS_META } from '../constants/theme';
+import { TEAM_META, STATUS_META, WEAPON_TYPE_LABEL } from '../constants/theme';
 import { TeamIcon } from './TeamIcon';
 import { playerTokens } from './playerTokens';
 
@@ -177,7 +177,7 @@ export function PlayerSeat({ player, active, isSelf, isNeighbor, targetable, onC
                           {i > 0 && ', '}
                           <span
                             className="cursor-help underline decoration-dotted decoration-fog/50 underline-offset-2"
-                            title={`${item.name} — ${item.description}`}
+                            title={`${item.name}${item.weaponType ? ` (${WEAPON_TYPE_LABEL[item.weaponType]})` : ''} — ${item.description}`}
                           >
                             {item.name}
                           </span>
