@@ -365,6 +365,28 @@ describe('viewFor redaction', () => {
     expect(viewFor(room, 't1').state?.pendingSheriff).toBeNull(); // everyone else
   });
 
+  it("reveals Shady Press's forced-card reveal only to the presser, even though the target's hand is otherwise redacted", () => {
+    const base = emptyGameState();
+    const state: GameState = {
+      ...base,
+      players: [
+        { ...playerStub('p0', 'A'), hand: [] },
+        { ...playerStub('p1', 'B'), hand: [card('e1')] }, // the pressed opponent's real hand
+      ],
+      pendingShadyPress: { pressId: 'p0', targetId: 'p1', perkCardId: 'sp', cards: [card('e1')] },
+    };
+    const room = startedRoomWithState(state);
+
+    const pressersView = viewFor(room, 't0');
+    expect(pressersView.state?.pendingShadyPress?.cards).toHaveLength(1); // the presser (seat 0) sees the reveal
+    // Confirms the reveal doesn't depend on the target's (redacted) hand:
+    // seat 1's own hand is hidden from the presser, yet the pending reveal
+    // still carries the real card.
+    expect(pressersView.state?.players[1].hand.every((c) => c.name === 'Hidden')).toBe(true);
+
+    expect(viewFor(room, 't1').state?.pendingShadyPress).toBeNull(); // everyone else, including the target
+  });
+
   it("reveals Manipulate's peek only to whoever used it", () => {
     const base = emptyGameState();
     const state: GameState = {

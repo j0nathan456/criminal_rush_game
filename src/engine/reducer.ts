@@ -56,6 +56,7 @@ export type GameAction =
   | { type: 'SKIP_MARKET_DISCOUNT' }
   | { type: 'RESOLVE_THREATEN'; mode: 'MONEY' | 'DISCARD'; cardId?: string }
   | { type: 'RESOLVE_SHERIFF'; cardId: string; category?: EvidenceCategory }
+  | { type: 'RESOLVE_SHADY_PRESS'; cardId: string; eventTargetId?: string; eventOptions?: EventOptions }
   | { type: 'RESOLVE_MANIPULATE'; cardId: string }
   | { type: 'RESOLVE_BODYGUARD_SETUP'; targetId: string }
   | { type: 'RESOLVE_JOURNAL'; use: boolean; targetId?: string; options?: EventOptions }
@@ -68,23 +69,18 @@ export type GameAction =
 /**
  * Parameters for an "Action:" perk (see applyPerk). Which fields matter depends
  * on the perk:
- *  - cardId       — a hand card (Bank Money, Recycling Bin discard, Alarm Clock Event),
- *                   or the opponent's Event card chosen to force-play (Shady Press).
+ *  - cardId       — a hand card (Bank Money, Recycling Bin discard, Alarm Clock Event).
  *  - marketCardId — a Market card to buy (Credit Card).
  *  - targetId     — the affected player (Hacked Passwords, Alarm Clock event target),
- *                   or the opponent being pressed (Shady Press).
+ *                   or the opponent being pressed (Shady Press — which of their Event
+ *                   cards to force-play is a separate step; see pendingShadyPress).
  *  - discardForBonus — Credit Card: discard the card for a $2 discount instead of $1.
- *  - eventTargetId, eventOptions — Shady Press: the forced Event card's own
- *    target/options (e.g. who Tax Collection taxes), gathered from the
- *    Criminal using Shady Press, distinct from `targetId` above.
  */
 export interface PerkPayload {
   cardId?: string;
   marketCardId?: string;
   targetId?: string;
   discardForBonus?: boolean;
-  eventTargetId?: string;
-  eventOptions?: EventOptions;
 }
 
 /**
@@ -179,6 +175,7 @@ export function emptyGameState(): GameState {
     pendingTrade: null,
     pendingExpressShipping: null,
     pendingSheriff: null,
+    pendingShadyPress: null,
     pendingManipulate: null,
     pendingBodyguardSetup: null,
     pendingJournal: null,
@@ -281,6 +278,12 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
     return log(state, "Resolve the Sheriff's subpoena before taking other actions.");
   }
 
+  // Shady Press has already spent the action pressing an opponent; the
+  // presser must play one of the revealed Event cards before anything else.
+  if (state.pendingShadyPress && action.type !== 'RESOLVE_SHADY_PRESS') {
+    return log(state, 'Resolve Shady Press before taking other actions.');
+  }
+
   // Manipulate already pulled the top of the deck off it; the actor must
   // finish choosing what to keep/top-deck/discard before anything else can
   // touch the deck again.
@@ -370,6 +373,8 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
       return resolveThreaten(state, action.mode, action.cardId);
     case 'RESOLVE_SHERIFF':
       return resolveSheriff(state, action.cardId, action.category);
+    case 'RESOLVE_SHADY_PRESS':
+      return resolveShadyPress(state, action.cardId, action.eventTargetId, action.eventOptions);
     case 'RESOLVE_MANIPULATE':
       return resolveManipulate(state, action.cardId);
     case 'RESOLVE_BODYGUARD_SETUP':
@@ -909,6 +914,37 @@ function resolveSheriff(state: GameState, cardId: string, category?: EvidenceCat
   s = placeEvidence(s, card, resolvedCategory, sheriff);
   s = { ...s, pendingSheriff: null };
   return log(s, `${sheriff.name} (Sheriff) subpoenas ${target.name} and plays ${card.name} into ${resolvedCategory}.`);
+}
+
+/**
+ * Resolve Shady Press's card choice after its reveal (see pendingShadyPress).
+ * The action was already spent when the target was pressed — pendingShadyPress
+ * is only ever set once the reveal found at least one Event card, so a play
+ * is always possible here. Mirrors resolveSheriff, but the "card" is an Event
+ * that itself may need a target/options (gathered client-side via EventPanel,
+ * same as a normal Event play) before resolveEvent can run it.
+ */
+function resolveShadyPress(
+  state: GameState,
+  cardId: string,
+  eventTargetId: string | undefined,
+  eventOptions: EventOptions | undefined,
+): GameState {
+  const pending = state.pendingShadyPress;
+  if (!pending) return state;
+  const pressIndex = playerIndexById(state, pending.pressId);
+  const targetIndex = playerIndexById(state, pending.targetId);
+  const presser = state.players[pressIndex];
+  const target = state.players[targetIndex];
+  if (!presser || !target) return { ...state, pendingShadyPress: null };
+
+  const card = pending.cards.find((c) => c.id === cardId);
+  if (!card) return log(state, 'Choose one of the revealed Event cards.');
+
+  let s = updatePlayer(state, targetIndex, (p) => ({ ...p, hand: p.hand.filter((c) => c.id !== card.id) }));
+  s = { ...s, discardPile: [...s.discardPile, card], pendingShadyPress: null };
+  s = resolveEvent(s, pressIndex, card.name, eventTargetId, eventOptions ?? {});
+  return log(s, `${presser.name}'s Shady Press plays ${target.name}'s ${card.name}.`);
 }
 
 /**
@@ -2001,24 +2037,23 @@ function applyPerk(
       return log(s, `${player.name} uses Manipulate to look at the top ${revealed.length} cards.`);
     }
     case 'Shady Press': {
-      // Choose an opponent, see all their Event cards, and force one to be
-      // played immediately — for the Criminal's benefit, same as Sheriff's
-      // Subpoena forces an opponent's Evidence card into play for the Sheriff.
-      // If the victim holds none, the action is still spent — "nothing
-      // happens" (rulebook), not a free retry.
+      // Choose an opponent and see all their Event cards — same as Sheriff's
+      // Subpoena reveals an opponent's Evidence. The action is spent on
+      // targeting alone (win or lose): if the victim holds none, it's wasted
+      // immediately; otherwise which card to force is a separate step (see
+      // pendingShadyPress/resolveShadyPress) so the reveal can survive online
+      // redaction the same way the Sheriff's does — the victim's hand is
+      // otherwise hidden from everyone but themselves.
       const ti = payload.targetId ? playerIndexById(state, payload.targetId) : -1;
       const victim = state.players[ti];
       if (!victim || victim.team === player.team) return log(state, 'Shady Press must target an opponent.');
       const events = victim.hand.filter((c) => c.type === 'EVENT');
+      const spent = spend(state);
       if (events.length === 0) {
-        return log(spend(state), `${victim.name} has no Event cards — the Action is wasted.`);
+        return log(spent, `${victim.name} has no Event cards — the Action is wasted.`);
       }
-      const evt = events.find((c) => c.id === payload.cardId);
-      if (!evt) return log(state, `Choose one of ${victim.name}'s Event cards to play.`);
-      let s = updatePlayer(state, ti, (p) => ({ ...p, hand: p.hand.filter((c) => c.id !== evt.id) }));
-      s = { ...s, discardPile: [...s.discardPile, evt] };
-      s = resolveEvent(s, idx, evt.name, payload.eventTargetId, payload.eventOptions ?? {});
-      return log(spend(s), `${player.name}'s Shady Press plays ${victim.name}'s ${evt.name}.`);
+      const s = { ...spent, pendingShadyPress: { pressId: player.id, targetId: victim.id, perkCardId: perk.id, cards: events } };
+      return log(s, `${player.name} uses Shady Press on ${victim.name}.`);
     }
     default:
       return log(state, `${perk.name} has no automated Action (resolve manually).`);

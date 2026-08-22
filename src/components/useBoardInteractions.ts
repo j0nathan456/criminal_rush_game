@@ -269,6 +269,8 @@ export function useBoardInteractions(
     onResolveBodyguardSetup: (targetId: string) => dispatch({ type: 'RESOLVE_BODYGUARD_SETUP', targetId }),
     onResolveSheriff: (cardId: string, category?: EvidenceCategory) =>
       dispatch({ type: 'RESOLVE_SHERIFF', cardId, category }),
+    onResolveShadyPress: (cardId: string, eventTargetId?: string, eventOptions?: EventOptions) =>
+      dispatch({ type: 'RESOLVE_SHADY_PRESS', cardId, eventTargetId, eventOptions }),
     onResolveManipulate: (cardId: string) => dispatch({ type: 'RESOLVE_MANIPULATE', cardId }),
     onSubmitExpose: (targetId, evidenceChoices) => {
       dispatch({ type: 'EXPOSE', targetId, evidenceChoices });

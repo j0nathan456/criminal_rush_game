@@ -277,6 +277,18 @@ export interface GameState {
   pendingSheriff?: { sheriffId: string; targetId: string; cards: ActionCard[] } | null;
 
   /**
+   * Shady Press's reveal: after pressing an opponent, their Event cards are
+   * shown here — the presser's own decision, not the target's, but the
+   * revealed card identities must survive online redaction (see redactState
+   * in online/room.ts, exempted like pendingSheriff) so the presser can
+   * actually see what to play. `cards` is a snapshot taken at reveal time;
+   * `perkCardId` is the specific Shady Press card in play (Ally Support may
+   * copy a teammate's), excluded from any "give up an item" choice the forced
+   * Event itself offers. Resolved via RESOLVE_SHADY_PRESS.
+   */
+  pendingShadyPress?: { pressId: string; targetId: string; perkCardId: string; cards: ActionCard[] } | null;
+
+  /**
    * Manipulate's reveal: the top of the deck, taken off it the moment the
    * perk is used (like Lottery) so nothing else can draw into it mid-choice.
    * Two sequential decisions share this one record, distinguished by `phase`:

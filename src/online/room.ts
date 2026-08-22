@@ -306,6 +306,10 @@ function redactState(state: GameState, viewerId: string): GameState {
     // hand is otherwise hidden above, so this is the only way they see it.
     pendingSheriff:
       state.pendingSheriff && state.pendingSheriff.sheriffId === viewerId ? state.pendingSheriff : null,
+    // Shady Press's reveal is private to the presser — the target's hand is
+    // otherwise hidden above, so this is the only way they see it.
+    pendingShadyPress:
+      state.pendingShadyPress && state.pendingShadyPress.pressId === viewerId ? state.pendingShadyPress : null,
     // Manipulate's reveal is private to whoever used it — the draw pile is
     // otherwise hidden above, so this is the only way they see it.
     pendingManipulate:

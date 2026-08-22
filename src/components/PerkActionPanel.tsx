@@ -3,8 +3,6 @@ import type { GameState } from '../types/game';
 import type { ActionCard, MarketCard } from '../types/cards';
 import type { PerkPayload } from '../engine';
 import { TEAM_META } from '../constants/theme';
-import { EventPanel } from './EventPanel';
-import { CONFIGURABLE_EVENTS } from './panelConstants';
 
 export interface PerkActionPanelProps {
   state: GameState;
@@ -38,30 +36,6 @@ export function PerkActionPanel({ state, viewerIndex, perkId, onSubmit, onCancel
   const teammates = state.players.filter((p) => p.team === viewer.team && p.id !== viewer.id);
   const others = state.players.filter((p) => p.id !== viewer.id);
   const opponents = state.players.filter((p) => p.team !== viewer.team);
-  const target = targetId ? state.players.find((p) => p.id === targetId) : undefined;
-
-  // Shady Press, once a configurable Event card is chosen: gather that
-  // card's own target/options from the presser (the actor who'll benefit),
-  // exactly like Alarm Clock/normal play would — mirrors AllySupportPanel's
-  // step 3 of composing another panel rather than duplicating its logic.
-  if (perk.name === 'Shady Press' && target) {
-    const forcedEvent = target.hand.find((c) => c.type === 'EVENT' && c.id === cardId);
-    if (forcedEvent && CONFIGURABLE_EVENTS.has(forcedEvent.name)) {
-      return (
-        <EventPanel
-          state={state}
-          viewerIndex={viewerIndex}
-          card={forcedEvent}
-          onSubmit={(eventTargetId, eventOptions) =>
-            onSubmit?.(perkId, { targetId: target.id, cardId: forcedEvent.id, eventTargetId, eventOptions })
-          }
-          onCancel={() => setCardId(undefined)}
-          forceDiscardIfImpossible
-          excludeInventoryCardId={perk.id}
-        />
-      );
-    }
-  }
 
   const chip = (label: string, selected: boolean, onClick: () => void, key?: string) => (
     <button key={key ?? label} type="button" className={`cr-role__chip${selected ? ' is-selected' : ''}`} onClick={onClick}>
@@ -155,22 +129,22 @@ export function PerkActionPanel({ state, viewerIndex, perkId, onSubmit, onCancel
       canSubmit = true;
       break;
     case 'Shady Press':
+      // Press an opponent by name only — that's all this step reveals. Their
+      // Event cards only surface after the engine commits to the target (see
+      // pendingShadyPress/ShadyPressPanel), the same way Sheriff's Subpoena
+      // survives online redaction: this client's copy of an opponent's hand
+      // is otherwise hidden, so checking it here would show "no cards" even
+      // when they truly have some.
       body = (
         <>
-          <p>Choose an opponent to see their Event cards:</p>
+          <p>Press an opponent — you'll see their Event cards next:</p>
           <div className="cr-role__chips">
             {opponents.length === 0 && <span className="cr-role__empty">No opponents.</span>}
-            {opponents.map((p) => chip(p.name, targetId === p.id, () => { setTargetId(p.id); setCardId(undefined); }, p.id))}
+            {opponents.map((p) => chip(p.name, targetId === p.id, () => setTargetId(p.id), p.id))}
           </div>
-          {target && (
-            <>
-              <p className="cr-role__sub">Play which of {target.name}'s Event cards?</p>
-              {cardRow(target.hand.filter((c) => c.type === 'EVENT'), `${target.name} has no Event cards — using this wastes the action.`)}
-            </>
-          )}
         </>
       );
-      canSubmit = !!targetId && (target ? target.hand.filter((c) => c.type === 'EVENT').length === 0 || !!cardId : false);
+      canSubmit = !!targetId;
       break;
     default:
       body = <p>{perk.name} is resolved manually at the table.</p>;

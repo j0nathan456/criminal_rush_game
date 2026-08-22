@@ -1958,6 +1958,20 @@ describe('gameReducer — remaining perks & events', () => {
     expect(next.gameLog.at(-1)).toMatch(/deck is empty/i);
   });
 
+  it('Shady Press reveals the pressed opponent\'s Event cards via pendingShadyPress — the action is spent immediately, before any card is chosen', () => {
+    const press = perk('pk', 'Shady Press', { source: 'BLACK_MARKET' });
+    const decoy: ActionCard = { id: 'd', name: 'Lottery', description: '', type: 'EVENT' };
+    const chosen: ActionCard = { id: 'v', name: 'Generational Wealth', description: '', type: 'EVENT' };
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL'), money: 0, inventory: [press] }),
+      mkPlayer({ id: 'p1', role: role('mayor', 'CIVILIAN'), money: 0, hand: [decoy, chosen] }),
+    ]);
+    const next = gameReducer(s, { type: 'USE_PERK', perkId: 'pk', payload: { targetId: 'p1' } });
+    expect(next.players[1].hand.map((c) => c.id)).toEqual(['d', 'v']); // untouched until resolved
+    expect(next.players[0].actionsRemaining).toBe(2); // spent on the press alone
+    expect(next.pendingShadyPress).toEqual({ pressId: 'p0', targetId: 'p1', perkCardId: 'pk', cards: [decoy, chosen] });
+  });
+
   it('Shady Press plays the chosen opponent Event card, not just the first one — for the presser', () => {
     const press = perk('pk', 'Shady Press', { source: 'BLACK_MARKET' });
     const decoy: ActionCard = { id: 'd', name: 'Lottery', description: '', type: 'EVENT' };
@@ -1966,13 +1980,15 @@ describe('gameReducer — remaining perks & events', () => {
       mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL'), money: 0, inventory: [press] }),
       mkPlayer({ id: 'p1', role: role('mayor', 'CIVILIAN'), money: 0, hand: [decoy, chosen] }),
     ]);
-    const next = gameReducer(s, { type: 'USE_PERK', perkId: 'pk', payload: { targetId: 'p1', cardId: 'v' } });
+    const pressed = gameReducer(s, { type: 'USE_PERK', perkId: 'pk', payload: { targetId: 'p1' } });
+    const next = gameReducer(pressed, { type: 'RESOLVE_SHADY_PRESS', cardId: 'v' });
     expect(next.players[1].hand.map((c) => c.id)).toEqual(['d']); // only the chosen card left their hand
     // Forced-play benefits the Criminal who used Shady Press, not the Civilian
     // who was forced to reveal it — same as Sheriff's Subpoena benefits the Sheriff.
     expect(next.players[0].money).toBe(1);
     expect(next.players[1].money).toBe(0);
-    expect(next.players[0].actionsRemaining).toBe(2);
+    expect(next.players[0].actionsRemaining).toBe(2); // unchanged by the resolve step — already spent on the press
+    expect(next.pendingShadyPress).toBeNull();
   });
 
   it("Shady Press gathers the forced Event's own target from the presser (Tax Collection)", () => {
@@ -1983,9 +1999,8 @@ describe('gameReducer — remaining perks & events', () => {
       mkPlayer({ id: 'p1', role: role('mayor', 'CIVILIAN'), hand: [evt] }), // supplies the card
       mkPlayer({ id: 'p2', role: role('sheriff', 'CIVILIAN'), money: 3 }), // p0's chosen tax target
     ]);
-    const next = gameReducer(s, {
-      type: 'USE_PERK', perkId: 'pk', payload: { targetId: 'p1', cardId: 'v', eventTargetId: 'p2' },
-    });
+    const pressed = gameReducer(s, { type: 'USE_PERK', perkId: 'pk', payload: { targetId: 'p1' } });
+    const next = gameReducer(pressed, { type: 'RESOLVE_SHADY_PRESS', cardId: 'v', eventTargetId: 'p2' });
     expect(next.players[1].hand).toHaveLength(0); // p1's card was spent
     expect(next.players[0].money).toBe(1); // p0 (the presser) collects the tax
     expect(next.players[2].money).toBe(2); // taxed from p2, the chosen target — not p1
@@ -1998,9 +2013,10 @@ describe('gameReducer — remaining perks & events', () => {
       mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL'), inventory: [press] }),
       mkPlayer({ id: 'p1', role: role('robber', 'CRIMINAL'), hand: [evt] }),
     ]);
-    const next = gameReducer(s, { type: 'USE_PERK', perkId: 'pk', payload: { targetId: 'p1', cardId: 'v' } });
+    const next = gameReducer(s, { type: 'USE_PERK', perkId: 'pk', payload: { targetId: 'p1' } });
     expect(next.players[1].hand).toHaveLength(1); // untouched
     expect(next.players[0].actionsRemaining).toBe(3); // action not spent
+    expect(next.pendingShadyPress).toBeNull();
   });
 
   it('Shady Press wastes the action when the target has no Event cards', () => {
@@ -2013,6 +2029,7 @@ describe('gameReducer — remaining perks & events', () => {
     const next = gameReducer(s, { type: 'USE_PERK', perkId: 'pk', payload: { targetId: 'p1' } });
     expect(next.players[1].hand).toHaveLength(1); // nothing happens to their hand
     expect(next.players[0].actionsRemaining).toBe(2); // but the action is still spent
+    expect(next.pendingShadyPress).toBeNull(); // nothing to resolve — already wasted
   });
 });
 

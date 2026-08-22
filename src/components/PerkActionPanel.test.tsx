@@ -72,7 +72,7 @@ describe('<PerkActionPanel />', () => {
     expect(screen.queryByText(/Expand Network/)).not.toBeInTheDocument();
   });
 
-  it('Shady Press: pick an opponent, then one of their (no-input) Event cards', () => {
+  it('Shady Press: press an opponent by name only — which of their Event cards to force is a separate step (see ShadyPressPanel)', () => {
     const onSubmit = vi.fn();
     const evt: ActionCard = { id: 'e1', name: 'Generational Wealth', description: '', type: 'EVENT' };
     const viewer = mkPlayer({ id: 'p0', name: 'Ana', team: 'CRIMINAL', inventory: [perk('sp', 'Shady Press')] });
@@ -80,64 +80,13 @@ describe('<PerkActionPanel />', () => {
     render(<PerkActionPanel state={stateWith([viewer, opponent])} viewerIndex={0} perkId="sp" onSubmit={onSubmit} onCancel={() => {}} />);
 
     expect(screen.getByText('Use').closest('button')).toBeDisabled();
-    fireEvent.click(screen.getByText('Ben'));
-    expect(screen.getByText('Use').closest('button')).toBeDisabled(); // still need a card choice
-    fireEvent.click(screen.getByText('Generational Wealth'));
-    fireEvent.click(screen.getByText('Use'));
-    expect(onSubmit).toHaveBeenCalledWith('sp', expect.objectContaining({ targetId: 'p1', cardId: 'e1' }));
-  });
-
-  it('Shady Press: a configurable Event opens its own follow-up, gathered from the presser', () => {
-    const onSubmit = vi.fn();
-    const evt: ActionCard = { id: 'e1', name: 'Tax Collection', description: '', type: 'EVENT' };
-    const viewer = mkPlayer({ id: 'p0', name: 'Ana', team: 'CRIMINAL', inventory: [perk('sp', 'Shady Press')] });
-    const victim = mkPlayer({ id: 'p1', name: 'Ben', team: 'CIVILIAN', hand: [evt] });
-    const taxable = mkPlayer({ id: 'p2', name: 'Cara', team: 'CIVILIAN', money: 3 });
-    render(
-      <PerkActionPanel state={stateWith([viewer, victim, taxable])} viewerIndex={0} perkId="sp" onSubmit={onSubmit} onCancel={() => {}} />,
-    );
-
-    fireEvent.click(screen.getByText('Ben'));
-    fireEvent.click(screen.getByText('Tax Collection'));
-
-    // Now Tax Collection's own follow-up appears, asking Ana (the presser) to
-    // choose who it taxes — not Ben, who merely supplied the card.
-    expect(screen.getByText('Play Tax Collection').closest('button')).toBeDisabled();
-    fireEvent.click(screen.getByText('Cara'));
-    fireEvent.click(screen.getByText('Play Tax Collection'));
-    expect(onSubmit).toHaveBeenCalledWith(
-      'sp',
-      expect.objectContaining({ targetId: 'p1', cardId: 'e1', eventTargetId: 'p2' }),
-    );
-  });
-
-  it('Shady Press: an opponent with no Event cards can still be confirmed (wastes the action)', () => {
-    const onSubmit = vi.fn();
-    const viewer = mkPlayer({ id: 'p0', name: 'Ana', team: 'CRIMINAL', inventory: [perk('sp', 'Shady Press')] });
-    const opponent = mkPlayer({ id: 'p1', name: 'Ben', team: 'CIVILIAN', hand: [money('m1')] });
-    render(<PerkActionPanel state={stateWith([viewer, opponent])} viewerIndex={0} perkId="sp" onSubmit={onSubmit} onCancel={() => {}} />);
-
+    // This client never inspects Ben's hand to decide what to show — in
+    // online play it would be redacted, and checking it here is exactly the
+    // bug that used to make Shady Press claim an opponent had no Event cards
+    // when they actually did.
+    expect(screen.queryByText('Generational Wealth')).not.toBeInTheDocument();
     fireEvent.click(screen.getByText('Ben'));
     fireEvent.click(screen.getByText('Use'));
-    expect(onSubmit).toHaveBeenCalledWith('sp', expect.objectContaining({ targetId: 'p1', cardId: undefined }));
-  });
-
-  it("Shady Press: the victim's only Event is Business Opportunity and the presser has nothing to sell — discards it instead of getting stuck", () => {
-    const onSubmit = vi.fn();
-    const evt: ActionCard = { id: 'e1', name: 'Business Opportunity', description: '', type: 'EVENT' };
-    const viewer = mkPlayer({ id: 'p0', name: 'Ana', team: 'CRIMINAL', inventory: [perk('sp', 'Shady Press')] }); // nothing else to sell
-    const victim = mkPlayer({ id: 'p1', name: 'Ben', team: 'CIVILIAN', hand: [evt] });
-    render(
-      <PerkActionPanel state={stateWith([viewer, victim])} viewerIndex={0} perkId="sp" onSubmit={onSubmit} onCancel={() => {}} />,
-    );
-
-    fireEvent.click(screen.getByText('Ben'));
-    fireEvent.click(screen.getByText('Business Opportunity'));
-
-    // No way to configure a sale (nothing sellable) — Play stays unreachable,
-    // but there's an explicit way forward instead of being stuck.
-    expect(screen.queryByRole('button', { name: /Play Business Opportunity/ })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText(/Discard Business Opportunity/));
-    expect(onSubmit).toHaveBeenCalledWith('sp', { targetId: 'p1', cardId: 'e1', eventTargetId: undefined, eventOptions: {} });
+    expect(onSubmit).toHaveBeenCalledWith('sp', { cardId: undefined, marketCardId: undefined, targetId: 'p1', discardForBonus: false });
   });
 });
