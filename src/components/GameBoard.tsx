@@ -277,10 +277,6 @@ export function GameBoard({
         <BodyguardSetupPanel state={state} viewerIndex={viewerIndex} onResolve={onResolveBodyguardSetup} />
       )}
 
-      {state.pendingThreaten && !state.combat && !state.winner && (
-        <ThreatenPanel state={state} viewerIndex={viewerIndex} onResolveThreaten={onResolveThreaten} />
-      )}
-
       {state.pendingSheriff && !state.combat && !state.winner && (
         <SheriffPanel state={state} viewerIndex={viewerIndex} onResolve={onResolveSheriff} />
       )}
@@ -378,6 +374,9 @@ export function GameBoard({
                   right under the viewer's own hand, rather than up at the top of
                   the page — this is their own decision, so it belongs next to the
                   hand they're making it from. */}
+              {state.pendingThreaten && !state.combat && !state.winner && (
+                <ThreatenPanel state={state} viewerIndex={viewerIndex} onResolveThreaten={onResolveThreaten} />
+              )}
               {targeting && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingRecyclingBin && !state.pendingGetawayCarGift && !state.pendingBribery && !state.winner && (
                 <TargetPicker state={state} viewerIndex={viewerIndex} mode={targeting} onSelectTarget={onSelectTarget} onCancel={onCancelTargeting} />
               )}
