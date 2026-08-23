@@ -78,21 +78,13 @@ describe('<MarketPickerPanel /> — Criminal', () => {
     expect(screen.getByText('Which Market?')).toBeInTheDocument();
   });
 
-  it('shows the Weakened Network surcharge on Expand Network for a captured Criminal', () => {
-    const viewer = mkPlayer({ id: 'p0', name: 'Ben', role: role('crime-lord', 'CRIMINAL'), money: 9, isCaptured: true });
-    const s = stateWith([viewer], { blackMarket: [expandNetwork] });
-    render(<MarketPickerPanel state={s} viewerIndex={0} onBuy={vi.fn()} onCancel={vi.fn()} />);
-    fireEvent.click(screen.getByText('Black Market'));
-    expect(screen.queryByText('Expand Network ($5)')).not.toBeInTheDocument();
-    expect(screen.getByText('Expand Network ($6)')).toBeInTheDocument();
-  });
-
-  it('shows the base price on Expand Network for a Criminal who is not captured', () => {
+  it('never lists Expand Network — it has its own dedicated Action button now, not the Buy picker', () => {
     const viewer = mkPlayer({ id: 'p0', name: 'Ben', role: role('crime-lord', 'CRIMINAL'), money: 9 });
-    const s = stateWith([viewer], { blackMarket: [expandNetwork] });
+    const s = stateWith([viewer], { blackMarket: [expandNetwork, pistol] });
     render(<MarketPickerPanel state={s} viewerIndex={0} onBuy={vi.fn()} onCancel={vi.fn()} />);
     fireEvent.click(screen.getByText('Black Market'));
-    expect(screen.getByText('Expand Network ($5)')).toBeInTheDocument();
+    expect(screen.queryByText(/Expand Network/)).not.toBeInTheDocument();
+    expect(screen.getByText('Pistol ($2)')).toBeInTheDocument(); // other Black Market items are unaffected
   });
 });
 

@@ -153,7 +153,7 @@ export function useBoardInteractions(
         break;
       case 'SPECIAL_GOAL':
         if (viewer?.team === 'CIVILIAN') setTargeting('expose');
-        else setNotice('Buy an Expand Network card from the Black Market to score a VP.');
+        else dispatch({ type: 'EXPAND_NETWORK' });
         break;
       case 'COMBAT':
         setTargeting('attack');

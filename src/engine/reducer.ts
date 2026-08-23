@@ -40,6 +40,7 @@ export type GameAction =
   | { type: 'CASH_IN_EVIDENCE'; cardId: string }
   | { type: 'PURCHASE'; cardId: string; coffeeRecipientId?: string }
   | { type: 'SELL'; cardId: string }
+  | { type: 'EXPAND_NETWORK' }
   | { type: 'EXPOSE'; targetId: string; evidenceChoices?: Partial<Record<EvidenceCategory, string>> }
   | { type: 'ATTACK'; targetId: string }
   | { type: 'PLAY_POWER'; cardId: string; side: CombatSide; byPlayerId?: string; mirrorTargetCardId?: string }
@@ -341,6 +342,8 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
       return purchase(state, idx, player, action.cardId, action.coffeeRecipientId);
     case 'SELL':
       return sellItem(state, idx, player, action.cardId);
+    case 'EXPAND_NETWORK':
+      return expandNetwork(state, idx, player);
     case 'EXPOSE':
       return expose(state, idx, player, action.targetId, action.evidenceChoices);
     case 'ATTACK':
@@ -822,10 +825,36 @@ function burnEvidence(state: GameState, idx: number, player: Player, cardId: str
 function purchase(state: GameState, idx: number, player: Player, cardId: string, coffeeRecipientId?: string): GameState {
   if (player.hasPurchasedFromMarket) return log(state, `${player.name} already bought this turn.`);
   if (player.actionsRemaining < 1) return log(state, `${player.name} has no actions left.`);
+  // Expand Network has its own dedicated Action (see expandNetwork/EXPAND_NETWORK)
+  // specifically so buying it doesn't consume the once-per-turn Buy — routing
+  // it through here instead would incorrectly block a separate Market purchase.
+  const target = [...state.publicMarket, ...state.blackMarket].find((c) => c.id === cardId);
+  if (target?.type === 'SPECIAL') {
+    return log(state, 'Buy Expand Network from its own Action button instead.');
+  }
   const { state: next, ok } = doPurchase(state, idx, player, cardId, {
     spendAction: true,
     setPurchaseFlag: true,
     coffeeRecipientId,
+  });
+  return ok ? next : log(state, next.gameLog[next.gameLog.length - 1] ?? 'Purchase failed.');
+}
+
+/**
+ * Buy the currently face-up Expand Network card directly (rulebook p.16) —
+ * its own Action button rather than a Black Market pick, so it never
+ * competes with (or gets blocked by) the once-per-turn Buy: setPurchaseFlag
+ * stays false, matching Crime Lord's Connections. doPurchase's own surcharge
+ * still applies the extra $1 for a captured buyer.
+ */
+function expandNetwork(state: GameState, idx: number, player: Player): GameState {
+  if (player.team !== 'CRIMINAL') return log(state, 'Only Criminals may buy Expand Network.');
+  if (player.actionsRemaining < 1) return log(state, `${player.name} has no actions left.`);
+  const card = state.blackMarket.find((c) => c.type === 'SPECIAL');
+  if (!card) return log(state, 'No Expand Network card is available.');
+  const { state: next, ok } = doPurchase(state, idx, player, card.id, {
+    spendAction: true,
+    setPurchaseFlag: false,
   });
   return ok ? next : log(state, next.gameLog[next.gameLog.length - 1] ?? 'Purchase failed.');
 }

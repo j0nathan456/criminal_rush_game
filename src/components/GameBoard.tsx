@@ -217,6 +217,13 @@ export function GameBoard({
   const maxActions = viewer ? actionsForTurn(viewer) : 0;
   const availability = viewer ? actionAvailability(state, viewerIndex) : {};
   const viewerNeighborIds = viewer ? neighborIds(state, viewerIndex) : [];
+  // The real price of buying Expand Network right now, for the Action button
+  // (see ActionBar) — mirrors doPurchase's own surcharge so the button never
+  // understates what a captured buyer will actually pay.
+  const expandNetworkCard = state.blackMarket.find((c) => c.type === 'SPECIAL');
+  const expandNetworkCost = expandNetworkCard
+    ? expandNetworkCard.cost + (viewer?.isCaptured ? 1 : 0)
+    : undefined;
 
   return (
     <div className="flex min-h-screen flex-col gap-2 p-3">
@@ -474,6 +481,7 @@ export function GameBoard({
                 player={viewer}
                 maxActions={maxActions}
                 availability={availability}
+                expandNetworkCost={expandNetworkCost}
                 onAction={isViewersTurn ? onAction : undefined}
                 onEndTurn={isViewersTurn ? onEndTurn : undefined}
               />

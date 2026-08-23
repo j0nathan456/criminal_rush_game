@@ -106,9 +106,35 @@ describe('actionAvailability — Expose (SPECIAL_GOAL)', () => {
     expect(goal?.reason).toMatch(/no criminal left/i);
   });
 
-  it('is always available for Criminals (Expand Network guidance)', () => {
-    const s = stateWith([mkPlayer({ id: 'p0', role: role('boss', 'CRIMINAL') })]);
+  const expandNetwork: MarketCard = { id: 'en', name: 'Expand Network', description: '', type: 'SPECIAL', cost: 5, source: 'BLACK_MARKET', vpValue: 1 };
+
+  it('is enabled for a Criminal who can afford the current Expand Network price', () => {
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('boss', 'CRIMINAL'), money: 5 })], { blackMarket: [expandNetwork] });
     expect(actionAvailability(s, 0).SPECIAL_GOAL).toEqual({ enabled: true });
+  });
+
+  it('is disabled when no Expand Network card is currently available', () => {
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('boss', 'CRIMINAL'), money: 99 })], { blackMarket: [] });
+    const goal = actionAvailability(s, 0).SPECIAL_GOAL;
+    expect(goal?.enabled).toBe(false);
+    expect(goal?.reason).toMatch(/no expand network/i);
+  });
+
+  it('is disabled for a Criminal who cannot afford it', () => {
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('boss', 'CRIMINAL'), money: 4 })], { blackMarket: [expandNetwork] });
+    const goal = actionAvailability(s, 0).SPECIAL_GOAL;
+    expect(goal?.enabled).toBe(false);
+    expect(goal?.reason).toMatch(/not enough money.*\$5/i);
+  });
+
+  it('folds in the captured Weakened Network surcharge before checking affordability', () => {
+    const s = stateWith(
+      [mkPlayer({ id: 'p0', role: role('boss', 'CRIMINAL'), money: 5, isCaptured: true })],
+      { blackMarket: [expandNetwork] },
+    );
+    const goal = actionAvailability(s, 0).SPECIAL_GOAL;
+    expect(goal?.enabled).toBe(false);
+    expect(goal?.reason).toMatch(/not enough money.*\$6/i); // $5 base + $1 captured
   });
 });
 

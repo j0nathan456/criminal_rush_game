@@ -89,7 +89,11 @@ export function MarketPickerPanel({ state, viewerIndex, onBuy, onCancel }: Marke
     );
   }
 
-  const cards: MarketCard[] = source === 'black' ? state.blackMarket : state.publicMarket;
+  // Expand Network has its own dedicated Action button (see ActionBar) —
+  // buying it here would incorrectly cost the once-per-turn Buy too.
+  const cards: MarketCard[] = source === 'black'
+    ? state.blackMarket.filter((c) => c.type !== 'SPECIAL')
+    : state.publicMarket;
   const title = source === 'black' ? 'Black Market' : 'Market';
 
   return (

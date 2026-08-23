@@ -244,13 +244,14 @@ describe('gameReducer — PURCHASE', () => {
     expect(next.publicMarket).toHaveLength(0);
   });
 
-  it('scores a VP when a Criminal buys Expand Network', () => {
+  it('refuses to sell Expand Network — it has its own dedicated Action now', () => {
     const expand: MarketCard = { id: 'en', name: 'Expand Network', description: '', cost: 5, source: 'BLACK_MARKET', type: 'SPECIAL', vpValue: 1 };
     const s = stateWith([mkPlayer({ id: 'p0', role: role('crime-lord', 'CRIMINAL'), money: 6 })], { blackMarket: [expand] });
 
     const next = gameReducer(s, { type: 'PURCHASE', cardId: 'en' });
-    expect(next.teamScores.CRIMINAL).toBe(1);
-    expect(next.players[0].money).toBe(1);
+    expect(next.players[0].inventory).toHaveLength(0); // not bought
+    expect(next.players[0].money).toBe(6); // untouched
+    expect(next.teamScores.CRIMINAL).toBe(0);
   });
 
   it('refills the bought public-market slot from the deck', () => {
@@ -264,20 +265,6 @@ describe('gameReducer — PURCHASE', () => {
     const next = gameReducer(s, { type: 'PURCHASE', cardId: 'm1' });
     expect(next.publicMarket.map((c) => c.id)).toEqual(['m2']);
     expect(next.publicMarketDeck).toHaveLength(0);
-  });
-
-  it('brings out the next (pricier) Expand Network after one is bought', () => {
-    const en0: MarketCard = { id: 'en0', name: 'Expand Network', description: '', cost: 5, source: 'BLACK_MARKET', type: 'SPECIAL', vpValue: 1 };
-    const en1: MarketCard = { id: 'en1', name: 'Expand Network', description: '', cost: 6, source: 'BLACK_MARKET', type: 'SPECIAL', vpValue: 1 };
-    const s = stateWith([mkPlayer({ id: 'p0', role: role('crime-lord', 'CRIMINAL'), money: 9 })], {
-      blackMarket: [en0],
-      expandNetworkPile: [en1],
-    });
-
-    const next = gameReducer(s, { type: 'PURCHASE', cardId: 'en0' });
-    expect(next.blackMarket.filter((c) => c.type === 'SPECIAL')).toHaveLength(1);
-    expect(next.blackMarket.find((c) => c.type === 'SPECIAL')?.cost).toBe(6);
-    expect(next.expandNetworkPile).toHaveLength(0);
   });
 
   describe('Coffee Machine', () => {
@@ -315,6 +302,59 @@ describe('gameReducer — PURCHASE', () => {
       expect(next.players[0].coffeeToken).toBe(true);
       expect(next.players[1].coffeeToken).toBeUndefined();
     });
+  });
+});
+
+describe('gameReducer — EXPAND_NETWORK', () => {
+  const expand: MarketCard = { id: 'en', name: 'Expand Network', description: '', cost: 5, source: 'BLACK_MARKET', type: 'SPECIAL', vpValue: 1 };
+
+  it('buys the face-up Expand Network and scores a VP for a Criminal', () => {
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('crime-lord', 'CRIMINAL'), money: 6 })], { blackMarket: [expand] });
+    const next = gameReducer(s, { type: 'EXPAND_NETWORK' });
+    expect(next.teamScores.CRIMINAL).toBe(1);
+    expect(next.players[0].money).toBe(1);
+    expect(next.players[0].actionsRemaining).toBe(2);
+  });
+
+  it('does not set hasPurchasedFromMarket — a separate Buy stays available the same turn', () => {
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('crime-lord', 'CRIMINAL'), money: 6 })], { blackMarket: [expand] });
+    const next = gameReducer(s, { type: 'EXPAND_NETWORK' });
+    expect(next.players[0].hasPurchasedFromMarket).toBe(false);
+  });
+
+  it('charges $1 more once the buyer is captured (Weakened Network)', () => {
+    const s = stateWith(
+      [mkPlayer({ id: 'p0', role: role('crime-lord', 'CRIMINAL'), money: 6, isCaptured: true })],
+      { blackMarket: [expand] },
+    );
+    const next = gameReducer(s, { type: 'EXPAND_NETWORK' });
+    expect(next.players[0].money).toBe(0); // 6 - (5 + 1)
+  });
+
+  it('brings out the next (pricier) Expand Network after one is bought', () => {
+    const en0: MarketCard = { id: 'en0', name: 'Expand Network', description: '', cost: 5, source: 'BLACK_MARKET', type: 'SPECIAL', vpValue: 1 };
+    const en1: MarketCard = { id: 'en1', name: 'Expand Network', description: '', cost: 6, source: 'BLACK_MARKET', type: 'SPECIAL', vpValue: 1 };
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('crime-lord', 'CRIMINAL'), money: 9 })], {
+      blackMarket: [en0],
+      expandNetworkPile: [en1],
+    });
+
+    const next = gameReducer(s, { type: 'EXPAND_NETWORK' });
+    expect(next.blackMarket.filter((c) => c.type === 'SPECIAL')).toHaveLength(1);
+    expect(next.blackMarket.find((c) => c.type === 'SPECIAL')?.cost).toBe(6);
+    expect(next.expandNetworkPile).toHaveLength(0);
+  });
+
+  it('refuses a Civilian', () => {
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 6 })], { blackMarket: [expand] });
+    const next = gameReducer(s, { type: 'EXPAND_NETWORK' });
+    expect(next.players[0].money).toBe(6);
+  });
+
+  it('refuses when no Expand Network card is available', () => {
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('crime-lord', 'CRIMINAL'), money: 6 })], { blackMarket: [] });
+    const next = gameReducer(s, { type: 'EXPAND_NETWORK' });
+    expect(next.players[0].actionsRemaining).toBe(3); // action not spent
   });
 });
 

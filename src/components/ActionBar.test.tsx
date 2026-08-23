@@ -29,12 +29,21 @@ describe('<ActionBar />', () => {
     expect(screen.queryByText('Expose')).not.toBeInTheDocument();
   });
 
-  it('flags the $1 Weakened Network surcharge on Expand Network only once captured', () => {
-    const { rerender } = render(<ActionBar player={makePlayer('CRIMINAL', 3)} onAction={() => {}} />);
-    expect(screen.queryByText(/\+\$1 more/)).not.toBeInTheDocument();
+  it('shows the real Expand Network price on the button — clicking it buys immediately, no picker to show it in', () => {
+    render(<ActionBar player={makePlayer('CRIMINAL', 3)} expandNetworkCost={5} onAction={() => {}} />);
+    expect(screen.getByText('Expand Network ($5)')).toBeInTheDocument();
+  });
 
-    rerender(<ActionBar player={{ ...makePlayer('CRIMINAL', 3), isCaptured: true }} onAction={() => {}} />);
-    expect(screen.getByText(/\+\$1 more/)).toBeInTheDocument();
+  it('folds the $1 Weakened Network surcharge into that same price once captured, not a separate note', () => {
+    const captured = { ...makePlayer('CRIMINAL', 3), isCaptured: true };
+    render(<ActionBar player={captured} expandNetworkCost={6} onAction={() => {}} />);
+    expect(screen.getByText('Expand Network ($6)')).toBeInTheDocument();
+    expect(screen.queryByText(/\+\$1 more/)).not.toBeInTheDocument();
+  });
+
+  it('falls back to the plain label when no Expand Network card is available to price', () => {
+    render(<ActionBar player={makePlayer('CRIMINAL', 3)} onAction={() => {}} />); // expandNetworkCost omitted
+    expect(screen.getByText('Expand Network')).toBeInTheDocument();
   });
 
   it('flags the +1 AP Traffic token surcharge on Trade only while snarled', () => {

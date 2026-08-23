@@ -98,7 +98,8 @@ export function actionAvailability(
   }
 
   // SPECIAL_GOAL: Civilians Expose (needs a full grid + a Criminal), Criminals
-  // Expand Network (guidance to buy — always offered, only AP-gated).
+  // Expand Network (buys the currently face-up copy directly — needs one
+  // available and affordable, same as any other purchase).
   if (player.team === 'CIVILIAN') {
     if (!isGridComplete(state.evidenceGrid)) {
       availability.SPECIAL_GOAL = { enabled: false, reason: 'Evidence grid is not full.' };
@@ -108,7 +109,15 @@ export function actionAvailability(
       availability.SPECIAL_GOAL = { enabled: true };
     }
   } else {
-    availability.SPECIAL_GOAL = { enabled: true };
+    const card = state.blackMarket.find((c) => c.type === 'SPECIAL');
+    if (!card) {
+      availability.SPECIAL_GOAL = { enabled: false, reason: 'No Expand Network card is available.' };
+    } else {
+      const cost = card.cost + (player.isCaptured ? 1 : 0);
+      availability.SPECIAL_GOAL = player.money >= cost
+        ? { enabled: true }
+        : { enabled: false, reason: `Not enough money (needs $${cost}).` };
+    }
   }
 
   return availability;

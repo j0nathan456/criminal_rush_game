@@ -14,6 +14,13 @@ interface ActionBarProps {
   maxActions?: number;
   /** Per-action legality from the engine; missing entries are treated as enabled. */
   availability?: Partial<Record<PlayerActionType, ActionAvailability>>;
+  /**
+   * The actual price of buying Expand Network right now — the current
+   * face-up copy's cost plus $1 if `player` is captured (Weakened Network) —
+   * or undefined if none is available to buy. Shown directly on the button
+   * since clicking it buys immediately, with no picker to show the price in.
+   */
+  expandNetworkCost?: number;
   onAction?: (action: ActionMeta) => void;
   onEndTurn?: () => void;
 }
@@ -47,7 +54,7 @@ function Pips({ total, filled, color }: { total: number; filled: number; color: 
  * Action to spend a point on — its ability triggers automatically — so Role
  * Action is omitted entirely rather than shown as a live, costed option.
  */
-export function ActionBar({ player, maxActions = BASE_ACTIONS_PER_TURN, availability = {}, onAction, onEndTurn }: ActionBarProps) {
+export function ActionBar({ player, maxActions = BASE_ACTIONS_PER_TURN, availability = {}, expandNetworkCost, onAction, onEndTurn }: ActionBarProps) {
   const [confirmEndTurn, setConfirmEndTurn] = useState(false);
   const actions = TURN_ACTIONS.filter(
     (a) => (!a.team || a.team === player.team) && (a.type !== 'ROLE_ABILITY' || !PASSIVE_ROLES.has(player.role.id)),
@@ -99,23 +106,24 @@ export function ActionBar({ player, maxActions = BASE_ACTIONS_PER_TURN, availabi
 
           // ROLE_ABILITY names the player's actual ability instead of a generic label.
           const isRole = action.type === 'ROLE_ABILITY';
-          const label = isRole ? player.role.abilityName || action.label : action.label;
+          // Expand Network buys immediately on click (no picker) — the button
+          // shows the real price (current face-up copy + $1 if captured, per
+          // doPurchase's own Weakened Network surcharge) right on its label.
+          const isExpandNetwork = action.type === 'SPECIAL_GOAL' && action.team === 'CRIMINAL';
+          const label = isRole
+            ? player.role.abilityName || action.label
+            : isExpandNetwork && expandNetworkCost !== undefined
+              ? `${action.label} ($${expandNetworkCost})`
+              : action.label;
           const description = isRole ? player.role.abilityDescription : undefined;
 
-          // Weakened Network (rulebook p.16): a captured Criminal pays $1 more
-          // for Expand Network — worth calling out on the button itself, not
-          // just in the hover tooltip, since it only applies once captured.
-          const isExpandNetwork = action.type === 'SPECIAL_GOAL' && action.team === 'CRIMINAL';
           // Traffic Jam: a Traffic token snarls its holder's own trades by +1
           // action, whichever side of the trade they end up on. Only the
           // player's own token is knowable before a teammate is even chosen,
           // so a token on the *other* party shows up in the Trade panel itself
           // once that teammate is picked, not here.
           const isTrade = action.type === 'TRADE';
-          const surchargeNote =
-            isExpandNetwork && player.isCaptured ? '+$1 more — captured (Weakened Network)'
-            : isTrade && player.trafficToken ? '+1 AP more — Traffic token'
-            : undefined;
+          const surchargeNote = isTrade && player.trafficToken ? '+1 AP more — Traffic token' : undefined;
 
           const baseTitle = !legal.enabled && legal.reason
             ? `${label} — ${legal.reason}`
