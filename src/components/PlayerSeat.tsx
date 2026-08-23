@@ -31,6 +31,11 @@ const POPOVER_HEIGHT_ESTIMATE = 280;
 export function PlayerSeat({ player, active, isSelf, isNeighbor, targetable, onClick }: PlayerSeatProps) {
   const [open, setOpen] = useState(false);
   const [openUpward, setOpenUpward] = useState(false);
+  // The seat's own bounding box at the moment it was opened — the popover is
+  // portaled to <body> (see below) so it needs fixed coordinates of its own
+  // rather than `absolute` positioning relative to its (possibly
+  // backdrop-blurred) ancestor.
+  const [anchor, setAnchor] = useState<{ left: number; top: number; bottom: number } | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const meta = TEAM_META[player.team];
   const statuses = (Object.keys(STATUS_META) as StatusKey[]).filter((k) => player[k]);
@@ -48,7 +53,10 @@ export function PlayerSeat({ player, active, isSelf, isNeighbor, targetable, onC
     // last few seats in a long roster) so it never gets clipped off-screen.
     if (!open) {
       const rect = buttonRef.current?.getBoundingClientRect();
-      setOpenUpward(Boolean(rect) && window.innerHeight - rect!.bottom < POPOVER_HEIGHT_ESTIMATE);
+      if (rect) {
+        setAnchor({ left: rect.left, top: rect.top, bottom: rect.bottom });
+        setOpenUpward(window.innerHeight - rect.bottom < POPOVER_HEIGHT_ESTIMATE);
+      }
     }
     setOpen((o) => !o);
   };
@@ -106,29 +114,43 @@ export function PlayerSeat({ player, active, isSelf, isNeighbor, targetable, onC
       </motion.button>
 
       <AnimatePresence>
-        {open && !selectsTarget && (
+        {/* AnimatePresence needs a plain element as its direct child to track
+            for exit animations — a Portal object fails `isValidElement` and
+            gets silently dropped — so the portal call is nested one level
+            inside this Fragment; motion.div's exit prop still works from
+            there since Framer Motion's presence context flows through
+            portals like any other React context. */}
+        {open && !selectsTarget && anchor && (
+          <>{createPortal(
           <>
-            {/* Click-away backdrop, portaled to <body>: the Roster panel (like
-                most panels) sits under a backdrop-blur ancestor, which — like
-                `filter` — creates a new containing block for `position:
-                fixed`. Left in place, this "fixed" catcher would actually
-                track the panel's box instead of the viewport, so scrolling
-                the roster (more likely with a full 8-player table) could
-                leave clicks outside the shifted catcher not closing the
-                popover. The popover itself stays a normal child below —
-                it's meant to be positioned relative to its own seat. */}
-            {createPortal(
-              <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden="true" />,
-              document.body,
-            )}
+            {/* Click-away backdrop, portaled to <body> along with the popover
+                itself: the Roster panel (like most panels) sits under a
+                backdrop-blur ancestor, which — like `filter` — creates a new
+                containing block for `position: fixed`. Previously only the
+                backdrop was portaled while the popover stayed put — the
+                backdrop then painted as a late document.body sibling, on top
+                of the un-portaled popover regardless of z-index, silently
+                swallowing hover/click on the perk/weapon tooltips inside it.
+                Portaling both together keeps them in the same stacking
+                context so z-40/z-50 actually order them correctly, and the
+                popover now needs `anchor` (captured on open) for its own
+                fixed coordinates instead of `absolute` positioning relative
+                to its (blurred) ancestor. */}
+            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden="true" />
             <motion.div
               initial={{ opacity: 0, y: -4, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -4, scale: 0.98 }}
               transition={{ duration: 0.12 }}
-              style={{ borderLeftColor: meta.color }}
-              className={`absolute left-0 z-50 w-60 rounded-xl border border-l-4 border-line bg-panel p-3 shadow-noir
-                ${openUpward ? 'bottom-full mb-1' : 'top-full mt-1'}`}
+              style={{
+                borderLeftColor: meta.color,
+                position: 'fixed',
+                left: anchor.left,
+                ...(openUpward
+                  ? { bottom: window.innerHeight - anchor.top + 4 }
+                  : { top: anchor.bottom + 4 }),
+              }}
+              className="z-50 w-60 rounded-xl border border-l-4 border-line bg-panel p-3 shadow-noir"
             >
               <div className="flex items-baseline justify-between">
                 <span className="font-extrabold" style={{ color: meta.color }}>{player.name}</span>
@@ -200,7 +222,9 @@ export function PlayerSeat({ player, active, isSelf, isNeighbor, targetable, onC
                 </div>
               </div>
             </motion.div>
-          </>
+          </>,
+          document.body,
+          )}</>
         )}
       </AnimatePresence>
     </div>

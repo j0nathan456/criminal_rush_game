@@ -63,9 +63,11 @@ describe('<Roster /> at the 8-player max', () => {
       />,
     );
     fireEvent.click(screen.getByTitle('Hal — details')); // the last (8th) seat
-    const popover = screen.getByText('Hal', { selector: 'span.font-extrabold' }).closest('div.absolute');
-    expect(popover).toHaveClass('bottom-full');
-    expect(popover).not.toHaveClass('top-full');
+    // Portaled to <body> with fixed coordinates rather than the old
+    // `absolute` + top-full/bottom-full classes (see PlayerSeat.tsx).
+    const popover = screen.getByText('Hal', { selector: 'span.font-extrabold' }).closest('div.shadow-noir') as HTMLElement;
+    expect(popover.style.bottom).toBe('64px'); // viewport height (800) - stubbed button top (740) + 4
+    expect(popover.style.top).toBe('');
 
     vi.restoreAllMocks();
   });

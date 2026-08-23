@@ -32,9 +32,11 @@ describe('<PlayerSeat />', () => {
     render(<PlayerSeat player={player} />);
 
     fireEvent.click(screen.getByTitle('Ana — details'));
-    const popover = screen.getByText('Ana', { selector: 'span.font-extrabold' }).closest('div.absolute');
-    expect(popover).toHaveClass('top-full');
-    expect(popover).not.toHaveClass('bottom-full');
+    // Portaled to <body> with fixed coordinates (see the anchor-tracking
+    // fix) rather than the old `absolute` + top-full/bottom-full classes.
+    const popover = screen.getByText('Ana', { selector: 'span.font-extrabold' }).closest('div.shadow-noir') as HTMLElement;
+    expect(popover.style.top).toBe('104px'); // stubbed button bottom (100) + 4
+    expect(popover.style.bottom).toBe('');
   });
 
   it('flips the popover above the seat when opening below would run off the bottom of the viewport', () => {
@@ -44,9 +46,9 @@ describe('<PlayerSeat />', () => {
     render(<PlayerSeat player={player} />);
 
     fireEvent.click(screen.getByTitle('Ana — details'));
-    const popover = screen.getByText('Ana', { selector: 'span.font-extrabold' }).closest('div.absolute');
-    expect(popover).toHaveClass('bottom-full');
-    expect(popover).not.toHaveClass('top-full');
+    const popover = screen.getByText('Ana', { selector: 'span.font-extrabold' }).closest('div.shadow-noir') as HTMLElement;
+    expect(popover.style.bottom).toBe('64px'); // viewport height (800) - stubbed button top (740) + 4
+    expect(popover.style.top).toBe('');
   });
 
   it("gives every perk/weapon in another player's inventory the same name-plus-description tooltip a viewer gets on their own", () => {
