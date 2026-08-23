@@ -286,17 +286,22 @@ describe('powerCardEligible', () => {
     expect(powerCardEligible(pow('ua', 'Unexpected Allies', 2), enemy, combatant, 'ATTACKER', []).enabled).toBe(false); // not even a teammate
   });
 
-  it('lets the active Bodyguard play any Power card for their protected teammate', () => {
+  it('lets the active Bodyguard play any Power card for their protected teammate while defending', () => {
     const protectedCombatant = { ...combatant, hasBodyguardToken: true };
-    expect(powerCardEligible(pow('b', 'Boost', 1), bodyguard, protectedCombatant, 'ATTACKER', []).enabled).toBe(true);
+    expect(powerCardEligible(pow('b', 'Boost', 1), bodyguard, protectedCombatant, 'DEFENDER', []).enabled).toBe(true);
     // Not protecting anyone right now — the token matters, not just the role.
-    expect(powerCardEligible(pow('b', 'Boost', 1), bodyguard, combatant, 'ATTACKER', []).enabled).toBe(false);
+    expect(powerCardEligible(pow('b', 'Boost', 1), bodyguard, combatant, 'DEFENDER', []).enabled).toBe(false);
+  });
+
+  it('refuses the Bodyguard from playing Power cards for their protected teammate while attacking — Protection is defense-only', () => {
+    const protectedCombatant = { ...combatant, hasBodyguardToken: true };
+    expect(powerCardEligible(pow('b', 'Boost', 1), bodyguard, protectedCombatant, 'ATTACKER', []).enabled).toBe(false);
   });
 
   it('refuses an injured Bodyguard from playing Power cards for their protected teammate', () => {
     const protectedCombatant = { ...combatant, hasBodyguardToken: true };
     const injuredBodyguard = { ...bodyguard, isInjured: true };
-    expect(powerCardEligible(pow('b', 'Boost', 1), injuredBodyguard, protectedCombatant, 'ATTACKER', []).enabled).toBe(false);
+    expect(powerCardEligible(pow('b', 'Boost', 1), injuredBodyguard, protectedCombatant, 'DEFENDER', []).enabled).toBe(false);
   });
 
   it('refuses Shield on offence', () => {
@@ -1185,6 +1190,44 @@ describe('interactive combat — Missile/Molotov destroy-perk (AFTER phase)', ()
     next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'DESTROY_PERK', perkId: 'r1' } });
     expect(next.players[1].inventory).toHaveLength(0);
     expect(next.players[1].money).toBe(3); // 1 + Radio's $2 cost refunded
+  });
+
+  it('an attacker still triggers their Molotov even when they lose the combat — no "if you win" clause', () => {
+    const atk = mkPlayer({
+      id: 'a', role: role('boss', 'CRIMINAL', 1), inventory: [wpn('mol', 'Molotov Cocktail', 'RANGED', 2)],
+    });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 5), inventory: [perk('r1', 'Radio')] });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+
+    // Attacker base 1 + 2 (Molotov) = 3 vs defender base 5 → the attack fails.
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'ATTACKER' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'DEFENDER' });
+    expect(next.combat!.pending[0]).toEqual({ kind: 'DESTROY_PERK', playerId: 'a', targetId: 'd', weaponName: 'Molotov Cocktail', side: 'ATTACKER' });
+
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'DESTROY_PERK', perkId: 'r1' } });
+    expect(next.players[1].inventory).toHaveLength(0); // the defender's Radio, destroyed despite the attacker losing
+    expect(next.combat).toBeNull();
+  });
+
+  it('a defender still triggers their Molotov even when they lose the combat (get injured)', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 5) });
+    const def = mkPlayer({
+      id: 'd', role: role('mayor', 'CIVILIAN', 1), inventory: [wpn('mol', 'Molotov Cocktail', 'RANGED', 2)],
+    });
+    const atkWithPerk = { ...atk, inventory: [perk('r1', 'Radio')] };
+    const s = stateWith([atkWithPerk, def], { currentPlayerIndex: 0 });
+
+    // Attacker base 5 vs defender base 1 + 2 (Molotov) = 3 → the attack succeeds.
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'ATTACKER' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'DEFENDER' });
+    expect(next.combat!.pending[0]).toEqual({ kind: 'DESTROY_PERK', playerId: 'd', targetId: 'a', weaponName: 'Molotov Cocktail', side: 'DEFENDER' });
+
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'DESTROY_PERK', perkId: 'r1' } });
+    expect(next.players[0].inventory).toHaveLength(0); // the attacker's Radio, destroyed
+    expect(next.players[1].isInjured).toBe(true); // the defender still lost the fight
+    expect(next.combat).toBeNull();
   });
 
   it('Mutants copying an opponent’s Missile also queues a destroy-perk choice', () => {

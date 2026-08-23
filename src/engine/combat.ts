@@ -13,7 +13,7 @@
  */
 
 import type {
-  GameState, Player, CombatSide, CombatState, PlayedPowerCard, CombatChoice, CombatChoiceInput,
+  GameState, Player, CombatSide, CombatState, CombatParticipant, PlayedPowerCard, CombatChoice, CombatChoiceInput,
 } from '../types/game.js';
 import type { ActionCard, MarketCard, WeaponType } from '../types/cards.js';
 import { applyScore, log, neighborIds, playerIndexById, updatePlayer } from './rules.js';
@@ -644,6 +644,9 @@ export function powerCardEligible(
     if (!isBodyguard) {
       return { enabled: false, reason: 'Only the combatant (or their Bodyguard) may play that Power card for this side.' };
     }
+    if (side !== 'DEFENDER') {
+      return { enabled: false, reason: 'The Bodyguard may only play Power cards while protecting a defender.' };
+    }
     if (by.isInjured) {
       return { enabled: false, reason: 'The Bodyguard is injured and cannot play Power cards until they heal.' };
     }
@@ -685,27 +688,48 @@ export function powerCardValue(
 // --- Resolution --------------------------------------------------------------
 
 /**
- * Missile/Molotov Cocktail choices to queue for the winner: one per weapon
- * that triggers it (literally held, or copied via Mutants — copiedWeaponName
- * is set the same way for either), each letting the winner pick which of the
- * loser's perks to destroy. Skipped entirely (no queued choice at all) when
- * the loser has no perk to destroy.
+ * Missile choices to queue for the winner: one per Missile the winner holds
+ * (literally, or copied via Mutants — copiedWeaponName is set the same way
+ * for either), each letting the winner pick which of the loser's perks to
+ * destroy. Win-conditional per the card's own text ("If you win with this…").
+ * Skipped entirely (no queued choice at all) when the loser has no perk.
  */
-function queueDestroyPerkChoices(combat: CombatState, winner: Player, loser: Player, winnerSide: CombatSide): CombatChoice[] {
+function queueMissileChoice(combat: CombatState, winner: Player, loser: Player, winnerSide: CombatSide): CombatChoice[] {
   if (!loser.inventory.some((c) => c.type === 'PERK')) return [];
-  const triggers: Array<'Missile' | 'Molotov Cocktail'> = [];
+  const triggers: 'Missile'[] = [];
   for (const weapon of weaponsOf(winner)) {
-    if (weapon.name === 'Missile' || weapon.name === 'Molotov Cocktail') triggers.push(weapon.name);
+    if (weapon.name === 'Missile') triggers.push('Missile');
   }
   const part = winnerSide === 'ATTACKER' ? combat.attacker : combat.defender;
-  if (part.copiedWeaponName === 'Missile' || part.copiedWeaponName === 'Molotov Cocktail') {
-    triggers.push(part.copiedWeaponName);
-  }
+  if (part.copiedWeaponName === 'Missile') triggers.push('Missile');
   return triggers.map((weaponName) => ({ kind: 'DESTROY_PERK' as const, playerId: winner.id, targetId: loser.id, weaponName, side: winnerSide }));
 }
 
 /**
- * Resolve one queued Missile/Molotov destroy-choice (see queueDestroyPerkChoices).
+ * Molotov Cocktail choices to queue for BOTH sides, independent of who won —
+ * unlike Missile, its card text has no "if you win" clause ("After combat,
+ * destroy one of the opponent's perks"), so a holder gets to destroy a perk
+ * even while defending and even after losing. Skipped per-side when that
+ * side's opponent has no perk to destroy.
+ */
+function queueMolotovChoices(combat: CombatState, attacker: Player, defender: Player): CombatChoice[] {
+  const sides: Array<{ self: Player; opponent: Player; side: CombatSide; part: CombatParticipant }> = [
+    { self: attacker, opponent: defender, side: 'ATTACKER', part: combat.attacker },
+    { self: defender, opponent: attacker, side: 'DEFENDER', part: combat.defender },
+  ];
+  const choices: CombatChoice[] = [];
+  for (const { self, opponent, side, part } of sides) {
+    if (!opponent.inventory.some((c) => c.type === 'PERK')) continue;
+    const holdsMolotov = weaponsOf(self).some((w) => w.name === 'Molotov Cocktail') || part.copiedWeaponName === 'Molotov Cocktail';
+    if (holdsMolotov) {
+      choices.push({ kind: 'DESTROY_PERK', playerId: self.id, targetId: opponent.id, weaponName: 'Molotov Cocktail', side });
+    }
+  }
+  return choices;
+}
+
+/**
+ * Resolve one queued Missile/Molotov destroy-choice (see queueMissileChoice/queueMolotovChoices).
  * Mandatory, like Pistol's discard — no skip variant, since the effect isn't
  * optional, only which perk is. Molotov additionally refunds a Civilian
  * victim the destroyed perk's cost.
@@ -781,7 +805,7 @@ function injureAndMaybeLeaveEvidence(state: GameState, combat: CombatState, defe
 }
 
 /**
- * Splice any queued destroy-perk choices (see queueDestroyPerkChoices) in
+ * Splice any queued destroy-perk choices (see queueMissileChoice/queueMolotovChoices) in
  * front of whatever AFTER-phase result the caller already computed —
  * `result.combat` is either null (fight closes) or already carries its own
  * pending item (Triage, Leaving Evidence). Both cases just gain a new front.
@@ -812,13 +836,18 @@ export function resolveCombat(state: GameState): GameState {
   // AFTER-phase choice — destroy-perk, Triage, then Leaving Evidence) at the end.
   let s: GameState = log(state, `Combat resolves — ${attacker.name}: ${atkTotal} vs ${defender.name}: ${defTotal}.`);
 
+  // Molotov fires for either side regardless of the outcome (see
+  // queueMolotovChoices) — computed once, up front, then merged into
+  // whichever branch below closes the fight.
+  const molotovChoices = queueMolotovChoices(combat, attacker, defender);
+
   if (!attackerWins) {
     s = log(s, `${attacker.name}'s attack fails.`);
     s = applyVirusTokens(s, attacker, defender);
     // A repelling defender "wins" this combat too — their own (or a
-    // Mutants-copied) Missile/Molotov Cocktail still destroys a perk, same
-    // as an attacker's win, just with the roles reversed.
-    const destroyChoices = queueDestroyPerkChoices(combat, defender, attacker, 'DEFENDER');
+    // Mutants-copied) Missile still destroys a perk, same as an attacker's
+    // win, just with the roles reversed.
+    const destroyChoices = [...queueMissileChoice(combat, defender, attacker, 'DEFENDER'), ...molotovChoices];
     return withPendingPrefix(combat, destroyChoices, { ...s, combat: null });
   }
 
@@ -828,13 +857,13 @@ export function resolveCombat(state: GameState): GameState {
     s = updatePlayer(s, defIdx, (p) => ({ ...p, isCaptured: true, isExposed: false }));
     s = applyScore(s, 'CIVILIAN', 1, `${attacker.name} captures ${defender.name}! Civilians score a VP.`);
     s = applyVirusTokens(s, attacker, defender);
-    const destroyChoices = queueDestroyPerkChoices(combat, attacker, defender, 'ATTACKER');
+    const destroyChoices = [...queueMissileChoice(combat, attacker, defender, 'ATTACKER'), ...molotovChoices];
     return withPendingPrefix(combat, destroyChoices, { ...s, combat: null });
   }
 
   s = applyScore(s, 'CRIMINAL', 1, `${attacker.name} defeats ${defender.name}! Criminals score a VP.`);
   s = applyVirusTokens(s, attacker, defender);
-  const destroyChoices = queueDestroyPerkChoices(combat, attacker, defender, 'ATTACKER');
+  const destroyChoices = [...queueMissileChoice(combat, attacker, defender, 'ATTACKER'), ...molotovChoices];
 
   if (defender.role.id === 'vigilante') {
     const closed = { ...log(s, `${defender.name} is a Vigilante and cannot be injured.`), combat: null };
