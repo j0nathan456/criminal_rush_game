@@ -105,6 +105,32 @@ export function leaveRoom(room: Room, token: string): Room {
   };
 }
 
+/**
+ * Rematch: once a finished game's "Play again" is clicked, the first caller
+ * resets this same code back to a fresh not-yet-started lobby containing
+ * just themselves, as the new host (seat 0) — nobody else carries over
+ * automatically, matching how a not-started room never assumes membership.
+ * Anyone who calls this afterward (the same code, already reset) simply
+ * joins that fresh lobby, same as joinRoom — including the first caller
+ * themselves, idempotently, and including players from the finished game
+ * who weren't first. `name` comes from the caller (the client already knows
+ * its own name from the game that just ended — no re-prompting).
+ */
+export function playAgain(room: Room, token: string, name: string): Room {
+  if (!room.started) return joinRoom(room, token, name);
+  if (!room.state?.winner) throw new RoomError('The game is still in progress.');
+  if (!room.players.some((p) => p.token === token)) throw new RoomError('You were not part of this game.');
+  return {
+    code: room.code,
+    createdAt: room.createdAt,
+    started: false,
+    players: [{ seat: 0, id: 'p0', name: name.trim() || 'Player 1', token }],
+    state: null,
+    chatEnabled: false,
+    chat: [],
+  };
+}
+
 export interface KickPlayerInput {
   hostToken: string;
   /** The seat (as shown in the lobby) of the player to remove. */

@@ -63,6 +63,17 @@ function wasRemoved(v: RoomView): boolean {
   return !v.started && v.yourSeat === -1;
 }
 
+/**
+ * A `wasRemoved` result has two possible causes, indistinguishable from `v`
+ * alone: a genuine pre-game kick, or someone else's "Play again" resetting
+ * this same code for a rematch before we'd clicked it ourselves. Told apart
+ * by the view we're about to replace — if it was a finished (winner-decided)
+ * game, this is a rematch, not an ejection, and the code is still good.
+ */
+export function isRematchResetWithoutUs(previous: RoomView | null): boolean {
+  return Boolean(previous?.started && previous.winner);
+}
+
 async function postJson<T>(url: string, payload: unknown): Promise<T> {
   const res = await fetch(url, {
     method: 'POST',
@@ -87,6 +98,13 @@ export interface OnlineGame {
   setChatEnabled: (enabled: boolean) => Promise<void>;
   sendChat: (text: string) => Promise<void>;
   dispatch: (action: GameAction) => Promise<void>;
+  /**
+   * Rematch: the first caller resets this same code to a fresh lobby with
+   * themselves as host; anyone who calls it afterward just joins that lobby
+   * (see playAgain() in room.ts). `name` is the caller's own — the client
+   * already knows it from the game that just ended.
+   */
+  playAgain: (name: string) => Promise<void>;
   leave: () => void;
 }
 
@@ -229,6 +247,20 @@ export function useOnlineGame(): OnlineGame {
     [run],
   );
 
+  const playAgain = useCallback(
+    (name: string) =>
+      run(async () => {
+        const id = beginRequest();
+        const { view: v } = await postJson<{ view: RoomView }>('/api/play-again', {
+          code: codeRef.current,
+          token: tokenRef.current,
+          name,
+        });
+        applyView(id, v);
+      }),
+    [run],
+  );
+
   const leave = useCallback(() => {
     const code = codeRef.current;
     const token = tokenRef.current;
@@ -311,6 +343,16 @@ export function useOnlineGame(): OnlineGame {
         if (!res.ok) return;
         const v = (await res.json()) as RoomView;
         if (wasRemoved(v)) {
+          // Same shape as a pre-game kick (not started, no seat) but a
+          // different cause: someone's "Play again" reset this code for a
+          // rematch while we hadn't clicked it ourselves yet. Don't treat
+          // that as ejection — the code is still good, we're just not
+          // seated in the fresh lobby yet. Keep the session and let the
+          // (now-unseated) waiting-room view offer a way to join it.
+          if (isRematchResetWithoutUs(view)) {
+            applyView(reqId, v);
+            return;
+          }
           clearSession();
           codeRef.current = null;
           tokenRef.current = null;
@@ -331,5 +373,5 @@ export function useOnlineGame(): OnlineGame {
     };
   }, [view]);
 
-  return { view, error, connecting, createRoom, joinRoom, start, kick, setChatEnabled, sendChat, dispatch, leave };
+  return { view, error, connecting, createRoom, joinRoom, start, kick, setChatEnabled, sendChat, dispatch, playAgain, leave };
 }

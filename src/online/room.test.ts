@@ -6,10 +6,12 @@ import {
   kickPlayer,
   rejoinRoom,
   startRoom,
+  playAgain,
   applyAction,
   setChatEnabled,
   postChatMessage,
   viewFor,
+  isHost,
   generateCode,
   RoomError,
   MIN_PLAYERS,
@@ -503,6 +505,60 @@ describe('rejoinRoom', () => {
   it('refuses an ambiguous name shared by more than one seat', () => {
     const started = startRoom(roomWith(['Ava', 'Ben', 'Ben', 'Dev']), { token: 't0', newGame });
     expect(() => rejoinRoom(started, 'x', 'Ben')).toThrow(/more than one player/i);
+  });
+});
+
+describe('playAgain', () => {
+  function finishedRoom(): Room {
+    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev']), { token: 't0', newGame });
+    return { ...started, state: { ...started.state!, winner: 'CIVILIAN' } };
+  }
+
+  it('refuses while the game is still in progress', () => {
+    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev']), { token: 't0', newGame });
+    expect(() => playAgain(started, 't0', 'Ava')).toThrow(/still in progress/);
+  });
+
+  it('refuses a token that was never part of the finished game', () => {
+    const room = finishedRoom();
+    expect(() => playAgain(room, 'stranger', 'Zed')).toThrow(/not part of this game/i);
+  });
+
+  it('the first caller resets the same code to a fresh lobby with just themselves, as host', () => {
+    const room = finishedRoom();
+    const after = playAgain(room, 't2', 'Cara'); // Cara (seat 2), not the original host
+
+    expect(after.code).toBe(room.code);
+    expect(after.started).toBe(false);
+    expect(after.state).toBeNull();
+    expect(after.players).toEqual([{ seat: 0, id: 'p0', name: 'Cara', token: 't2' }]);
+    expect(isHost(after, 't2')).toBe(true); // first to click becomes host, regardless of their old seat
+    expect(after.chatEnabled).toBe(false); // reset — the new host picks fresh
+    expect(after.chat).toEqual([]);
+  });
+
+  it('a second caller joins the fresh lobby as a normal seat, not a new reset', () => {
+    const room = finishedRoom();
+    const afterFirst = playAgain(room, 't2', 'Cara');
+    const afterSecond = playAgain(afterFirst, 't0', 'Ava'); // the original host, joining second
+
+    expect(afterSecond.players.map((p) => p.name)).toEqual(['Cara', 'Ava']);
+    expect(isHost(afterSecond, 't2')).toBe(true); // Cara stays host
+    expect(isHost(afterSecond, 't0')).toBe(false); // Ava did not reclaim host by being original seat 0
+  });
+
+  it('is idempotent for the same caller clicking twice', () => {
+    const room = finishedRoom();
+    const afterFirst = playAgain(room, 't2', 'Cara');
+    const afterAgain = playAgain(afterFirst, 't2', 'Cara');
+    expect(afterAgain.players).toHaveLength(1);
+  });
+
+  it('once reset, behaves like a normal join for anyone else with the code, not just former players', () => {
+    const room = finishedRoom();
+    const afterFirst = playAgain(room, 't2', 'Cara');
+    const afterStranger = playAgain(afterFirst, 'new-guy', 'Zed');
+    expect(afterStranger.players.map((p) => p.name)).toEqual(['Cara', 'Zed']);
   });
 });
 

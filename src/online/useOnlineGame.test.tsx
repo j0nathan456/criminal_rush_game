@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useOnlineGame } from './useOnlineGame.js';
+import { useOnlineGame, isRematchResetWithoutUs } from './useOnlineGame.js';
 import type { RoomView } from './protocol.js';
 
 const STORAGE_KEY = 'criminal-rush:online';
@@ -141,5 +141,26 @@ describe('useOnlineGame — out-of-order responses', () => {
 
     expect(result.current.view?.seats[0].name).toBe('turn-2');
     unmount();
+  });
+});
+
+describe('isRematchResetWithoutUs', () => {
+  it("is true when the view we're about to lose our seat in was a finished (winner-decided) game", () => {
+    const justEnded = fakeView({ started: true, winner: 'CIVILIAN' });
+    expect(isRematchResetWithoutUs(justEnded)).toBe(true);
+  });
+
+  it('is false for a genuine pre-game kick — not started, no winner to have ended', () => {
+    const preGame = fakeView({ started: false, winner: null });
+    expect(isRematchResetWithoutUs(preGame)).toBe(false);
+  });
+
+  it('is false for a live game with no winner yet — should never lose our seat mid-game anyway', () => {
+    const midGame = fakeView({ started: true, winner: null });
+    expect(isRematchResetWithoutUs(midGame)).toBe(false);
+  });
+
+  it('is false when there was no previous view at all (cold start)', () => {
+    expect(isRematchResetWithoutUs(null)).toBe(false);
   });
 });

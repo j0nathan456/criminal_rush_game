@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useOnlineGame } from '../online/useOnlineGame';
-import { MIN_PLAYERS } from '../online/room';
+import { MIN_PLAYERS, MAX_PLAYERS } from '../online/room';
 import { TEAM_META } from '../constants/theme';
 import { PlayableBoard } from './PlayableBoard';
 import { HowToPlay } from './HowToPlay';
@@ -146,11 +146,23 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
 
   // --- Phase 2: waiting room ---
   if (!view.started || !view.state) {
+    // Set once a rematch someone else started resets this same code out
+    // from under us before we'd clicked "Play again" ourselves — see the
+    // gameJustEnded carve-out in useOnlineGame's poll loop. We're still
+    // holding a valid code, just not seated in the fresh lobby yet.
+    const notSeated = view.yourSeat === -1;
+
     return (
       <div className="stage">
         <motion.div variants={panelIn} initial="hidden" animate="show" className="panel w-full max-w-md p-7">
           <h1 className="text-center text-3xl font-extrabold">Waiting room</h1>
-          <p className="mt-1 text-center text-sm text-fog">Share this code so others can join:</p>
+          {notSeated ? (
+            <p className="mt-1 text-center text-sm text-fog">
+              Someone started a rematch with this code — join in:
+            </p>
+          ) : (
+            <p className="mt-1 text-center text-sm text-fog">Share this code so others can join:</p>
+          )}
           <div className="my-4 rounded-xl bg-panel-2 py-4 text-center text-5xl font-extrabold tracking-[0.35em] text-amber">
             {view.code}
           </div>
@@ -202,7 +214,16 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
           )}
 
           <div className="flex flex-col gap-2">
-            {view.isHost ? (
+            {notSeated ? (
+              <button
+                type="button"
+                className="btn btn-primary w-full py-3 text-base"
+                disabled={view.seats.length >= MAX_PLAYERS || game.connecting}
+                onClick={() => game.playAgain(name.trim())}
+              >
+                Join
+              </button>
+            ) : view.isHost ? (
               <button
                 type="button"
                 className="btn btn-primary w-full py-3 text-base"
@@ -312,14 +333,21 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
                   : 'Better luck next time.'}
               </p>
               <div className="mt-6 flex gap-2">
-                <button type="button" className="btn btn-primary flex-1 py-3" onClick={() => game.leave()}>
+                <button
+                  type="button"
+                  className="btn btn-primary flex-1 py-3"
+                  disabled={game.connecting}
+                  onClick={() => game.playAgain(view.seats.find((s) => s.seat === view.yourSeat)?.name ?? name.trim())}
+                >
                   Play again
                 </button>
                 <button type="button" className="btn flex-1 py-3" onClick={leave}>
                   Exit to menu
                 </button>
               </div>
-              <p className="mt-4 text-xs text-fog">“Play again” returns you to the lobby to create or join a new room.</p>
+              <p className="mt-4 text-xs text-fog">
+                “Play again” reopens this same room code as a fresh waiting room — whoever clicks it first becomes the new host.
+              </p>
             </motion.div>
           </motion.div>
         )}
