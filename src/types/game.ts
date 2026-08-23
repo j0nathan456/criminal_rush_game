@@ -365,4 +365,13 @@ export interface GameState {
    * sale just proceeds normally with nothing to bribe.
    */
   pendingBribery?: { playerId: string } | null;
+
+  /**
+   * Trash Can's start-of-turn choice (see applyStartOfTurn): the rulebook
+   * says the holder picks which Market card to bin, not that it's chosen
+   * for them, so this blocks other actions until they answer — same as
+   * Getaway Car's free start-of-turn offer. Only set when the public Market
+   * actually has a card to bin.
+   */
+  pendingTrashCan?: { playerId: string } | null;
 }

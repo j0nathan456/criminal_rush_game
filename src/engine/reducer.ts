@@ -65,6 +65,7 @@ export type GameAction =
   | { type: 'RESOLVE_RECYCLING_BIN'; cardId?: string; mode?: 'MONEY' | 'DRAW' }
   | { type: 'RESOLVE_GETAWAY_CAR_GIFT'; give: boolean; teammateId?: string; cardId?: string }
   | { type: 'RESOLVE_BRIBERY'; targetId: string; category: EvidenceCategory; cardId: string }
+  | { type: 'RESOLVE_TRASH_CAN'; cardId: string }
   | { type: 'END_TURN' };
 
 /**
@@ -184,6 +185,7 @@ export function emptyGameState(): GameState {
     pendingRecyclingBin: null,
     pendingGetawayCarGift: null,
     pendingBribery: null,
+    pendingTrashCan: null,
   };
 }
 
@@ -329,6 +331,12 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
     return log(state, 'Resolve Bribery before taking other actions.');
   }
 
+  // Trash Can's start-of-turn bin choice is free — costs no action — but
+  // still needs an answer before anything else, same as Getaway Car's offer.
+  if (state.pendingTrashCan && action.type !== 'RESOLVE_TRASH_CAN') {
+    return log(state, 'Choose a Market card for the Trash Can before taking other actions.');
+  }
+
   switch (action.type) {
     case 'DRAW_CARD':
       return drawCard(state, idx, player);
@@ -392,6 +400,8 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
       return resolveGetawayCarGift(state, action.give, action.teammateId, action.cardId);
     case 'RESOLVE_BRIBERY':
       return resolveBribery(state, action.targetId, action.category, action.cardId);
+    case 'RESOLVE_TRASH_CAN':
+      return resolveTrashCan(state, action.cardId);
     case 'END_TURN':
       return endTurn(state, idx);
     default:
@@ -1181,6 +1191,31 @@ function resolveGetawayCarGift(
   s = updatePlayer(s, mateIdx, (p) => ({ ...p, inventory: [...p.inventory, car], hand: [...p.hand, card] }));
   s = { ...s, pendingGetawayCarGift: null };
   return log(s, `${player.name} gives their Getaway Car and a card to ${mate.name}.`);
+}
+
+/**
+ * Resolve Trash Can's start-of-turn bin choice (see pendingTrashCan). An
+ * invalid pick (card no longer in the Market) logs and stays pending, same
+ * as Getaway Car's/Trade's "stays pending" pattern.
+ */
+function resolveTrashCan(state: GameState, cardId: string): GameState {
+  const pending = state.pendingTrashCan;
+  if (!pending) return state;
+  const idx = playerIndexById(state, pending.playerId);
+  const player = state.players[idx];
+  if (!player) return { ...state, pendingTrashCan: null };
+
+  const card = state.publicMarket.find((c) => c.id === cardId);
+  if (!card) return log(state, 'Choose a card from the Market to bin.');
+
+  let s: GameState = {
+    ...state,
+    publicMarket: state.publicMarket.filter((c) => c.id !== cardId),
+    trashPile: [...(state.trashPile ?? []), card],
+  };
+  s = refillMarkets(s);
+  s = { ...s, pendingTrashCan: null };
+  return log(s, `${player.name}'s Trash Can bins ${card.name}.`);
 }
 
 /**
@@ -2198,12 +2233,11 @@ function applyStartOfTurn(state: GameState, index: number): GameState {
     }
   }
 
-  // Trash Can: bin the top Market card into the trash pile, then refill.
+  // Trash Can: offer to bin a Market card of the holder's choosing (see
+  // pendingTrashCan/resolveTrashCan) — the rulebook has them pick, not an
+  // automatic top-of-Market bin.
   if (has('Trash Can') && s.publicMarket.length > 0) {
-    const binned = s.publicMarket[0];
-    s = { ...s, publicMarket: s.publicMarket.slice(1), trashPile: [...(s.trashPile ?? []), binned] };
-    s = refillMarkets(s);
-    s = log(s, `${player.name}'s Trash Can bins ${binned.name}.`);
+    s = { ...s, pendingTrashCan: { playerId: player.id } };
   }
 
   // Disguise is discarded at the start of the holder's turn (rulebook p.16).

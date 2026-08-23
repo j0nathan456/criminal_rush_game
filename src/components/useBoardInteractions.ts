@@ -295,6 +295,7 @@ export function useBoardInteractions(
       dispatch({ type: 'RESOLVE_GETAWAY_CAR_GIFT', give, teammateId, cardId }),
     onResolveBribery: (targetId: string, category: EvidenceCategory, cardId: string) =>
       dispatch({ type: 'RESOLVE_BRIBERY', targetId, category, cardId }),
+    onResolveTrashCan: (cardId: string) => dispatch({ type: 'RESOLVE_TRASH_CAN', cardId }),
   };
 
   return {

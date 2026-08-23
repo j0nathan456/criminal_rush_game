@@ -1943,7 +1943,7 @@ describe('gameReducer — remaining perks & events', () => {
     expect(next.players[2].money).toBe(4);
   });
 
-  it('Trash Can bins a Market card at start of turn and sells it back at $1 off', () => {
+  it('Trash Can offers the holder a choice of Market card to bin at start of turn, then sells it back at $1 off', () => {
     const trash = perk('pk', 'Trash Can');
     const a = perk('m1', 'A', { cost: 3 });
     const b = perk('m2', 'B', { cost: 2 });
@@ -1952,16 +1952,39 @@ describe('gameReducer — remaining perks & events', () => {
         mkPlayer({ id: 'p0', role: role('sheriff', 'CIVILIAN') }),
         mkPlayer({ id: 'p1', role: role('mayor', 'CIVILIAN'), money: 5, inventory: [trash] }),
       ],
-      { publicMarket: [a], publicMarketDeck: [b] },
+      { publicMarket: [a, b], publicMarketDeck: [] },
     );
-    // End p0's turn so p1's start-of-turn bins the top public card (A) into the trash.
+    // End p0's turn so p1's start-of-turn offers the bin choice — not automatic.
     const started = gameReducer(s, { type: 'END_TURN' });
-    expect(started.trashPile?.map((c) => c.id)).toEqual(['m1']);
-    expect(started.publicMarket.map((c) => c.id)).toEqual(['m2']); // refilled
-    // p1 buys A back from the trash at $1 off.
-    const bought = gameReducer(started, { type: 'USE_PERK', perkId: 'pk', payload: { marketCardId: 'm1' } });
-    expect(bought.players[1].inventory.some((c) => c.id === 'm1')).toBe(true);
-    expect(bought.players[1].money).toBe(3); // 5 - (3 - 1)
+    expect(started.pendingTrashCan).toEqual({ playerId: 'p1' });
+    expect(started.publicMarket.map((c) => c.id)).toEqual(['m1', 'm2']); // untouched until resolved
+
+    // p1 picks B, not the top card — a real choice, not "always the first".
+    const binned = gameReducer(started, { type: 'RESOLVE_TRASH_CAN', cardId: 'm2' });
+    expect(binned.pendingTrashCan).toBeNull();
+    expect(binned.trashPile?.map((c) => c.id)).toEqual(['m2']);
+    expect(binned.publicMarket.map((c) => c.id)).toEqual(['m1']);
+
+    // p1 buys B back from the trash at $1 off.
+    const bought = gameReducer(binned, { type: 'USE_PERK', perkId: 'pk', payload: { marketCardId: 'm2' } });
+    expect(bought.players[1].inventory.some((c) => c.id === 'm2')).toBe(true);
+    expect(bought.players[1].money).toBe(4); // 5 - (2 - 1)
+  });
+
+  it('Trash Can blocks other actions until the bin choice is resolved', () => {
+    const trash = perk('pk', 'Trash Can');
+    const a = perk('m1', 'A', { cost: 3 });
+    const s = stateWith(
+      [
+        mkPlayer({ id: 'p0', role: role('sheriff', 'CIVILIAN') }),
+        mkPlayer({ id: 'p1', role: role('mayor', 'CIVILIAN'), money: 5, inventory: [trash] }),
+      ],
+      { publicMarket: [a] },
+    );
+    const started = gameReducer(s, { type: 'END_TURN' });
+    const blocked = gameReducer(started, { type: 'DRAW_CARD' });
+    expect(blocked.players[1].hand).toHaveLength(0); // refused — Trash Can still pending
+    expect(blocked.pendingTrashCan).toEqual({ playerId: 'p1' });
   });
 
   it('Manipulate reveals the top 3, lets the player choose which to keep and which goes back on top', () => {
