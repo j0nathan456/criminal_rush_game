@@ -42,6 +42,15 @@ export interface Room {
   chatEnabled: boolean;
   /** Public to every room member — no redaction needed. */
   chat: ChatMessage[];
+  /**
+   * A rematch lobby forming inside a finished game (see playAgain in room.ts).
+   * Kept separate from this room's own players/state so players who haven't
+   * clicked "Play again" yet keep seeing the finished game exactly as before
+   * — nobody is bounced out or shown a false "removed" error just because
+   * someone else moved first. Promoted into this room's own fields once its
+   * own host starts it.
+   */
+  rematch?: Room | null;
 }
 
 /** Public seat info (no tokens). */

@@ -401,6 +401,22 @@ describe('viewFor redaction', () => {
     expect(viewFor(room, 't1').state?.pendingManipulate?.cards).toHaveLength(1); // the user (seat 1)
     expect(viewFor(room, 't0').state?.pendingManipulate).toBeNull(); // everyone else
   });
+
+  it('hands back no state at all — not even unredacted — for a token this room does not recognize', () => {
+    const base = emptyGameState();
+    const state: GameState = {
+      ...base,
+      players: [
+        { ...playerStub('p0', 'A'), hand: [card('a1')] },
+        { ...playerStub('p1', 'B'), hand: [card('b1')] },
+      ],
+    };
+    const room = startedRoomWithState(state);
+
+    const view = viewFor(room, 'unknown-token');
+    expect(view.yourSeat).toBe(-1);
+    expect(view.state).toBeNull();
+  });
 });
 
 describe('leaveRoom', () => {
@@ -524,41 +540,144 @@ describe('playAgain', () => {
     expect(() => playAgain(room, 'stranger', 'Zed')).toThrow(/not part of this game/i);
   });
 
-  it('the first caller resets the same code to a fresh lobby with just themselves, as host', () => {
+  it('the first caller opens a rematch lobby with just themselves as host, without touching the finished game', () => {
     const room = finishedRoom();
     const after = playAgain(room, 't2', 'Cara'); // Cara (seat 2), not the original host
 
+    // The finished game itself is untouched — teammates who haven't clicked
+    // "Play again" yet must keep seeing it exactly as before.
     expect(after.code).toBe(room.code);
-    expect(after.started).toBe(false);
-    expect(after.state).toBeNull();
-    expect(after.players).toEqual([{ seat: 0, id: 'p0', name: 'Cara', token: 't2' }]);
-    expect(isHost(after, 't2')).toBe(true); // first to click becomes host, regardless of their old seat
-    expect(after.chatEnabled).toBe(false); // reset — the new host picks fresh
-    expect(after.chat).toEqual([]);
+    expect(after.started).toBe(true);
+    expect(after.state).toBe(room.state);
+    expect(after.players).toEqual(room.players);
+
+    expect(after.rematch?.started).toBe(false);
+    expect(after.rematch?.state).toBeNull();
+    expect(after.rematch?.players).toEqual([{ seat: 0, id: 'p0', name: 'Cara', token: 't2' }]);
+    expect(isHost(after.rematch!, 't2')).toBe(true); // first to click becomes host, regardless of their old seat
+    expect(after.rematch?.chatEnabled).toBe(false); // fresh — the new host picks again
+    expect(after.rematch?.chat).toEqual([]);
   });
 
-  it('a second caller joins the fresh lobby as a normal seat, not a new reset', () => {
+  it('a second caller joins the same rematch lobby as a normal seat, not a new one', () => {
     const room = finishedRoom();
     const afterFirst = playAgain(room, 't2', 'Cara');
     const afterSecond = playAgain(afterFirst, 't0', 'Ava'); // the original host, joining second
 
-    expect(afterSecond.players.map((p) => p.name)).toEqual(['Cara', 'Ava']);
-    expect(isHost(afterSecond, 't2')).toBe(true); // Cara stays host
-    expect(isHost(afterSecond, 't0')).toBe(false); // Ava did not reclaim host by being original seat 0
+    expect(afterSecond.rematch?.players.map((p) => p.name)).toEqual(['Cara', 'Ava']);
+    expect(isHost(afterSecond.rematch!, 't2')).toBe(true); // Cara stays host
+    expect(isHost(afterSecond.rematch!, 't0')).toBe(false); // Ava did not reclaim host by being original seat 0
+    // Still untouched — Ava joining the rematch doesn't affect the finished game.
+    expect(afterSecond.started).toBe(true);
+    expect(afterSecond.players).toEqual(room.players);
   });
 
   it('is idempotent for the same caller clicking twice', () => {
     const room = finishedRoom();
     const afterFirst = playAgain(room, 't2', 'Cara');
     const afterAgain = playAgain(afterFirst, 't2', 'Cara');
-    expect(afterAgain.players).toHaveLength(1);
+    expect(afterAgain.rematch?.players).toHaveLength(1);
   });
 
-  it('once reset, behaves like a normal join for anyone else with the code, not just former players', () => {
+  it('refuses a stranger who was never part of the finished game, even once a rematch lobby exists', () => {
     const room = finishedRoom();
     const afterFirst = playAgain(room, 't2', 'Cara');
-    const afterStranger = playAgain(afterFirst, 'new-guy', 'Zed');
-    expect(afterStranger.players.map((p) => p.name)).toEqual(['Cara', 'Zed']);
+    // Unlike a normal room code (anyone can join), a rematch is for the group
+    // that was actually just playing — the finished game's own players list
+    // is the source of truth for who's allowed in, and it never changes.
+    expect(() => playAgain(afterFirst, 'new-guy', 'Zed')).toThrow(/not part of this game/i);
+  });
+});
+
+describe('rematch lobby (playAgain + viewFor + startRoom/kick/chat/leave)', () => {
+  function finishedRoom(): Room {
+    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev']), { token: 't0', newGame });
+    return { ...started, state: { ...started.state!, winner: 'CIVILIAN' } };
+  }
+
+  it("keeps showing the finished game to a player who hasn't clicked Play again yet — no false removal", () => {
+    const room = finishedRoom();
+    const afterCara = playAgain(room, 't2', 'Cara'); // Cara opens the rematch lobby
+
+    // Ava (t0) never clicked anything — her view must be exactly as if
+    // nothing happened: still seated, still seeing the finished game.
+    const avaView = viewFor(afterCara, 't0');
+    expect(avaView.started).toBe(true);
+    expect(avaView.yourSeat).toBe(0);
+    expect(avaView.winner).toBe('CIVILIAN');
+    expect(avaView.state).not.toBeNull();
+  });
+
+  it('shows the rematch lobby, not the finished game, to a player who has joined it', () => {
+    const room = finishedRoom();
+    const afterBoth = playAgain(playAgain(room, 't2', 'Cara'), 't1', 'Ben');
+
+    const benView = viewFor(afterBoth, 't1');
+    expect(benView.started).toBe(false);
+    expect(benView.winner).toBeNull();
+    expect(benView.isHost).toBe(false); // Cara got there first
+    expect(benView.seats.map((s) => s.name)).toEqual(['Cara', 'Ben']);
+
+    const caraView = viewFor(afterBoth, 't2');
+    expect(caraView.isHost).toBe(true);
+  });
+
+  it("the rematch host's Start Game promotes the lobby into the room's own fields", () => {
+    const room = finishedRoom();
+    const withLobby = playAgain(
+      playAgain(playAgain(playAgain(room, 't2', 'Cara'), 't1', 'Ben'), 't3', 'Dev'),
+      't0',
+      'Ava',
+    );
+    const promoted = startRoom(withLobby, { token: 't2', newGame }); // Cara, the lobby host
+
+    expect(promoted.code).toBe(room.code);
+    expect(promoted.started).toBe(true);
+    expect(promoted.state).not.toBeNull();
+    expect(promoted.state?.winner).toBeNull();
+    expect(promoted.players.map((p) => p.name)).toEqual(['Cara', 'Ben', 'Dev', 'Ava']);
+    expect(promoted.rematch).toBeNull();
+  });
+
+  it("leaves out a player who never joined the rematch, once it's started", () => {
+    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev', 'Eli']), { token: 't0', newGame });
+    const room: Room = { ...started, state: { ...started.state!, winner: 'CIVILIAN' } };
+    // Everyone but Ava (t0) rejoins for the rematch — still enough for MIN_PLAYERS.
+    const withLobby = playAgain(
+      playAgain(playAgain(playAgain(room, 't2', 'Cara'), 't1', 'Ben'), 't3', 'Dev'),
+      't4',
+      'Eli',
+    );
+    const promoted = startRoom(withLobby, { token: 't2', newGame });
+
+    expect(viewFor(promoted, 't0').yourSeat).toBe(-1);
+  });
+
+  it("the rematch host can kick a lobby member without touching the finished game's own players", () => {
+    const room = finishedRoom();
+    const withLobby = playAgain(playAgain(room, 't2', 'Cara'), 't1', 'Ben');
+    const afterKick = kickPlayer(withLobby, { hostToken: 't2', targetSeat: 1 }); // Cara kicks Ben
+
+    expect(afterKick.rematch?.players.map((p) => p.name)).toEqual(['Cara']);
+    expect(afterKick.players).toEqual(room.players); // finished game untouched
+  });
+
+  it('the rematch host can toggle chat for the lobby without touching the finished game', () => {
+    const room = finishedRoom();
+    const withLobby = playAgain(room, 't2', 'Cara');
+    const afterToggle = setChatEnabled(withLobby, { hostToken: 't2', enabled: true });
+
+    expect(afterToggle.rematch?.chatEnabled).toBe(true);
+    expect(afterToggle.chatEnabled).toBe(room.chatEnabled);
+  });
+
+  it('a lobby member can leave the rematch without affecting the finished game', () => {
+    const room = finishedRoom();
+    const withLobby = playAgain(playAgain(room, 't2', 'Cara'), 't1', 'Ben');
+    const afterLeave = leaveRoom(withLobby, 't1'); // Ben backs out of the rematch
+
+    expect(afterLeave.rematch?.players.map((p) => p.name)).toEqual(['Cara']);
+    expect(afterLeave.players).toEqual(room.players); // finished game untouched
   });
 });
 

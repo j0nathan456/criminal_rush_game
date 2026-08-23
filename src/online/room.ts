@@ -47,6 +47,7 @@ export function createRoom({ code, hostToken, hostName, now }: CreateRoomInput):
     state: null,
     chatEnabled: false,
     chat: [],
+    rematch: null,
   };
 }
 
@@ -96,6 +97,9 @@ export function rejoinRoom(room: Room, token: string, name: string): Room {
  * callers should delete the room if `players` ends up empty.
  */
 export function leaveRoom(room: Room, token: string): Room {
+  if (inRematch(room, token)) {
+    return { ...room, rematch: leaveRoom(room.rematch!, token) };
+  }
   if (room.started) return room;
   const remaining = room.players.filter((p) => p.token !== token);
   if (remaining.length === room.players.length) return room; // not in room
@@ -106,29 +110,39 @@ export function leaveRoom(room: Room, token: string): Room {
 }
 
 /**
+ * Whether `token` belongs to a rematch lobby actively forming inside a
+ * finished game (see playAgain) — if so, lobby actions (start/kick/chat
+ * toggle/leave) should operate on that nested room, not the frozen finished
+ * game whose own `started`/`players` never change until promotion.
+ */
+function inRematch(room: Room, token: string): boolean {
+  return Boolean(room.rematch?.players.some((p) => p.token === token));
+}
+
+/**
  * Rematch: once a finished game's "Play again" is clicked, the first caller
- * resets this same code back to a fresh not-yet-started lobby containing
- * just themselves, as the new host (seat 0) — nobody else carries over
- * automatically, matching how a not-started room never assumes membership.
- * Anyone who calls this afterward (the same code, already reset) simply
- * joins that fresh lobby, same as joinRoom — including the first caller
- * themselves, idempotently, and including players from the finished game
- * who weren't first. `name` comes from the caller (the client already knows
- * its own name from the game that just ended — no re-prompting).
+ * opens a fresh rematch lobby for this same code, with themselves as host
+ * (seat 0) — WITHOUT touching the finished game's own players/state. That
+ * way teammates who haven't clicked "Play again" yet keep seeing the
+ * game-over screen exactly as before (see viewFor): nobody is bounced out or
+ * shown a false "removed" error just because someone else moved first.
+ * Later callers (including the first caller again, idempotently) simply
+ * join that same lobby, same as joinRoom — but only former players of this
+ * finished game, unlike a normal room code, which anyone can join; a
+ * "rematch" only makes sense for the group that was actually just playing.
+ * The lobby is promoted into this room's own fields once its own host starts
+ * it — see startRoom's inRematch branch. `name` comes from the caller (the
+ * client already knows its own name from the game that just ended — no
+ * re-prompting).
  */
 export function playAgain(room: Room, token: string, name: string): Room {
   if (!room.started) return joinRoom(room, token, name);
   if (!room.state?.winner) throw new RoomError('The game is still in progress.');
   if (!room.players.some((p) => p.token === token)) throw new RoomError('You were not part of this game.');
-  return {
-    code: room.code,
-    createdAt: room.createdAt,
-    started: false,
-    players: [{ seat: 0, id: 'p0', name: name.trim() || 'Player 1', token }],
-    state: null,
-    chatEnabled: false,
-    chat: [],
-  };
+  if (!room.rematch) {
+    return { ...room, rematch: createRoom({ code: room.code, hostToken: token, hostName: name, now: room.createdAt }) };
+  }
+  return { ...room, rematch: joinRoom(room.rematch, token, name) };
 }
 
 export interface KickPlayerInput {
@@ -145,6 +159,9 @@ export interface KickPlayerInput {
  * action, so a bad request should surface rather than fail silently.
  */
 export function kickPlayer(room: Room, { hostToken, targetSeat }: KickPlayerInput): Room {
+  if (inRematch(room, hostToken)) {
+    return { ...room, rematch: kickPlayer(room.rematch!, { hostToken, targetSeat }) };
+  }
   if (room.started) throw new RoomError('Cannot remove a player once the game has started.');
   if (!isHost(room, hostToken)) throw new RoomError('Only the host can remove a player.');
   if (targetSeat === 0) throw new RoomError('The host cannot remove themselves.');
@@ -160,8 +177,19 @@ export interface StartRoomInput {
   newGame: (playerNames: string[]) => GameState;
 }
 
-/** Host-only: start the game once at least MIN_PLAYERS have joined. */
+/**
+ * Host-only: start the game once at least MIN_PLAYERS have joined. When
+ * `token` belongs to a forming rematch lobby (see playAgain), this promotes
+ * that lobby into the room's own fields instead — its players/state/chat
+ * replace the finished game's, and the lobby itself is cleared. Anyone who
+ * never clicked "Play again" simply isn't part of the new game, same as not
+ * joining before any other room's host starts it.
+ */
 export function startRoom(room: Room, { token, newGame }: StartRoomInput): Room {
+  if (inRematch(room, token)) {
+    const promoted = startRoom(room.rematch!, { token, newGame });
+    return { ...promoted, createdAt: room.createdAt, rematch: null };
+  }
   if (room.started) throw new RoomError('Game already started.');
   if (!isHost(room, token)) throw new RoomError('Only the host can start the game.');
   if (room.players.length < MIN_PLAYERS) {
@@ -183,6 +211,9 @@ export interface SetChatEnabledInput {
  * and need it pulled out from under them.
  */
 export function setChatEnabled(room: Room, { hostToken, enabled }: SetChatEnabledInput): Room {
+  if (inRematch(room, hostToken)) {
+    return { ...room, rematch: setChatEnabled(room.rematch!, { hostToken, enabled }) };
+  }
   if (!isHost(room, hostToken)) throw new RoomError('Only the host can change the chat setting.');
   if (room.started) throw new RoomError('Chat can only be turned on or off before the game starts.');
   return { ...room, chatEnabled: enabled };
@@ -288,9 +319,20 @@ export function isHost(room: Room, token: string): boolean {
  * The discard pile and everything else is public.
  */
 export function viewFor(room: Room, token: string): RoomView {
+  // Once `token` has clicked "Play again" and joined the forming rematch
+  // lobby, that's the room they should see — not the finished game they're
+  // still nominally seated in (see playAgain). Everyone else keeps seeing
+  // this room's own fields untouched, which is what keeps the finished
+  // game's game-over screen up for players who haven't decided yet.
+  if (room.rematch?.players.some((p) => p.token === token)) {
+    return viewFor(room.rematch, token);
+  }
   const me = room.players.find((p) => p.token === token);
   const yourSeat = me ? me.seat : -1;
-  const state = me && room.state ? redactState(room.state, me.id) : room.state;
+  // Nothing (not even redacted) for a token this room doesn't recognize —
+  // otherwise a started game would hand back its fully unredacted state
+  // (every hand visible) to anyone polling with a stale or unknown token.
+  const state = me && room.state ? redactState(room.state, me.id) : null;
   const yourPlayerIndex = me && state ? state.players.findIndex((p) => p.id === me.id) : -1;
 
   return {
