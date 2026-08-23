@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Player } from '../types/game';
 import { TEAM_META, STATUS_META, WEAPON_TYPE_LABEL } from '../constants/theme';
@@ -107,8 +108,19 @@ export function PlayerSeat({ player, active, isSelf, isNeighbor, targetable, onC
       <AnimatePresence>
         {open && !selectsTarget && (
           <>
-            {/* click-away backdrop */}
-            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden="true" />
+            {/* Click-away backdrop, portaled to <body>: the Roster panel (like
+                most panels) sits under a backdrop-blur ancestor, which — like
+                `filter` — creates a new containing block for `position:
+                fixed`. Left in place, this "fixed" catcher would actually
+                track the panel's box instead of the viewport, so scrolling
+                the roster (more likely with a full 8-player table) could
+                leave clicks outside the shifted catcher not closing the
+                popover. The popover itself stays a normal child below —
+                it's meant to be positioned relative to its own seat. */}
+            {createPortal(
+              <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden="true" />,
+              document.body,
+            )}
             <motion.div
               initial={{ opacity: 0, y: -4, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
