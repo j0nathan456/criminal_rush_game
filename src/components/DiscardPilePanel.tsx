@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import type { ActionCard } from '../types/cards';
 import { CARD_TYPE_META, CATEGORY_META } from '../constants/theme';
 
@@ -17,7 +18,13 @@ export interface DiscardPilePanelProps {
 export function DiscardPilePanel({ cards, onClose }: DiscardPilePanelProps) {
   const ordered = [...cards].reverse();
 
-  return (
+  // Portaled to <body>: this panel (like most panels) sits under a
+  // backdrop-blur ancestor, which — like `filter` — creates a new
+  // containing block for `position: fixed`. Left in place, the "fixed"
+  // backdrop below would actually track that ancestor's box instead of the
+  // viewport, so scrolling the page scrolls the modal (including its Close
+  // button) right along with it instead of keeping it pinned on screen.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/70 p-4" onClick={onClose}>
       <section
         className="cr-role flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden"
@@ -64,6 +71,7 @@ export function DiscardPilePanel({ cards, onClose }: DiscardPilePanelProps) {
           </ul>
         )}
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }
