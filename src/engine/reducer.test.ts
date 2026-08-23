@@ -761,6 +761,38 @@ describe('gameReducer — USE_ROLE_ABILITY (Criminals)', () => {
     expect(next.players[0].actionsRemaining).toBe(2);
   });
 
+  it("Connections is separate from the normal Expand Network Action — using it doesn't set hasPurchasedFromMarket, so Buy stays available", () => {
+    const expand: MarketCard = { id: 'en', name: 'Expand Network', description: '', cost: 5, source: 'BLACK_MARKET', type: 'SPECIAL', vpValue: 1 };
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('crime-lord', 'CRIMINAL'), money: 5 })], { blackMarket: [expand] });
+    const next = gameReducer(s, { type: 'USE_ROLE_ABILITY', payload: { cardId: 'en' } });
+    expect(next.players[0].hasPurchasedFromMarket).toBe(false);
+  });
+
+  it('Connections is gated by hasUsedRoleAbility, independent of the plain Expand Network Action', () => {
+    const expand: MarketCard = { id: 'en', name: 'Expand Network', description: '', cost: 5, source: 'BLACK_MARKET', type: 'SPECIAL', vpValue: 1 };
+    const s = stateWith(
+      [mkPlayer({ id: 'p0', role: role('crime-lord', 'CRIMINAL'), money: 5, hasUsedRoleAbility: true })],
+      { blackMarket: [expand] },
+    );
+    const next = gameReducer(s, { type: 'USE_ROLE_ABILITY', payload: { cardId: 'en' } });
+    expect(next.players[0].money).toBe(5); // ability refused, nothing bought
+  });
+
+  it('buying Expand Network via the plain Action does not spend the Crime Lord role ability — Connections is still usable after', () => {
+    const en0: MarketCard = { id: 'en0', name: 'Expand Network', description: '', cost: 5, source: 'BLACK_MARKET', type: 'SPECIAL', vpValue: 1 };
+    const en1: MarketCard = { id: 'en1', name: 'Expand Network', description: '', cost: 6, source: 'BLACK_MARKET', type: 'SPECIAL', vpValue: 1 };
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('crime-lord', 'CRIMINAL'), money: 20 })], {
+      blackMarket: [en0],
+      expandNetworkPile: [en1],
+    });
+    const afterPlainBuy = gameReducer(s, { type: 'EXPAND_NETWORK' });
+    expect(afterPlainBuy.players[0].hasUsedRoleAbility).toBe(false);
+
+    const afterConnections = gameReducer(afterPlainBuy, { type: 'USE_ROLE_ABILITY', payload: { cardId: 'en1' } });
+    expect(afterConnections.players[0].money).toBe(20 - 5 - (6 - 1)); // full price, then $1 off
+    expect(afterConnections.teamScores.CRIMINAL).toBe(2); // both purchases scored a VP
+  });
+
   it('Evil Scientist buys a Tech/Chemical weapon at a discount and draws', () => {
     const card: ActionCard = { id: 'd1', name: 'd1', description: '', type: 'MONEY', value: 1 };
     const s = stateWith([mkPlayer({ id: 'p0', role: role('evil-scientist', 'CRIMINAL'), money: 5 })], {
