@@ -1943,6 +1943,31 @@ describe('gameReducer — remaining perks & events', () => {
     expect(next.players[2].money).toBe(4);
   });
 
+  it("Ally Support copies a teammate's Sheriff Subpoena — the copier (not the actual Sheriff) gets the reveal and plays the card", () => {
+    const evt: ActionCard = { id: 'e', name: 'Ally Support', description: '', type: 'EVENT' };
+    const ev = evidence('ev1', ['MEANS']);
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('attorney', 'CIVILIAN'), hand: [evt] }), // the copier
+      mkPlayer({ id: 'p1', role: role('sheriff', 'CIVILIAN') }), // the actual Sheriff, being copied
+      mkPlayer({ id: 'p2', role: role('hitman', 'CRIMINAL'), hand: [ev] }), // the subpoena's target
+    ]);
+    const next = gameReducer(s, {
+      type: 'PLAY_CARD',
+      cardId: 'e',
+      targetId: 'p1',
+      options: { allyPayload: { targetId: 'p2' } },
+    });
+    // Ally Support runs the ability *as the copier*, so p0 — not p1, the real
+    // Sheriff — is who the pending reveal (and eventual grid credit) belongs to.
+    expect(next.pendingSheriff).toEqual({ sheriffId: 'p0', targetId: 'p2', cards: [ev] });
+    expect(next.players[1].hasUsedRoleAbility).toBe(false); // p1's own Action untouched — it was never spent
+
+    const resolved = gameReducer(next, { type: 'RESOLVE_SHERIFF', cardId: 'ev1' });
+    expect(resolved.pendingSheriff).toBeNull();
+    expect(resolved.evidenceGrid.MEANS.cards.map((c) => c.id)).toContain('ev1');
+    expect(resolved.players[2].hand).toHaveLength(0); // taken from the target
+  });
+
   it('Trash Can offers the holder a choice of Market card to bin at start of turn, then sells it back at $1 off', () => {
     const trash = perk('pk', 'Trash Can');
     const a = perk('m1', 'A', { cost: 3 });
