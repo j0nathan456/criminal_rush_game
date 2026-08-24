@@ -99,54 +99,14 @@ describe('<MarketPickerPanel /> — Criminal', () => {
 });
 
 describe('<MarketPickerPanel /> — Coffee Machine', () => {
-  it("buying it asks who gets the token, defaulting to the buyer, before calling onBuy", () => {
-    const onBuy = vi.fn();
-    const viewer = mkPlayer({ id: 'p0', name: 'Ana', role: role('mayor', 'CIVILIAN'), money: 5 });
-    const teammate = mkPlayer({ id: 'p1', name: 'Bea', role: role('attorney', 'CIVILIAN'), money: 5 });
-    const s = stateWith([viewer, teammate], { publicMarket: [coffeeMachine] });
-    render(<MarketPickerPanel state={s} viewerIndex={0} onBuy={onBuy} onCancel={vi.fn()} />);
-
-    fireEvent.click(screen.getByText('Coffee Machine ($3)'));
-    expect(onBuy).not.toHaveBeenCalled(); // not bought yet — asks for a recipient first
-    expect(screen.getByText('Give the Coffee token to:')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByText('Buy ($3)'));
-    expect(onBuy).toHaveBeenCalledWith(coffeeMachine, 'p0'); // defaults to the buyer
-  });
-
-  it('picking a teammate sends their id along instead', () => {
-    const onBuy = vi.fn();
-    const viewer = mkPlayer({ id: 'p0', name: 'Ana', role: role('mayor', 'CIVILIAN'), money: 5 });
-    const teammate = mkPlayer({ id: 'p1', name: 'Bea', role: role('attorney', 'CIVILIAN'), money: 5 });
-    const s = stateWith([viewer, teammate], { publicMarket: [coffeeMachine] });
-    render(<MarketPickerPanel state={s} viewerIndex={0} onBuy={onBuy} onCancel={vi.fn()} />);
-
-    fireEvent.click(screen.getByText('Coffee Machine ($3)'));
-    fireEvent.click(screen.getByText('Bea'));
-    fireEvent.click(screen.getByText('Buy ($3)'));
-    expect(onBuy).toHaveBeenCalledWith(coffeeMachine, 'p1');
-  });
-
-  it('Back returns to the Market list without buying', () => {
+  it('buys it the same as any other card — who gets the token is a separate follow-up step (see CoffeeRecipientPanel), not gathered here', () => {
     const onBuy = vi.fn();
     const viewer = mkPlayer({ id: 'p0', name: 'Ana', role: role('mayor', 'CIVILIAN'), money: 5 });
     const s = stateWith([viewer], { publicMarket: [coffeeMachine] });
     render(<MarketPickerPanel state={s} viewerIndex={0} onBuy={onBuy} onCancel={vi.fn()} />);
 
     fireEvent.click(screen.getByText('Coffee Machine ($3)'));
-    fireEvent.click(screen.getByText('Back'));
-    expect(onBuy).not.toHaveBeenCalled();
-    expect(screen.getByText('Coffee Machine ($3)')).toBeInTheDocument();
-  });
-
-  it('buying any other card skips the recipient step entirely', () => {
-    const onBuy = vi.fn();
-    const viewer = mkPlayer({ id: 'p0', name: 'Ana', role: role('mayor', 'CIVILIAN'), money: 5 });
-    const s = stateWith([viewer], { publicMarket: [computer] });
-    render(<MarketPickerPanel state={s} viewerIndex={0} onBuy={onBuy} onCancel={vi.fn()} />);
-
-    fireEvent.click(screen.getByText('Computer ($3)'));
-    expect(onBuy).toHaveBeenCalledWith(computer);
+    expect(onBuy).toHaveBeenCalledWith(coffeeMachine);
     expect(screen.queryByText('Give the Coffee token to:')).not.toBeInTheDocument();
   });
 });

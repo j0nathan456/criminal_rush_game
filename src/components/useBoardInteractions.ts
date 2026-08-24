@@ -217,8 +217,8 @@ export function useBoardInteractions(
     onCashInEvidence,
     onCancelEvidencePlay,
     onPlaySelected,
-    onBuy: (card, coffeeRecipientId) => {
-      dispatch({ type: 'PURCHASE', cardId: card.id, coffeeRecipientId });
+    onBuy: (card) => {
+      dispatch({ type: 'PURCHASE', cardId: card.id });
       setSelectedCardId(null);
       setBuyOpen(false);
     },
@@ -289,6 +289,8 @@ export function useBoardInteractions(
     onDeclineJournal: () => dispatch({ type: 'RESOLVE_JOURNAL', use: false }),
     onUseEvidenceBurn: () => dispatch({ type: 'RESOLVE_EVIDENCE_BURN', use: true }),
     onDeclineEvidenceBurn: () => dispatch({ type: 'RESOLVE_EVIDENCE_BURN', use: false }),
+    onResolveEvidencePlay: (mode: 'DECLINE' | 'GRID' | 'CASH', category?: EvidenceCategory) =>
+      dispatch({ type: 'RESOLVE_EVIDENCE_PLAY', mode, category }),
     onResolveRecyclingBin: (cardId: string | undefined, mode: 'MONEY' | 'DRAW' | undefined) =>
       dispatch({ type: 'RESOLVE_RECYCLING_BIN', cardId, mode }),
     onResolveGetawayCarGift: (give: boolean, teammateId?: string, cardId?: string) =>
@@ -296,6 +298,7 @@ export function useBoardInteractions(
     onResolveBribery: (targetId: string, category: EvidenceCategory, cardId: string) =>
       dispatch({ type: 'RESOLVE_BRIBERY', targetId, category, cardId }),
     onResolveTrashCan: (cardId: string) => dispatch({ type: 'RESOLVE_TRASH_CAN', cardId }),
+    onResolveCoffeeRecipient: (recipientId: string) => dispatch({ type: 'RESOLVE_COFFEE_RECIPIENT', recipientId }),
   };
 
   return {

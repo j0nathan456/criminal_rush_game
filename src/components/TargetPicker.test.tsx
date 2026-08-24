@@ -65,4 +65,18 @@ describe('<TargetPicker /> — expose', () => {
     expect(screen.queryByText('Cy')).not.toBeInTheDocument();
     expect(screen.queryByText('Deb')).not.toBeInTheDocument();
   });
+
+  it('never lists a Criminal wearing a Disguise — "cannot be Exposed while held"', () => {
+    const viewer = mkPlayer({ id: 'p0', name: 'Ana', role: role('sheriff', 'CIVILIAN', 3) });
+    const disguised = mkPlayer({
+      id: 'p1', name: 'Ben', role: role('hitman', 'CRIMINAL', 3),
+      inventory: [{ id: 'dg', name: 'Disguise', description: '', cost: 1, source: 'BLACK_MARKET', type: 'PERK' }],
+    });
+    const fresh = mkPlayer({ id: 'p2', name: 'Cy', role: role('robber', 'CRIMINAL', 2) });
+    const s = stateWith([viewer, disguised, fresh]);
+
+    render(<TargetPicker state={s} viewerIndex={0} mode="expose" onSelectTarget={vi.fn()} onCancel={() => {}} />);
+    expect(screen.queryByText('Ben')).not.toBeInTheDocument();
+    expect(screen.getByText('Cy')).toBeInTheDocument();
+  });
 });

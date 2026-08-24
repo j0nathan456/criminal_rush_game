@@ -35,6 +35,20 @@ describe('<GameBoard />', () => {
     expect(screen.getAllByText('Black Market').length).toBeGreaterThan(0);
   });
 
+  it("doesn't offer a Disguised Criminal as a pickable Expose target in the roster", () => {
+    const disguise = { id: 'dg', name: 'Disguise', description: '', cost: 1, source: 'BLACK_MARKET' as const, type: 'PERK' as const };
+    const state = {
+      ...MOCK_GAME,
+      players: MOCK_GAME.players.map((p) => (p.id === 'p1' ? { ...p, inventory: [...p.inventory, disguise] } : p)),
+    };
+    render(<GameBoard state={state} viewerIndex={0} targeting="expose" />);
+    fireEvent.click(screen.getByText(/Players · Roles/).closest('button')!);
+
+    // Ben (p1, Crime Lord) is disguised — not offered; Dev (p3, Hitman) still is.
+    expect(screen.getByTitle('Select Dev')).toBeInTheDocument();
+    expect(screen.queryByTitle('Select Ben')).not.toBeInTheDocument();
+  });
+
   it('only shows the chat box once the host has enabled it', () => {
     const { rerender } = render(<GameBoard state={MOCK_GAME} />);
     expect(screen.queryByLabelText('Chat')).not.toBeInTheDocument();

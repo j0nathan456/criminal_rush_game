@@ -73,15 +73,6 @@ export function EventPanel({
     </div>
   );
 
-  // Only used by Market Access below, which is always a flat $1 off — the
-  // button's price already reflects what doPurchase will actually charge.
-  const marketRow = (cards: MarketCard[], selected: string | undefined, onPick: (id: string) => void) => (
-    <div className="cr-role__chips">
-      {cards.length === 0 && <span className="cr-role__empty">Nothing available.</span>}
-      {cards.map((c) => chip(`${c.name} ($${Math.max(0, c.cost - 1)})`, selected === c.id, () => onPick(c.id), c.id))}
-    </div>
-  );
-
   const inventoryRow = (cards: MarketCard[], selected: string | undefined, onPick: (id: string) => void, emptyMsg = 'Nothing to choose.') => (
     <div className="cr-role__chips">
       {cards.length === 0 && <span className="cr-role__empty">{emptyMsg}</span>}
@@ -106,14 +97,26 @@ export function EventPanel({
 
   switch (card.name) {
     case 'Market Access': {
+      // Always a flat $1 off — the button's price already reflects what
+      // doPurchase will actually charge. Only what the viewer can afford
+      // (post-discount) is offered — an unaffordable card is a dead end,
+      // not a choice.
+      const affordable = state.publicMarket.filter((c) => Math.max(0, c.cost - 1) <= viewer.money);
       body = (
         <>
           <p>Buy a Market card for $1 off:</p>
-          {marketRow(state.publicMarket, marketCardId, setMarketCardId)}
+          <div className="cr-role__chips">
+            {affordable.length === 0 && (
+              <span className="cr-role__empty">
+                {state.publicMarket.length === 0 ? 'Nothing available.' : "You can't afford anything here."}
+              </span>
+            )}
+            {affordable.map((c) => chip(`${c.name} ($${Math.max(0, c.cost - 1)})`, marketCardId === c.id, () => setMarketCardId(c.id), c.id))}
+          </div>
         </>
       );
       canSubmit = !!marketCardId;
-      impossible = state.publicMarket.length === 0;
+      impossible = affordable.length === 0;
       break;
     }
     case 'Tax Collection': {

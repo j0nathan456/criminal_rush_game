@@ -38,7 +38,7 @@ export type GameAction =
   | { type: 'PLAY_CARD'; cardId: string; category?: EvidenceCategory; targetId?: string; options?: EventOptions }
   | { type: 'PLAY_EVIDENCE'; cardId: string; category: EvidenceCategory }
   | { type: 'CASH_IN_EVIDENCE'; cardId: string }
-  | { type: 'PURCHASE'; cardId: string; coffeeRecipientId?: string }
+  | { type: 'PURCHASE'; cardId: string }
   | { type: 'SELL'; cardId: string }
   | { type: 'EXPAND_NETWORK' }
   | { type: 'EXPOSE'; targetId: string; evidenceChoices?: Partial<Record<EvidenceCategory, string>> }
@@ -62,10 +62,12 @@ export type GameAction =
   | { type: 'RESOLVE_BODYGUARD_SETUP'; targetId: string }
   | { type: 'RESOLVE_JOURNAL'; use: boolean; targetId?: string; options?: EventOptions }
   | { type: 'RESOLVE_EVIDENCE_BURN'; use: boolean }
+  | { type: 'RESOLVE_EVIDENCE_PLAY'; mode: 'DECLINE' | 'GRID' | 'CASH'; category?: EvidenceCategory }
   | { type: 'RESOLVE_RECYCLING_BIN'; cardId?: string; mode?: 'MONEY' | 'DRAW' }
   | { type: 'RESOLVE_GETAWAY_CAR_GIFT'; give: boolean; teammateId?: string; cardId?: string }
   | { type: 'RESOLVE_BRIBERY'; targetId: string; category: EvidenceCategory; cardId: string }
   | { type: 'RESOLVE_TRASH_CAN'; cardId: string }
+  | { type: 'RESOLVE_COFFEE_RECIPIENT'; recipientId: string }
   | { type: 'END_TURN' };
 
 /**
@@ -182,10 +184,12 @@ export function emptyGameState(): GameState {
     pendingBodyguardSetup: null,
     pendingJournal: null,
     pendingEvidenceBurn: null,
+    pendingEvidencePlay: null,
     pendingRecyclingBin: null,
     pendingGetawayCarGift: null,
     pendingBribery: null,
     pendingTrashCan: null,
+    pendingCoffeeRecipient: null,
   };
 }
 
@@ -313,6 +317,13 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
     return log(state, 'Resolve the Evidence burn offer before taking other actions.');
   }
 
+  // Gain Influence's Civilian counterpart: play the Evidence card it just
+  // took straight into the grid (or cash it in), also free and also blocking
+  // until answered.
+  if (state.pendingEvidencePlay && action.type !== 'RESOLVE_EVIDENCE_PLAY') {
+    return log(state, 'Resolve the Evidence play offer before taking other actions.');
+  }
+
   // Recycling Bin already discarded the chosen card; the take-a-replacement
   // and $1-or-draw choices that follow block everything else until answered.
   if (state.pendingRecyclingBin && action.type !== 'RESOLVE_RECYCLING_BIN') {
@@ -337,6 +348,13 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
     return log(state, 'Choose a Market card for the Trash Can before taking other actions.');
   }
 
+  // Coffee Machine's purchase already happened (see doPurchase) — who gets
+  // the token is the one thing left to answer before anything else, no
+  // matter which purchase path bought it.
+  if (state.pendingCoffeeRecipient && action.type !== 'RESOLVE_COFFEE_RECIPIENT') {
+    return log(state, 'Choose who gets the Coffee token before taking other actions.');
+  }
+
   switch (action.type) {
     case 'DRAW_CARD':
       return drawCard(state, idx, player);
@@ -347,7 +365,7 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
     case 'CASH_IN_EVIDENCE':
       return cashInEvidence(state, idx, player, action.cardId);
     case 'PURCHASE':
-      return purchase(state, idx, player, action.cardId, action.coffeeRecipientId);
+      return purchase(state, idx, player, action.cardId);
     case 'SELL':
       return sellItem(state, idx, player, action.cardId);
     case 'EXPAND_NETWORK':
@@ -394,6 +412,8 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
       return resolveJournal(state, action.use, action.targetId, action.options);
     case 'RESOLVE_EVIDENCE_BURN':
       return resolveEvidenceBurn(state, action.use);
+    case 'RESOLVE_EVIDENCE_PLAY':
+      return resolveEvidencePlay(state, action.mode, action.category);
     case 'RESOLVE_RECYCLING_BIN':
       return resolveRecyclingBin(state, action.cardId, action.mode);
     case 'RESOLVE_GETAWAY_CAR_GIFT':
@@ -402,6 +422,8 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
       return resolveBribery(state, action.targetId, action.category, action.cardId);
     case 'RESOLVE_TRASH_CAN':
       return resolveTrashCan(state, action.cardId);
+    case 'RESOLVE_COFFEE_RECIPIENT':
+      return resolveCoffeeRecipient(state, action.recipientId);
     case 'END_TURN':
       return endTurn(state, idx);
     default:
@@ -542,10 +564,17 @@ function resolveEvent(state: GameState, idx: number, name: string, targetId: str
       let s = updatePlayer(state, victimIndex, (p) => ({ ...p, hand: p.hand.slice(1) }));
       s = updatePlayer(s, idx, (p) => ({ ...p, hand: [...p.hand, taken] }));
       s = log(s, `${actor.name} takes a card from ${victim.name}.`);
-      // "If Evidence, you may... burn it as a Criminal" — offered as a free
-      // (no action cost) follow-up, same as the Journal's repeat offer.
-      if (taken.type === 'EVIDENCE' && actor.team === 'CRIMINAL') {
-        s = { ...s, pendingEvidenceBurn: { playerId: actor.id, cardId: taken.id } };
+      // "If Evidence, you may play it (or burn it as a Criminal)" — offered
+      // as a free (no action cost) follow-up, same as the Journal's repeat
+      // offer. Civilians get the play-it-immediately option (into the grid,
+      // or cash it in once every Criminal is already exposed); Criminals get
+      // the burn option instead — never both.
+      if (taken.type === 'EVIDENCE') {
+        if (actor.team === 'CRIMINAL') {
+          s = { ...s, pendingEvidenceBurn: { playerId: actor.id, cardId: taken.id } };
+        } else {
+          s = { ...s, pendingEvidencePlay: { playerId: actor.id, cardId: taken.id } };
+        }
       }
       return s;
     }
@@ -734,9 +763,10 @@ function playEvidence(
   player: Player,
   cardId: string,
   category: EvidenceCategory,
+  opts: { free?: boolean } = {},
 ): GameState {
   if (player.team !== 'CIVILIAN') return log(state, 'Only Civilians can play evidence into the grid.');
-  if (player.actionsRemaining < 1) return log(state, `${player.name} has no actions left.`);
+  if (!opts.free && player.actionsRemaining < 1) return log(state, `${player.name} has no actions left.`);
 
   const card = player.hand.find((c) => c.id === cardId);
   if (!card || card.type !== 'EVIDENCE') return log(state, 'That card is not evidence.');
@@ -747,7 +777,7 @@ function playEvidence(
   let s = updatePlayer(state, idx, (p) => ({
     ...p,
     hand: p.hand.filter((c) => c.id !== cardId),
-    actionsRemaining: p.actionsRemaining - 1,
+    actionsRemaining: opts.free ? p.actionsRemaining : p.actionsRemaining - 1,
   }));
   s = placeEvidence(s, card, category, player);
   return log(s, `${player.name} played ${card.name} into ${category}.`);
@@ -792,9 +822,9 @@ function placeEvidence(
  * it in for $2 instead is the alternative to playEvidence — same cost (1
  * action), but the card goes to the discard pile rather than the grid.
  */
-function cashInEvidence(state: GameState, idx: number, player: Player, cardId: string): GameState {
+function cashInEvidence(state: GameState, idx: number, player: Player, cardId: string, opts: { free?: boolean } = {}): GameState {
   if (player.team !== 'CIVILIAN') return log(state, 'Only Civilians can cash in evidence.');
-  if (player.actionsRemaining < 1) return log(state, `${player.name} has no actions left.`);
+  if (!opts.free && player.actionsRemaining < 1) return log(state, `${player.name} has no actions left.`);
   if (!allCriminalsExposed(state)) return log(state, 'Every Criminal must be exposed first.');
 
   const card = player.hand.find((c) => c.id === cardId);
@@ -804,7 +834,7 @@ function cashInEvidence(state: GameState, idx: number, player: Player, cardId: s
     ...p,
     hand: p.hand.filter((c) => c.id !== cardId),
     money: p.money + 2,
-    actionsRemaining: p.actionsRemaining - 1,
+    actionsRemaining: opts.free ? p.actionsRemaining : p.actionsRemaining - 1,
   }));
   s = { ...s, discardPile: [...s.discardPile, card] };
   return log(s, `${player.name} cashes in ${card.name} for $2.`);
@@ -832,7 +862,7 @@ function burnEvidence(state: GameState, idx: number, player: Player, cardId: str
   return log(s, `${player.name} burned ${card.name} and drew 2 cards.`);
 }
 
-function purchase(state: GameState, idx: number, player: Player, cardId: string, coffeeRecipientId?: string): GameState {
+function purchase(state: GameState, idx: number, player: Player, cardId: string): GameState {
   if (player.hasPurchasedFromMarket) return log(state, `${player.name} already bought this turn.`);
   if (player.actionsRemaining < 1) return log(state, `${player.name} has no actions left.`);
   // Expand Network has its own dedicated Action (see expandNetwork/EXPAND_NETWORK)
@@ -845,7 +875,6 @@ function purchase(state: GameState, idx: number, player: Player, cardId: string,
   const { state: next, ok } = doPurchase(state, idx, player, cardId, {
     spendAction: true,
     setPurchaseFlag: true,
-    coffeeRecipientId,
   });
   return ok ? next : log(state, next.gameLog[next.gameLog.length - 1] ?? 'Purchase failed.');
 }
@@ -1109,6 +1138,42 @@ function resolveEvidenceBurn(state: GameState, use: boolean): GameState {
 }
 
 /**
+ * Resolve Gain Influence's free play offer (see pendingEvidencePlay), the
+ * Civilian counterpart to resolveEvidenceBurn: play the Evidence card just
+ * taken straight into the grid, cash it in (once every Criminal is already
+ * exposed), or decline and keep it in hand to play later at the usual
+ * action cost. A single-category card needs no explicit `category` — same
+ * "resolve automatically unless it's genuinely a choice" pattern as
+ * resolveSheriff.
+ */
+function resolveEvidencePlay(state: GameState, mode: 'DECLINE' | 'GRID' | 'CASH', category?: EvidenceCategory): GameState {
+  const pending = state.pendingEvidencePlay;
+  if (!pending) return state;
+  const idx = playerIndexById(state, pending.playerId);
+  const player = state.players[idx];
+  if (!player) return { ...state, pendingEvidencePlay: null };
+
+  if (mode === 'DECLINE') {
+    return { ...log(state, `${player.name} keeps the Evidence instead of playing it.`), pendingEvidencePlay: null };
+  }
+
+  if (mode === 'CASH') {
+    const s = cashInEvidence(state, idx, player, pending.cardId, { free: true });
+    return { ...s, pendingEvidencePlay: null };
+  }
+
+  const card = player.hand.find((c) => c.id === pending.cardId);
+  const options = card?.evidenceCategories ?? [];
+  const resolvedCategory = options.length === 1 ? options[0] : category;
+  if (!resolvedCategory || !options.includes(resolvedCategory)) {
+    return log(state, `Choose a category for ${card?.name ?? 'the Evidence card'}.`);
+  }
+
+  const s = playEvidence(state, idx, player, pending.cardId, resolvedCategory, { free: true });
+  return { ...s, pendingEvidencePlay: null };
+}
+
+/**
  * Resolve one step of Recycling Bin (see pendingRecyclingBin). Two calls in
  * sequence — mirrors Manipulate's KEEP/TOP phase split: TAKE picks a
  * same-type card from the discard to recover (cardId omitted, or not a
@@ -1219,6 +1284,28 @@ function resolveTrashCan(state: GameState, cardId: string): GameState {
 }
 
 /**
+ * Resolve Coffee Machine's post-purchase choice (see pendingCoffeeRecipient):
+ * hand the token to the buyer or a teammate. An invalid pick (not the buyer,
+ * not a teammate) logs and stays pending, same as Getaway Car's/Trade's
+ * "stays pending" pattern.
+ */
+function resolveCoffeeRecipient(state: GameState, recipientId: string): GameState {
+  const pending = state.pendingCoffeeRecipient;
+  if (!pending) return state;
+  const buyerIdx = playerIndexById(state, pending.playerId);
+  const buyer = state.players[buyerIdx];
+  if (!buyer) return { ...state, pendingCoffeeRecipient: null };
+
+  const recipientIdx = state.players.findIndex((p) => p.id === recipientId && p.team === buyer.team);
+  if (recipientIdx < 0) return log(state, "Choose the buyer or one of their teammates for the Coffee token.");
+
+  let s = updatePlayer(state, recipientIdx, (p) => ({ ...p, coffeeToken: true }));
+  s = { ...s, pendingCoffeeRecipient: null };
+  const recipient = s.players[recipientIdx];
+  return log(s, recipientIdx === buyerIdx ? `${buyer.name} brews a Coffee token.` : `${buyer.name} brews a Coffee token for ${recipient.name}.`);
+}
+
+/**
  * Resolve Bribery's sell trigger (see pendingBribery / sellItem): pay $1 to
  * the chosen Civilian, discard the chosen grid Evidence card. Invalid picks
  * (not a Civilian, paying yourself, no such grid card) log and stay pending
@@ -1272,12 +1359,6 @@ interface PurchaseOptions {
   requireType?: MarketCard['type'][];
   /** If set, the card must be in the public Market, not the Black Market (Credit Card). */
   requirePublicMarket?: boolean;
-  /**
-   * Coffee Machine: who the brewed token goes to (rulebook p.13 — the buyer
-   * or a teammate). Ignored for every other card; defaults to the buyer when
-   * omitted or when it doesn't resolve to the buyer/a teammate.
-   */
-  coffeeRecipientId?: string;
 }
 
 /**
@@ -1340,16 +1421,11 @@ function doPurchase(
     s = drawForPlayer(s, idx);
     s = log(s, `${player.name} draws 2 cards from the Disguise.`);
   }
-  // Coffee Machine: hands its buyer (or a chosen teammate) an active Coffee
-  // token (rulebook p.13).
+  // Coffee Machine: who gets the brewed token (rulebook p.13 — the buyer or
+  // a teammate) is a separate follow-up choice for every purchase path (see
+  // pendingCoffeeRecipient/resolveCoffeeRecipient) — never assumed here.
   if (card.name === 'Coffee Machine') {
-    const recipientIdx = s.players.findIndex(
-      (p) => p.id === opts.coffeeRecipientId && (p.id === player.id || p.team === player.team),
-    );
-    const holderIdx = recipientIdx >= 0 ? recipientIdx : idx;
-    s = updatePlayer(s, holderIdx, (p) => ({ ...p, coffeeToken: true }));
-    const holderName = s.players[holderIdx].name;
-    s = log(s, holderIdx === idx ? `${player.name} brews a Coffee token.` : `${player.name} brews a Coffee token for ${holderName}.`);
+    s = { ...s, pendingCoffeeRecipient: { playerId: player.id } };
   }
 
   // Expand Network (and any vp-bearing card) scores instantly for the buyer's team.

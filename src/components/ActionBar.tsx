@@ -96,13 +96,20 @@ export function ActionBar({ player, maxActions = BASE_ACTIONS_PER_TURN, availabi
       <div className="grid grid-cols-2 gap-2">
         {actions.map((action) => {
           const legal = availability[action.type] ?? { enabled: true };
+          // Getaway Car halves Combat's cost (2 → 1, see attackActionCost) —
+          // the button should show and gate on what attacking will actually
+          // cost, not the flat base price. Nerve Agents' +1 depends on the
+          // defender, not knowable here since no target is picked yet, so
+          // it's left out, same as any other target-dependent cost.
+          const hasGetawayCar = action.type === 'COMBAT' && player.inventory.some((c) => c.name === 'Getaway Car');
+          const displayCost = hasGetawayCar ? Math.max(1, action.cost - 1) : action.cost;
           // Perk Action's real AP cost is per-perk (Water Bottle is free, the
           // rest cost 1) — the engine enforces it; don't gate the button on a
           // single flat cost or Water Bottle would be unreachable at 0 AP,
           // exactly when it's most useful.
-          const tooExpensive = action.type !== 'PERK_ACTION' && action.cost > player.actionsRemaining;
+          const tooExpensive = action.type !== 'PERK_ACTION' && displayCost > player.actionsRemaining;
           const disabled = tooExpensive || !legal.enabled || !onAction;
-          const expensive = action.cost > 1;
+          const expensive = displayCost > 1;
 
           // ROLE_ABILITY names the player's actual ability instead of a generic label.
           const isRole = action.type === 'ROLE_ABILITY';
@@ -166,8 +173,8 @@ export function ActionBar({ player, maxActions = BASE_ACTIONS_PER_TURN, availabi
                 <span className="text-[11px] font-bold text-amber">{surchargeNote}</span>
               ) : null}
               <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-fog">
-                <Pips total={action.cost} filled={action.cost} color={expensive ? 'var(--color-amber)' : teamColor} />
-                {action.cost} AP
+                <Pips total={displayCost} filled={displayCost} color={expensive ? 'var(--color-amber)' : teamColor} />
+                {displayCost} AP
               </span>
             </button>
           );

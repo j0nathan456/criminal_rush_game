@@ -342,6 +342,16 @@ export interface GameState {
   pendingEvidenceBurn?: { playerId: string; cardId: string } | null;
 
   /**
+   * Gain Influence's free play offer: the Civilian counterpart to
+   * pendingEvidenceBurn — set when the Evidence card it just took lands in a
+   * Civilian's hand (rulebook: "you may play it"). Free — costs no action —
+   * but still blocks other actions until answered via RESOLVE_EVIDENCE_PLAY.
+   * Redacted the same way as pendingEvidenceBurn: hidden from everyone but
+   * the actor.
+   */
+  pendingEvidencePlay?: { playerId: string; cardId: string } | null;
+
+  /**
    * Recycling Bin's two-step resolution, live after the chosen hand card has
    * already been discarded (see applyPerk): first TAKE offers a same-type
    * card from the discard to recover (or, with none available, just an
@@ -382,4 +392,14 @@ export interface GameState {
    * actually has a card to bin.
    */
   pendingTrashCan?: { playerId: string } | null;
+
+  /**
+   * Coffee Machine's post-purchase choice (see doPurchase): who gets the
+   * Coffee token — the buyer or a teammate (rulebook p.13). Set centrally
+   * inside doPurchase for every purchase path (the Buy action, Collector's
+   * Commission, Credit Card, Market Access, ...) so none of them need their
+   * own special-cased recipient picker — buying Coffee Machine anywhere
+   * always leads here.
+   */
+  pendingCoffeeRecipient?: { playerId: string } | null;
 }

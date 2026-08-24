@@ -12,9 +12,12 @@ export interface TargetPickerProps {
   onCancel?: () => void;
 }
 
-/** Civilians may Expose an unexposed, uncaptured Criminal. */
+/**
+ * Civilians may Expose an unexposed, uncaptured Criminal — but not one
+ * wearing a Disguise ("Cannot be Exposed while held," rulebook p.16).
+ */
 function exposable(p: Player): boolean {
-  return p.team === 'CRIMINAL' && !p.isCaptured && !p.isExposed;
+  return p.team === 'CRIMINAL' && !p.isCaptured && !p.isExposed && !p.inventory.some((c) => c.name === 'Disguise');
 }
 
 /**

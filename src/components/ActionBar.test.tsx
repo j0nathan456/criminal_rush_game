@@ -71,6 +71,26 @@ describe('<ActionBar />', () => {
     expect(screen.getByText('Draw').closest('button')).not.toBeDisabled();
   });
 
+  it('shows Combat at 1 AP, not 2, once the player holds a Getaway Car', () => {
+    const withCar = {
+      ...makePlayer('CIVILIAN', 3),
+      inventory: [{ id: 'gc', name: 'Getaway Car', description: '', cost: 3, source: 'BLACK_MARKET' as const, type: 'PERK' as const }],
+    };
+    render(<ActionBar player={withCar} onAction={() => {}} />);
+    const combatButton = screen.getByText('Combat').closest('button')!;
+    expect(within(combatButton).getByText('1 AP')).toBeInTheDocument();
+    expect(within(combatButton).queryByText('2 AP')).not.toBeInTheDocument();
+  });
+
+  it("lets a Getaway Car holder attack with just 1 action left — the discounted cost, not the flat base price, gates the button", () => {
+    const withCar = {
+      ...makePlayer('CIVILIAN', 1),
+      inventory: [{ id: 'gc', name: 'Getaway Car', description: '', cost: 3, source: 'BLACK_MARKET' as const, type: 'PERK' as const }],
+    };
+    render(<ActionBar player={withCar} onAction={() => {}} />);
+    expect(screen.getByText('Combat').closest('button')).not.toBeDisabled();
+  });
+
   it("shows how to actually Play/Sell instead of a role description, since clicking these buttons doesn't do it directly", () => {
     render(<ActionBar player={makePlayer('CIVILIAN', 3)} onAction={() => {}} />);
     expect(screen.getByText('Choose card directly from hand')).toBeInTheDocument();

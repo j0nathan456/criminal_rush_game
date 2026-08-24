@@ -386,6 +386,9 @@ function redactState(state: GameState, viewerId: string): GameState {
     // actor's own (otherwise-hidden) hand — private to them, like the above.
     pendingEvidenceBurn:
       state.pendingEvidenceBurn && state.pendingEvidenceBurn.playerId === viewerId ? state.pendingEvidenceBurn : null,
+    // Gain Influence's play offer (the Civilian counterpart) — same reasoning.
+    pendingEvidencePlay:
+      state.pendingEvidencePlay && state.pendingEvidencePlay.playerId === viewerId ? state.pendingEvidencePlay : null,
   };
 }
 

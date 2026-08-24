@@ -270,13 +270,23 @@ describe('gameReducer — PURCHASE', () => {
   describe('Coffee Machine', () => {
     const coffee: MarketCard = { id: 'cm', name: 'Coffee Machine', description: '', cost: 3, source: 'PUBLIC', type: 'PERK' };
 
-    it('defaults the brewed token to the buyer when no recipient is given', () => {
+    it('buying it opens a pending choice of who gets the token — never assigns it up front', () => {
       const s = stateWith([mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 5 })], { publicMarket: [coffee] });
       const next = gameReducer(s, { type: 'PURCHASE', cardId: 'cm' });
+      expect(next.pendingCoffeeRecipient).toEqual({ playerId: 'p0' });
+      expect(next.players[0].coffeeToken).toBeUndefined();
+      expect(next.players[0].inventory.some((c) => c.id === 'cm')).toBe(true); // the purchase itself already went through
+    });
+
+    it('resolving the choice for the buyer brews their own token', () => {
+      const s = stateWith([mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 5 })], { publicMarket: [coffee] });
+      const bought = gameReducer(s, { type: 'PURCHASE', cardId: 'cm' });
+      const next = gameReducer(bought, { type: 'RESOLVE_COFFEE_RECIPIENT', recipientId: 'p0' });
+      expect(next.pendingCoffeeRecipient).toBeNull();
       expect(next.players[0].coffeeToken).toBe(true);
     });
 
-    it('gives the token to a chosen teammate instead of the buyer', () => {
+    it('resolving the choice for a teammate gives them the token instead', () => {
       const s = stateWith(
         [
           mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 5 }),
@@ -284,13 +294,14 @@ describe('gameReducer — PURCHASE', () => {
         ],
         { publicMarket: [coffee] },
       );
-      const next = gameReducer(s, { type: 'PURCHASE', cardId: 'cm', coffeeRecipientId: 'p1' });
+      const bought = gameReducer(s, { type: 'PURCHASE', cardId: 'cm' });
+      const next = gameReducer(bought, { type: 'RESOLVE_COFFEE_RECIPIENT', recipientId: 'p1' });
       expect(next.players[0].coffeeToken).toBeUndefined();
       expect(next.players[1].coffeeToken).toBe(true);
       expect(next.gameLog.at(-1)).toContain('for');
     });
 
-    it('ignores a coffeeRecipientId that is an opponent, falling back to the buyer', () => {
+    it('refuses a recipient who is an opponent, staying pending', () => {
       const s = stateWith(
         [
           mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 5 }),
@@ -298,9 +309,29 @@ describe('gameReducer — PURCHASE', () => {
         ],
         { publicMarket: [coffee] },
       );
-      const next = gameReducer(s, { type: 'PURCHASE', cardId: 'cm', coffeeRecipientId: 'p1' });
-      expect(next.players[0].coffeeToken).toBe(true);
+      const bought = gameReducer(s, { type: 'PURCHASE', cardId: 'cm' });
+      const next = gameReducer(bought, { type: 'RESOLVE_COFFEE_RECIPIENT', recipientId: 'p1' });
+      expect(next.pendingCoffeeRecipient).toEqual({ playerId: 'p0' }); // still pending
+      expect(next.players[0].coffeeToken).toBeUndefined();
       expect(next.players[1].coffeeToken).toBeUndefined();
+    });
+
+    it('blocks other actions until the choice is resolved', () => {
+      const s = stateWith(
+        [mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 5 })],
+        { publicMarket: [coffee], drawPile: [{ id: 'x', name: 'x', description: '', type: 'MONEY', value: 1 }] },
+      );
+      const bought = gameReducer(s, { type: 'PURCHASE', cardId: 'cm' });
+      const blocked = gameReducer(bought, { type: 'DRAW_CARD' });
+      expect(blocked.players[0].hand).toHaveLength(0);
+      expect(blocked.pendingCoffeeRecipient).toEqual({ playerId: 'p0' });
+    });
+
+    it('follows a role-ability purchase too — Collector buying it via Commission also gets the pending choice', () => {
+      const s = stateWith([mkPlayer({ id: 'p0', role: role('collector', 'CIVILIAN'), money: 5 })], { publicMarket: [coffee] });
+      const next = gameReducer(s, { type: 'USE_ROLE_ABILITY', payload: { cardId: 'cm' } });
+      expect(next.pendingCoffeeRecipient).toEqual({ playerId: 'p0' });
+      expect(next.players[0].coffeeToken).toBeUndefined();
     });
   });
 });
@@ -1191,7 +1222,7 @@ describe('gameReducer — Event cards', () => {
     expect(kept.players[0].hand.some((c) => c.id === 'ev')).toBe(true);
   });
 
-  it('Gain Influence does not offer a burn to a Civilian who takes Evidence', () => {
+  it('Gain Influence offers a Civilian who takes Evidence a free play instead of a burn', () => {
     const evt: ActionCard = { id: 'e', name: 'Gain Influence', description: '', type: 'EVENT' };
     const ev = evidence('ev', ['MEANS']);
     const s = stateWith([
@@ -1200,9 +1231,10 @@ describe('gameReducer — Event cards', () => {
     ]);
     const next = gameReducer(s, { type: 'PLAY_CARD', cardId: 'e', targetId: 'p1' });
     expect(next.pendingEvidenceBurn).toBeFalsy();
+    expect(next.pendingEvidencePlay).toEqual({ playerId: 'p0', cardId: 'ev' });
   });
 
-  it('pays a teammate Attorney when Evidence stolen via Gain Influence is later played into the grid', () => {
+  it('lets a Civilian play the Evidence stolen via Gain Influence for free, and still pays a teammate Attorney', () => {
     const evt: ActionCard = { id: 'e', name: 'Gain Influence', description: '', type: 'EVENT' };
     const ev = evidence('ev', ['MEANS']);
     const s = stateWith([
@@ -1212,10 +1244,45 @@ describe('gameReducer — Event cards', () => {
     ]);
     const stolen = gameReducer(s, { type: 'PLAY_CARD', cardId: 'e', targetId: 'p1' });
     expect(stolen.players[0].hand.some((c) => c.id === 'ev')).toBe(true);
+    expect(stolen.pendingEvidencePlay).toEqual({ playerId: 'p0', cardId: 'ev' });
 
-    const next = gameReducer(stolen, { type: 'PLAY_EVIDENCE', cardId: 'ev', category: 'MEANS' });
+    // Blocked from acting elsewhere until the free-play offer is resolved.
+    const blocked = gameReducer(stolen, { type: 'DRAW_CARD' });
+    expect(blocked.players[0].hand.some((c) => c.id === 'ev')).toBe(true); // untouched
+
+    const next = gameReducer(stolen, { type: 'RESOLVE_EVIDENCE_PLAY', mode: 'GRID', category: 'MEANS' });
+    expect(next.pendingEvidencePlay).toBeNull();
     expect(next.evidenceGrid.MEANS.cards.map((c) => c.id)).toEqual(['ev']);
     expect(next.players[2].money).toBe(3); // Attorney collected $1
+    expect(next.players[0].actionsRemaining).toBe(stolen.players[0].actionsRemaining); // free — no action spent
+  });
+
+  it('lets the Civilian decline and keep the stolen Evidence in hand instead', () => {
+    const evt: ActionCard = { id: 'e', name: 'Gain Influence', description: '', type: 'EVENT' };
+    const ev = evidence('ev', ['MEANS']);
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), hand: [evt] }),
+      mkPlayer({ id: 'p1', role: role('hitman', 'CRIMINAL'), hand: [ev] }),
+    ]);
+    const stolen = gameReducer(s, { type: 'PLAY_CARD', cardId: 'e', targetId: 'p1' });
+    const next = gameReducer(stolen, { type: 'RESOLVE_EVIDENCE_PLAY', mode: 'DECLINE' });
+    expect(next.pendingEvidencePlay).toBeNull();
+    expect(next.players[0].hand.some((c) => c.id === 'ev')).toBe(true); // still in hand
+    expect(next.evidenceGrid.MEANS.cards).toHaveLength(0);
+  });
+
+  it('lets the Civilian cash in the stolen Evidence for $2 once every Criminal is exposed', () => {
+    const evt: ActionCard = { id: 'e', name: 'Gain Influence', description: '', type: 'EVENT' };
+    const ev = evidence('ev', ['MEANS']);
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), hand: [evt], money: 1 }),
+      mkPlayer({ id: 'p1', role: role('hitman', 'CRIMINAL'), hand: [ev], isExposed: true }),
+    ]);
+    const stolen = gameReducer(s, { type: 'PLAY_CARD', cardId: 'e', targetId: 'p1' });
+    const next = gameReducer(stolen, { type: 'RESOLVE_EVIDENCE_PLAY', mode: 'CASH' });
+    expect(next.players[0].money).toBe(3); // 1 + $2
+    expect(next.players[0].hand.some((c) => c.id === 'ev')).toBe(false);
+    expect(next.discardPile.map((c) => c.id)).toContain('ev');
   });
 
   it('Tax Collection takes $1 from a chosen opponent', () => {

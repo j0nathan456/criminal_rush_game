@@ -81,6 +81,41 @@ describe('<EventPanel /> — Market Access', () => {
     render(<EventPanel state={s} viewerIndex={0} card={marketAccessCard} onSubmit={vi.fn()} onCancel={() => {}} />);
     expect(screen.getByText('Free Sample ($0)')).toBeInTheDocument();
   });
+
+  it('hides a card the viewer still cannot afford even after the $1 discount', () => {
+    const viewer = mkPlayer({ id: 'p0', name: 'Ana', role: role('mayor', 'CIVILIAN'), money: 1 });
+    const s = stateWith([viewer], { publicMarket: [perkCard('m1', 'Computer', 3)] }); // $2 after discount — still too much
+
+    render(<EventPanel state={s} viewerIndex={0} card={marketAccessCard} onSubmit={vi.fn()} onCancel={() => {}} />);
+    expect(screen.queryByText('Computer ($2)')).not.toBeInTheDocument();
+    expect(screen.getByText("You can't afford anything here.")).toBeInTheDocument();
+  });
+
+  it('shows only what the viewer can afford when the Market has a mix', () => {
+    const viewer = mkPlayer({ id: 'p0', name: 'Ana', role: role('mayor', 'CIVILIAN'), money: 1 });
+    const s = stateWith([viewer], { publicMarket: [perkCard('m1', 'Computer', 3), perkCard('m2', 'Cheap', 1)] });
+
+    render(<EventPanel state={s} viewerIndex={0} card={marketAccessCard} onSubmit={vi.fn()} onCancel={() => {}} />);
+    expect(screen.getByText('Cheap ($0)')).toBeInTheDocument();
+    expect(screen.queryByText('Computer ($2)')).not.toBeInTheDocument();
+  });
+
+  it("treats being unaffordable as impossible for Shady Press's forced-discard offer", () => {
+    const presser = mkPlayer({ id: 'p0', name: 'Ana', role: role('mayor', 'CIVILIAN'), money: 0 });
+    const s = stateWith([presser], { publicMarket: [perkCard('m1', 'Computer', 3)] });
+
+    render(
+      <EventPanel
+        state={s}
+        viewerIndex={0}
+        card={marketAccessCard}
+        onSubmit={vi.fn()}
+        onCancel={() => {}}
+        forceDiscardIfImpossible
+      />,
+    );
+    expect(screen.getByRole('button', { name: /Discard/ })).toBeInTheDocument();
+  });
 });
 
 describe('<EventPanel /> — Gain Influence', () => {
