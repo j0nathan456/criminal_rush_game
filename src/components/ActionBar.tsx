@@ -115,7 +115,18 @@ export function ActionBar({ player, maxActions = BASE_ACTIONS_PER_TURN, availabi
             : isExpandNetwork && expandNetworkCost !== undefined
               ? `${action.label} ($${expandNetworkCost})`
               : action.label;
-          const description = isRole ? player.role.abilityDescription : undefined;
+          // Play Card and Sell aren't clicked to perform the action directly —
+          // you play by clicking a card in your hand, and sell by clicking a
+          // perk/weapon under Items — so they don't get the same "click me"
+          // hover treatment as a real one-click action, and say as much
+          // instead of a role/perk description.
+          const isDirectPick = action.type === 'PLAY_CARD' || action.type === 'SELL_ITEM';
+          const directPickHint = action.type === 'PLAY_CARD' ? 'Choose card directly from hand' : 'Sell from perks directly';
+          const description = isRole
+            ? player.role.abilityDescription
+            : isDirectPick
+              ? directPickHint
+              : undefined;
 
           // Traffic Jam: a Traffic token snarls its holder's own trades by +1
           // action, whichever side of the trade they end up on. Only the
@@ -141,7 +152,8 @@ export function ActionBar({ player, maxActions = BASE_ACTIONS_PER_TURN, availabi
               onClick={onAction ? () => onAction(action) : undefined}
               style={expensive ? { borderColor: 'var(--color-amber)' } : undefined}
               className={`flex flex-col items-start gap-0.5 rounded-lg border bg-panel-2 px-3 py-2 text-left
-                         transition-all duration-150 enabled:hover:-translate-y-px enabled:hover:border-amber/60
+                         transition-all duration-150
+                         ${isDirectPick ? '' : 'enabled:hover:-translate-y-px enabled:hover:border-amber/60'}
                          disabled:cursor-not-allowed disabled:opacity-40
                          ${expensive ? 'border-l-[3px]' : 'border-line'}`}
             >

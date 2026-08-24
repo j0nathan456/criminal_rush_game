@@ -71,6 +71,22 @@ describe('<ActionBar />', () => {
     expect(screen.getByText('Draw').closest('button')).not.toBeDisabled();
   });
 
+  it("shows how to actually Play/Sell instead of a role description, since clicking these buttons doesn't do it directly", () => {
+    render(<ActionBar player={makePlayer('CIVILIAN', 3)} onAction={() => {}} />);
+    expect(screen.getByText('Choose card directly from hand')).toBeInTheDocument();
+    expect(screen.getByText('Sell from perks directly')).toBeInTheDocument();
+  });
+
+  it("doesn't give Play Card/Sell the same hover-to-click affordance as a real one-click action", () => {
+    render(<ActionBar player={makePlayer('CIVILIAN', 3)} onAction={() => {}} />);
+    const playButton = screen.getByText('Play Card').closest('button')!;
+    const sellButton = screen.getByText('Sell').closest('button')!;
+    const drawButton = screen.getByText('Draw').closest('button')!;
+    expect(playButton.className).not.toContain('hover:border-amber');
+    expect(sellButton.className).not.toContain('hover:border-amber');
+    expect(drawButton.className).toContain('hover:border-amber'); // a real one-click action keeps it
+  });
+
   it('fires onAction with the chosen action', () => {
     const onAction = vi.fn();
     render(<ActionBar player={makePlayer('CIVILIAN', 3)} onAction={onAction} onEndTurn={() => {}} />);
