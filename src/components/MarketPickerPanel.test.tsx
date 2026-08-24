@@ -41,11 +41,21 @@ describe('<MarketPickerPanel /> — Civilian', () => {
     expect(onBuy).toHaveBeenCalledWith(computer);
   });
 
-  it('disables a card the viewer cannot afford', () => {
+  it('hides a card the viewer cannot afford, instead of offering a dead-end button', () => {
     const viewer = mkPlayer({ id: 'p0', name: 'Ana', role: role('mayor', 'CIVILIAN'), money: 1 });
     const s = stateWith([viewer], { publicMarket: [computer] });
     render(<MarketPickerPanel state={s} viewerIndex={0} onBuy={vi.fn()} onCancel={vi.fn()} />);
-    expect(screen.getByText('Computer ($3)')).toBeDisabled();
+    expect(screen.queryByText('Computer ($3)')).not.toBeInTheDocument();
+    expect(screen.getByText("You can't afford anything here.")).toBeInTheDocument();
+  });
+
+  it('shows only what the viewer can afford when the Market has a mix', () => {
+    const viewer = mkPlayer({ id: 'p0', name: 'Ana', role: role('mayor', 'CIVILIAN'), money: 2 });
+    const cheap: MarketCard = { id: 'm2', name: 'Cheap', description: '', cost: 1, source: 'PUBLIC', type: 'PERK' };
+    const s = stateWith([viewer], { publicMarket: [computer, cheap] });
+    render(<MarketPickerPanel state={s} viewerIndex={0} onBuy={vi.fn()} onCancel={vi.fn()} />);
+    expect(screen.getByText('Cheap ($1)')).toBeInTheDocument();
+    expect(screen.queryByText('Computer ($3)')).not.toBeInTheDocument();
   });
 });
 

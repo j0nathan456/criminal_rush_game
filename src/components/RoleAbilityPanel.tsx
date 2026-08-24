@@ -71,15 +71,25 @@ export function RoleAbilityPanel({
   // what doPurchase will actually charge. Weakened Network (rulebook p.16)
   // stacks on top: a captured Criminal pays $1 more for Expand Network
   // regardless of any discount, exactly like doPurchase's own surcharge.
-  const marketRow = (cards: MarketCard[], discount = 0) => (
-    <div className="cr-role__chips">
-      {cards.length === 0 && <span className="cr-role__empty">Nothing available.</span>}
-      {cards.map((c) => {
-        const surcharge = c.type === 'SPECIAL' && viewer.isCaptured ? 1 : 0;
-        return chip(`${c.name} ($${Math.max(0, c.cost + surcharge - discount)})`, cardId === c.id, () => setCardId(c.id), c.id);
-      })}
-    </div>
-  );
+  // `costsMoney` (default true) hides anything the viewer can't afford —
+  // off for smuggler, the one caller that doesn't spend money at all.
+  const marketRow = (cards: MarketCard[], discount = 0, costsMoney = true) => {
+    const priced = cards.map((c) => {
+      const surcharge = c.type === 'SPECIAL' && viewer.isCaptured ? 1 : 0;
+      return { card: c, cost: Math.max(0, c.cost + surcharge - discount) };
+    });
+    const visible = costsMoney ? priced.filter(({ cost }) => cost <= viewer.money) : priced;
+    return (
+      <div className="cr-role__chips">
+        {visible.length === 0 && (
+          <span className="cr-role__empty">
+            {cards.length === 0 ? 'Nothing available.' : "You can't afford anything here."}
+          </span>
+        )}
+        {visible.map(({ card: c, cost }) => chip(`${c.name} ($${cost})`, cardId === c.id, () => setCardId(c.id), c.id))}
+      </div>
+    );
+  };
 
   const cardRow = (cards: ActionCard[], emptyMsg = 'No eligible cards.') => (
     <div className="cr-role__chips">
@@ -104,7 +114,7 @@ export function RoleAbilityPanel({
       canSubmit = !!cardId;
       break;
     case 'smuggler':
-      body = (<><p>Move a Market card into the Black Market ($1 cheaper there):</p>{marketRow(state.publicMarket)}</>);
+      body = (<><p>Move a Market card into the Black Market ($1 cheaper there):</p>{marketRow(state.publicMarket, 0, false)}</>);
       canSubmit = !!cardId;
       break;
     case 'evil-scientist': {

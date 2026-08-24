@@ -143,6 +143,45 @@ describe('<RoleAbilityPanel />', () => {
     expect(screen.getByText('Bat ($3)')).toBeInTheDocument();
   });
 
+  it("Collector: hides anything the viewer can't afford, instead of a dead-end button", () => {
+    const s = stateWith(
+      [mkPlayer({ id: 'p0', name: 'Cole', role: role('collector', 'Collector', 'CIVILIAN'), money: 2 })],
+      { publicMarket: [weapon('w1', 'Bat', 3), weapon('w2', 'Radio', 1)] },
+    );
+    render(<RoleAbilityPanel state={s} viewerIndex={0} onSubmit={() => {}} onCancel={() => {}} />);
+    expect(screen.queryByText('Bat ($3)')).not.toBeInTheDocument();
+    expect(screen.getByText('Radio ($1)')).toBeInTheDocument();
+  });
+
+  it("Evil Scientist: hides a weapon the viewer can't afford even after the discount", () => {
+    const s = stateWith(
+      [mkPlayer({ id: 'p0', name: 'Eve', role: role('evil-scientist', 'Evil Scientist', 'CRIMINAL'), money: 2 })],
+      { publicMarket: [weapon('w1', 'Robot Soldier', 4)] }, // $3 after the $1 discount — still unaffordable
+    );
+    render(<RoleAbilityPanel state={s} viewerIndex={0} onSubmit={() => {}} onCancel={() => {}} />);
+    expect(screen.queryByText('Robot Soldier ($3)')).not.toBeInTheDocument();
+    expect(screen.getByText("You can't afford anything here.")).toBeInTheDocument();
+  });
+
+  it("Crime Lord: hides Expand Network when even the $1-off price is unaffordable", () => {
+    const s = stateWith(
+      [mkPlayer({ id: 'p0', name: 'Ben', role: role('crime-lord', 'Crime Lord', 'CRIMINAL'), money: 3 })],
+      { blackMarket: [expand('en', 5)] }, // $4 after the discount — still unaffordable
+    );
+    render(<RoleAbilityPanel state={s} viewerIndex={0} onSubmit={() => {}} onCancel={() => {}} />);
+    expect(screen.queryByText('Expand Network ($4)')).not.toBeInTheDocument();
+    expect(screen.getByText("You can't afford anything here.")).toBeInTheDocument();
+  });
+
+  it("Smuggler: shows a Market card regardless of the viewer's money — moving it doesn't cost anything", () => {
+    const s = stateWith(
+      [mkPlayer({ id: 'p0', name: 'Sam', role: role('smuggler', 'Smuggler', 'CRIMINAL'), money: 0 })],
+      { publicMarket: [weapon('w1', 'Bat', 3)] },
+    );
+    render(<RoleAbilityPanel state={s} viewerIndex={0} onSubmit={() => {}} onCancel={() => {}} />);
+    expect(screen.getByText('Bat ($3)')).toBeInTheDocument();
+  });
+
   it('shows a passive message and no Use button for passive roles', () => {
     const s = stateWith([mkPlayer({ id: 'p0', name: 'Mona', role: role('spy', 'Spy', 'CRIMINAL') })]);
     render(<RoleAbilityPanel state={s} viewerIndex={0} onSubmit={() => {}} onCancel={() => {}} />);

@@ -96,6 +96,15 @@ export function MarketPickerPanel({ state, viewerIndex, onBuy, onCancel }: Marke
     : state.publicMarket;
   const title = source === 'black' ? 'Black Market' : 'Market';
 
+  // Weakened Network (rulebook p.16): a captured Criminal pays $1 more for
+  // Expand Network — mirrors doPurchase's own surcharge, so the button
+  // always shows what buying will actually cost. Only what the viewer can
+  // actually afford is offered here — an unaffordable card is a dead end,
+  // not a choice.
+  const affordable = cards
+    .map((c) => ({ card: c, cost: c.cost + (c.type === 'SPECIAL' && viewer.isCaptured ? 1 : 0) }))
+    .filter(({ cost }) => cost <= viewer.money);
+
   return (
     <section className="cr-role" aria-label="Buy from a Market">
       <header className="cr-role__head" style={{ color: TEAM_META[viewer.team].color }}>
@@ -103,26 +112,22 @@ export function MarketPickerPanel({ state, viewerIndex, onBuy, onCancel }: Marke
       </header>
       <div className="cr-role__body">
         <div className="cr-role__chips">
-          {cards.length === 0 && <span className="cr-role__empty">Nothing available.</span>}
-          {cards.map((c) => {
-            // Weakened Network (rulebook p.16): a captured Criminal pays $1
-            // more for Expand Network — mirrors doPurchase's own surcharge,
-            // so the button always shows what buying will actually cost.
-            const surcharge = c.type === 'SPECIAL' && viewer.isCaptured ? 1 : 0;
-            const cost = c.cost + surcharge;
-            return (
-              <button
-                key={c.id}
-                type="button"
-                className="cr-role__chip"
-                disabled={cost > viewer.money}
-                title={cost > viewer.money ? `${c.name} — you can't afford this ($${cost}).` : `${c.name} — ${c.description}`}
-                onClick={() => (c.name === 'Coffee Machine' ? setPendingCoffee(c) : onBuy?.(c))}
-              >
-                {c.name} (${cost})
-              </button>
-            );
-          })}
+          {affordable.length === 0 && (
+            <span className="cr-role__empty">
+              {cards.length === 0 ? 'Nothing available.' : "You can't afford anything here."}
+            </span>
+          )}
+          {affordable.map(({ card: c, cost }) => (
+            <button
+              key={c.id}
+              type="button"
+              className="cr-role__chip"
+              title={`${c.name} — ${c.description}`}
+              onClick={() => (c.name === 'Coffee Machine' ? setPendingCoffee(c) : onBuy?.(c))}
+            >
+              {c.name} (${cost})
+            </button>
+          ))}
         </div>
       </div>
       <div className="cr-role__actions">
