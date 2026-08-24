@@ -624,6 +624,68 @@ describe('interactive combat — pre-combat choices', () => {
     expect(next.players[2].inventory.map((c) => c.name).sort()).toEqual(['Axe', 'Portal']); // teammate keeps Axe, gains Portal
   });
 
+  it('Portal SWAP for Mosquitos triggers its discard against the actual opponent — the trade lands before the effect fires', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), money: 3, inventory: [wpn('por', 'Portal', 'TECH', 0)] });
+    const mate = mkPlayer({ id: 'm', role: role('spy', 'CRIMINAL', 4), inventory: [wpn('mos', 'Mosquitos', 'CHEMICAL', 3)] });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2), hand: [junk('keep'), junk('toss')] });
+    const s = stateWith([atk, def, mate], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    expect(next.players[1].hand).toHaveLength(2); // no Mosquitos held yet — resolvePreCombat's own pass found nothing
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'PORTAL', mode: 'SWAP', teammateId: 'm', teammateWeaponId: 'mos' } });
+
+    expect(next.players[0].inventory.some((c) => c.name === 'Mosquitos')).toBe(true); // the trade happened
+    expect(next.players[1].hand).toHaveLength(1); // ...and Mosquitos' own effect then fired against the defender
+    // The trade's own log line precedes the effect it triggered.
+    const tradeIdx = next.gameLog.findIndex((l) => l.includes('swap Portal'));
+    const discardIdx = next.gameLog.findIndex((l) => l.includes('discards') && l.includes('Mosquitos'));
+    expect(tradeIdx).toBeGreaterThanOrEqual(0);
+    expect(discardIdx).toBeGreaterThan(tradeIdx);
+  });
+
+  it('Portal SWAP for Hammer draws the new holder a card', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), money: 3, inventory: [wpn('por', 'Portal', 'TECH', 0)] });
+    const mate = mkPlayer({ id: 'm', role: role('spy', 'CRIMINAL', 4), inventory: [wpn('ham', 'Hammer', 'MELEE', 2)] });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2) });
+    const s = stateWith([atk, def, mate], { currentPlayerIndex: 0, drawPile: [junk('drawn')] });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    expect(next.players[0].hand).toHaveLength(0); // no Hammer held yet
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'PORTAL', mode: 'SWAP', teammateId: 'm', teammateWeaponId: 'ham' } });
+
+    expect(next.players[0].inventory.some((c) => c.name === 'Hammer')).toBe(true);
+    expect(next.players[0].hand.map((c) => c.id)).toEqual(['drawn']); // Hammer's own draw fired for the new holder
+  });
+
+  it('Portal SWAP for Barbed Wire queues the opponent’s own discard choice, not an automatic one', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), money: 3, inventory: [wpn('por', 'Portal', 'TECH', 0)] });
+    const mate = mkPlayer({ id: 'm', role: role('spy', 'CRIMINAL', 4), inventory: [wpn('bw', 'Barbed Wire', 'MELEE', 1)] });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2), hand: [junk('keep'), junk('toss')] });
+    const s = stateWith([atk, def, mate], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'PORTAL', mode: 'SWAP', teammateId: 'm', teammateWeaponId: 'bw' } });
+
+    expect(next.players[0].inventory.some((c) => c.name === 'Barbed Wire')).toBe(true);
+    expect(next.combat!.pending[0]).toEqual({ kind: 'BARBED_WIRE', playerId: 'd', weaponId: 'bw', side: 'ATTACKER' });
+    expect(next.players[1].hand).toHaveLength(2); // untouched until the defender actually chooses
+
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'BARBED_WIRE', cardId: 'toss' } });
+    expect(next.players[1].hand.map((c) => c.id)).toEqual(['keep']);
+  });
+
+  it('Portal SWAP for Mosquitos on the defending side triggers against the attacker instead', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 5), hand: [junk('keep'), junk('toss')] });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2), money: 3, inventory: [wpn('por', 'Portal', 'TECH', 0)] });
+    const mate = mkPlayer({ id: 'm', role: role('attorney', 'CIVILIAN', 3), inventory: [wpn('mos', 'Mosquitos', 'CHEMICAL', 3)] });
+    const s = stateWith([atk, def, mate], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'PORTAL', mode: 'SWAP', teammateId: 'm', teammateWeaponId: 'mos' } });
+    expect(next.players[1].inventory.some((c) => c.name === 'Mosquitos')).toBe(true);
+    expect(next.players[0].hand).toHaveLength(1); // attacker, not the defender's teammate, lost a card
+  });
+
   it('Mutants copies a weapon’s effect, not its flat printed power', () => {
     // Axe is pure flat power with no other effect — nothing to copy.
     const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mut', 'Mutants', 'CHEMICAL', 1)] });

@@ -409,7 +409,19 @@ export function enterPowerPhase(state: GameState): GameState {
   );
 }
 
+/**
+ * Portal: draw 2 (default), or pay $1 to swap it for a teammate's weapon —
+ * the swap happens mid-PRE-phase, after resolvePreCombat's deterministic
+ * pass already ran without the newly-acquired weapon, so nothing would ever
+ * trigger its own before-combat effect unless this does it explicitly, right
+ * after the trade itself (same idea as Mutants copying a weapon's effect —
+ * see applyMutants — including chaining a fresh BARBED_WIRE choice when the
+ * swap brings in Barbed Wire, since its chooser is the opponent, not the
+ * holder). Manages its own `combat.pending` rather than the generic pop-tail
+ * for the same reason MUTANTS/DRONES do.
+ */
 function applyPortal(state: GameState, head: Extract<CombatChoice, { kind: 'PORTAL' }>, input: CombatChoiceInput): GameState {
+  const combat = state.combat!;
   const hi = playerIndexById(state, head.playerId);
   const holder = state.players[hi];
   if (input.kind === 'PORTAL' && input.mode === 'SWAP' && holder.money >= 1) {
@@ -422,13 +434,25 @@ function applyPortal(state: GameState, head: Extract<CombatChoice, { kind: 'PORT
         ...p, money: p.money - 1, inventory: [...p.inventory.filter((c) => c.id !== portal.id), twpn],
       }));
       s = updatePlayer(s, ti, (p) => ({ ...p, inventory: [...p.inventory.filter((c) => c.id !== twpn.id), portal] }));
-      return log(s, `${holder.name} pays $1 to swap Portal for ${teammate.name}'s ${twpn.name}.`);
+      s = log(s, `${holder.name} pays $1 to swap Portal for ${teammate.name}'s ${twpn.name}.`);
+
+      const oppId = head.side === 'ATTACKER' ? combat.defender.playerId : combat.attacker.playerId;
+      if (twpn.name === 'Barbed Wire') {
+        const opp = s.players[playerIndexById(s, oppId)];
+        if (opp.hand.length === 0) return advancePendingQueue(s);
+        const rest = combat.pending.slice(1);
+        const barbedChoice: CombatChoice = { kind: 'BARBED_WIRE', playerId: oppId, weaponId: twpn.id, side: head.side };
+        return { ...s, combat: { ...combat, pending: [barbedChoice, ...rest] } };
+      }
+      s = applyPreCombatWeaponEffect(s, twpn, holder.id, oppId, head.side === 'ATTACKER');
+      return advancePendingQueue(s);
     }
   }
   // Default / DRAW: draw 2 cards.
   let s = drawForPlayer(state, head.playerId);
   s = drawForPlayer(s, head.playerId);
-  return log(s, `${holder.name}'s Portal draws 2 cards.`);
+  s = log(s, `${holder.name}'s Portal draws 2 cards.`);
+  return advancePendingQueue(s);
 }
 
 /**
@@ -639,18 +663,19 @@ export function applyCombatChoice(state: GameState, input: CombatChoiceInput, rn
   const head = combat.pending[0];
   if (head.kind !== input.kind) return log(state, `Expected a ${head.kind} choice.`);
 
-  // NURSE_HEAL, DRONES, and MUTANTS each manage their own resulting `combat`
-  // (they may chain a fresh pending item — Leaving Evidence, the teammate's
-  // own return card, or — for a Mutants copy of Barbed Wire — the copied-from
-  // opponent's own discard choice — instead of just popping the queue), so
-  // they return directly rather than falling into the generic pop-tail below.
+  // NURSE_HEAL, DRONES, MUTANTS, and PORTAL each manage their own resulting
+  // `combat` (they may chain a fresh pending item — Leaving Evidence, the
+  // teammate's own return card, or — for a Mutants copy or a Portal swap
+  // that brings in Barbed Wire — the copied/acquired-from opponent's own
+  // discard choice — instead of just popping the queue), so they return
+  // directly rather than falling into the generic pop-tail below.
   if (head.kind === 'NURSE_HEAL') return applyNurseHeal(state, head, input);
   if (head.kind === 'DRONES') return applyDrones(state, head, input);
   if (head.kind === 'MUTANTS') return applyMutants(state, head, input);
+  if (head.kind === 'PORTAL') return applyPortal(state, head, input);
 
   let s = state;
   switch (head.kind) {
-    case 'PORTAL': s = applyPortal(s, head, input); break;
     case 'DRONES_RETURN': s = applyDronesReturn(s, head, input); break;
     case 'PISTOL': s = applyPistol(s, head, input); break;
     case 'BARBED_WIRE': s = applyBarbedWire(s, head, input); break;
