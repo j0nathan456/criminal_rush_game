@@ -290,10 +290,6 @@ export function GameBoard({
         <BodyguardSetupPanel state={state} viewerIndex={viewerIndex} onResolve={onResolveBodyguardSetup} />
       )}
 
-      {state.pendingSheriff && !state.combat && !state.winner && (
-        <SheriffPanel state={state} viewerIndex={viewerIndex} onResolve={onResolveSheriff} />
-      )}
-
       {state.pendingShadyPress && !state.combat && !state.winner && (
         <ShadyPressPanel state={state} viewerIndex={viewerIndex} onResolve={onResolveShadyPress} />
       )}
@@ -393,6 +389,9 @@ export function GameBoard({
                   hand they're making it from. */}
               {state.pendingThreaten && !state.combat && !state.winner && (
                 <ThreatenPanel state={state} viewerIndex={viewerIndex} onResolveThreaten={onResolveThreaten} />
+              )}
+              {state.pendingSheriff && !state.combat && !state.winner && (
+                <SheriffPanel state={state} viewerIndex={viewerIndex} onResolve={onResolveSheriff} />
               )}
               {targeting && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingShadyPress && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingRecyclingBin && !state.pendingGetawayCarGift && !state.pendingBribery && !state.pendingTrashCan && !state.winner && (
                 <TargetPicker state={state} viewerIndex={viewerIndex} mode={targeting} onSelectTarget={onSelectTarget} onCancel={onCancelTargeting} />
