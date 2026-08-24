@@ -200,4 +200,41 @@ describe('<CombatChoicePanel />', () => {
     expect(screen.getByText(/Waiting for Mona to choose which of Dee's perks to destroy/)).toBeInTheDocument();
     expect(screen.queryByText('Radio')).not.toBeInTheDocument();
   });
+
+  it('Barbed Wire: the opponent (not the holder) picks their own card to discard', () => {
+    const onCombatChoice = vi.fn();
+    const attacker = mkPlayer({ id: 'a', name: 'Mona', role: role('hitman', 'CRIMINAL') });
+    const def = mkPlayer({
+      id: 'd', name: 'Dee', role: role('mayor', 'CIVILIAN'),
+      hand: [{ id: 'keep', name: 'Keep', description: '', type: 'MONEY' }, { id: 'toss', name: 'Toss', description: '', type: 'MONEY' }],
+    });
+    const combat: CombatState = {
+      attacker: part('a'), defender: part('d'), turn: 'ATTACKER', played: [], actionCost: 2, playerCount: 2,
+      // playerId is the defender — Barbed Wire's opponent, not Mona (its holder).
+      phase: 'PRE', pending: [{ kind: 'BARBED_WIRE', playerId: 'd', weaponId: 'bw', side: 'ATTACKER' }],
+    };
+    render(<CombatChoicePanel state={stateWith([attacker, def], combat)} viewerIndex={1} onCombatChoice={onCombatChoice} />);
+
+    expect(screen.getByText('Keep')).toBeInTheDocument();
+    expect(screen.getByText('Toss')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Toss'));
+    fireEvent.click(screen.getByText('Discard'));
+    expect(onCombatChoice).toHaveBeenCalledWith({ kind: 'BARBED_WIRE', cardId: 'toss' });
+  });
+
+  it("Barbed Wire: everyone but the discarder — including the weapon's own holder — sees a read-only waiting notice", () => {
+    const attacker = mkPlayer({ id: 'a', name: 'Mona', role: role('hitman', 'CRIMINAL') });
+    const def = mkPlayer({
+      id: 'd', name: 'Dee', role: role('mayor', 'CIVILIAN'),
+      hand: [{ id: 'toss', name: 'Toss', description: '', type: 'MONEY' }],
+    });
+    const combat: CombatState = {
+      attacker: part('a'), defender: part('d'), turn: 'ATTACKER', played: [], actionCost: 2, playerCount: 2,
+      phase: 'PRE', pending: [{ kind: 'BARBED_WIRE', playerId: 'd', weaponId: 'bw', side: 'ATTACKER' }],
+    };
+    // Mona holds Barbed Wire but isn't the one discarding — she still just waits.
+    render(<CombatChoicePanel state={stateWith([attacker, def], combat)} viewerIndex={0} />);
+    expect(screen.getByText(/Waiting for Dee to choose a card to discard for Barbed Wire/)).toBeInTheDocument();
+    expect(screen.queryByText('Toss')).not.toBeInTheDocument();
+  });
 });

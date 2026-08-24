@@ -109,6 +109,13 @@ export type CombatChoice =
   | { kind: 'DRONES_RETURN'; playerId: string; holderId: string; holderCardId: string; side: CombatSide }
   | { kind: 'MUTANTS'; playerId: string; weaponId: string; side: CombatSide }
   | { kind: 'PISTOL'; playerId: string; weaponId: string; side: CombatSide }
+  /**
+   * Barbed Wire: unlike Pistol (the holder picks their own discard), the
+   * *opponent* of the Barbed Wire holder picks which of their own cards to
+   * discard — so `playerId` here is that opponent, not the holder, same as
+   * DRONES_RETURN's teammate. `side` still identifies the holder's side.
+   */
+  | { kind: 'BARBED_WIRE'; playerId: string; weaponId: string; side: CombatSide }
   | { kind: 'NURSE_HEAL'; playerId: string; injuredId: string; side: CombatSide }
   | { kind: 'LEAVING_EVIDENCE'; playerId: string; side: CombatSide }
   | { kind: 'DESTROY_PERK'; playerId: string; targetId: string; weaponName: 'Missile' | 'Molotov Cocktail'; side: CombatSide };
@@ -123,6 +130,7 @@ export type CombatChoiceInput =
   | { kind: 'MUTANTS'; mode: 'SKIP' }
   | { kind: 'MUTANTS'; mode: 'COPY'; opponentWeaponId: string }
   | { kind: 'PISTOL'; cardId: string }
+  | { kind: 'BARBED_WIRE'; cardId: string }
   | { kind: 'NURSE_HEAL'; mode: 'SKIP' }
   | { kind: 'NURSE_HEAL'; mode: 'HEAL'; cardId: string }
   | { kind: 'LEAVING_EVIDENCE'; evidenceIds: string[] }

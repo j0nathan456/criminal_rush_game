@@ -338,13 +338,17 @@ describe('interactive combat — rulebook worked example', () => {
     // Seats [Mayor, Hitman, Ally]: Hitman (index 1) neighbours both, and it is his turn.
     const s = stateWith([mayor, hitman, ally], { currentPlayerIndex: 1, drawPile: [pow('mir', 'Mirror', 0)] });
 
-    // Initiate: Hammer draws the Mirror into the Hitman's hand; Barbed Wire makes the Mayor discard.
+    // Initiate: Hammer draws the Mirror into the Hitman's hand automatically;
+    // Barbed Wire then needs the Mayor's own choice of what to discard.
     let next = gameReducer(s, { type: 'ATTACK', targetId: 'may' });
     expect(next.combat).not.toBeNull();
+    expect(next.players[1].hand.some((c) => c.name === 'Mirror')).toBe(true); // Hammer drew it
+    expect(next.players[0].hand).toHaveLength(1); // Barbed Wire hasn't resolved yet
+
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'BARBED_WIRE', cardId: 'm1' } });
+    expect(next.players[0].hand).toHaveLength(0); // Barbed Wire discarded the Mayor's junk
     expect(next.combat!.attacker.basePower).toBe(8);
     expect(next.combat!.defender.basePower).toBe(9);
-    expect(next.players[1].hand.some((c) => c.name === 'Mirror')).toBe(true); // Hammer drew it
-    expect(next.players[0].hand).toHaveLength(0); // Barbed Wire discarded the Mayor's junk
 
     // Power phase.
     next = gameReducer(next, { type: 'PLAY_POWER', cardId: 'surge', side: 'ATTACKER', byPlayerId: 'hit' });
@@ -972,6 +976,105 @@ describe('interactive combat — pre-combat choices', () => {
 
     const next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
     expect(next.combat!.phase).toBe('POWER'); // no PRE choice queued — nothing to discard
+  });
+
+  it('Barbed Wire lets the opponent choose which card to discard, not a random/first one', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('bw', 'Barbed Wire', 'MELEE', 1)] });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2), hand: [junk('keep'), junk('toss')] });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    expect(next.combat!.phase).toBe('PRE');
+    expect(next.combat!.pending[0]).toEqual({ kind: 'BARBED_WIRE', playerId: 'd', weaponId: 'bw', side: 'ATTACKER' });
+    expect(next.players[1].hand.map((c) => c.id)).toEqual(['keep', 'toss']); // untouched until chosen
+
+    // Choosing the second card (not hand[0]) proves it's the opponent's real
+    // choice, not a stand-in for "discard the first/a random card".
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'BARBED_WIRE', cardId: 'toss' } });
+    expect(next.combat!.phase).toBe('POWER'); // PRE queue drained
+    expect(next.players[1].hand.map((c) => c.id)).toEqual(['keep']);
+    expect(next.discardPile.map((c) => c.id)).toContain('toss');
+  });
+
+  it('Barbed Wire is skipped ("if possible") when the opponent has no cards to discard', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('bw', 'Barbed Wire', 'MELEE', 1)] });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2), hand: [] });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+
+    const next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    expect(next.combat!.phase).toBe('POWER'); // no PRE choice queued — nothing to discard
+  });
+
+  it('a defending Barbed Wire holder forces the attacker to choose their own discard', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), hand: [junk('x')] });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2), inventory: [wpn('bw', 'Barbed Wire', 'MELEE', 1)] });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    expect(next.combat!.pending[0]).toEqual({ kind: 'BARBED_WIRE', playerId: 'a', weaponId: 'bw', side: 'DEFENDER' });
+
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'BARBED_WIRE', cardId: 'x' } });
+    expect(next.players[0].hand).toHaveLength(0);
+    expect(next.combat!.phase).toBe('POWER');
+  });
+
+  it("auto-skips Barbed Wire once the discarder's hand is already empty — e.g. their own Pistol resolved first", () => {
+    const atk = mkPlayer({
+      id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('pis', 'Pistol', 'RANGED', 4)], hand: [junk('only')],
+    });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2), inventory: [wpn('bw', 'Barbed Wire', 'MELEE', 1)] });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    // Both target the attacker's own hand: their own Pistol (attacker's
+    // weapons are queued first) and the defender's Barbed Wire.
+    expect(next.combat!.pending).toEqual([
+      { kind: 'PISTOL', playerId: 'a', weaponId: 'pis', side: 'ATTACKER' },
+      { kind: 'BARBED_WIRE', playerId: 'a', weaponId: 'bw', side: 'DEFENDER' },
+    ]);
+
+    // Resolving Pistol empties the attacker's one-card hand — the
+    // still-queued Barbed Wire (also targeting the attacker) is now a dead
+    // choice and must be auto-skipped rather than leaving the player stuck
+    // on an empty picker.
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'PISTOL', cardId: 'only' } });
+    expect(next.combat!.phase).toBe('POWER');
+  });
+
+  it('Mutants copying Barbed Wire queues a fresh discard choice for the copied-from opponent, alongside the real thing', () => {
+    // Both the real Barbed Wire (defender's own) and the Mutants copy (the
+    // attacker's) are live in this one combat — each must force its own
+    // opponent to discard independently, without getting mixed up.
+    const atk = mkPlayer({
+      id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mut', 'Mutants', 'CHEMICAL', 1)], hand: [junk('atk-card')],
+    });
+    const def = mkPlayer({
+      id: 'd', role: role('mayor', 'CIVILIAN', 2),
+      inventory: [wpn('bw', 'Barbed Wire', 'MELEE', 1)], hand: [junk('keep'), junk('toss')],
+    });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    // Queued: the attacker's Mutants choice, then the defender's real Barbed
+    // Wire (which targets the attacker, who has a card to lose).
+    expect(next.combat!.pending).toEqual([
+      { kind: 'MUTANTS', playerId: 'a', weaponId: 'mut', side: 'ATTACKER' },
+      { kind: 'BARBED_WIRE', playerId: 'a', weaponId: 'bw', side: 'DEFENDER' },
+    ]);
+
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'COPY', opponentWeaponId: 'bw' } });
+    // The copy chains its own choice — targeting the defender it was copied
+    // from — ahead of the still-pending real Barbed Wire.
+    expect(next.combat!.pending[0]).toEqual({ kind: 'BARBED_WIRE', playerId: 'd', weaponId: 'bw', side: 'ATTACKER' });
+
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'BARBED_WIRE', cardId: 'toss' } });
+    expect(next.players[1].hand.map((c) => c.id)).toEqual(['keep']); // the copy's target discarded
+    // The real Barbed Wire (defender's own weapon, forcing the attacker) still follows.
+    expect(next.combat!.pending[0]).toEqual({ kind: 'BARBED_WIRE', playerId: 'a', weaponId: 'bw', side: 'DEFENDER' });
+
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'BARBED_WIRE', cardId: 'atk-card' } });
+    expect(next.players[0].hand).toHaveLength(0); // the real weapon's target discarded too
+    expect(next.combat!.phase).toBe('POWER');
   });
 });
 

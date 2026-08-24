@@ -270,11 +270,12 @@ function discardFirstCard(state: GameState, playerId: string, why: string): Game
 
 /**
  * One weapon's deterministic before-combat effect, `self` (the holder)
- * against `opp`. Portal (draw/swap), Drones (exchange), Mutants (copy), and
- * Pistol (choose which card to discard) are interactive choices resolved in
- * the PRE phase instead — see buildPendingChoices / applyCombatChoice — so
- * they're a no-op here. Shared by preCombatFor (a player's own weapons) and
- * applyMutants (a copied weapon's effect fires too, not just its power —
+ * against `opp`. Portal (draw/swap), Drones (exchange), Mutants (copy),
+ * Pistol (the holder chooses their own discard), and Barbed Wire (the
+ * *opponent* chooses their own discard) are all interactive choices resolved
+ * in the PRE phase instead — see buildPendingChoices / applyCombatChoice —
+ * so they're a no-op here. Shared by preCombatFor (a player's own weapons)
+ * and applyMutants (a copied weapon's effect fires too, not just its power —
  * against this fight's actual opponent, whoever the weapon was copied from).
  */
 function applyPreCombatWeaponEffect(state: GameState, weapon: MarketCard, selfId: string, oppId: string, isAttacker: boolean): GameState {
@@ -284,8 +285,6 @@ function applyPreCombatWeaponEffect(state: GameState, weapon: MarketCard, selfId
       const s = log(state, `${self.name}'s Hammer draws a card before combat.`);
       return drawForPlayer(s, selfId);
     }
-    case 'Barbed Wire':
-      return discardFirstCard(state, oppId, 'Barbed Wire');
     case 'Mosquitos':
       return discardFirstCard(state, oppId, 'Mosquitos');
     case 'Brass Knuckles': {
@@ -319,7 +318,7 @@ export function resolvePreCombat(state: GameState, attackerId: string, defenderI
   return s;
 }
 
-// --- Interactive pre-combat choices (Portal / Drones / Mutants / Pistol) ----
+// --- Interactive pre-combat choices (Portal / Drones / Mutants / Pistol / Barbed Wire) ----
 
 /** Weapons that require an interactive pre-combat decision. */
 const CHOICE_WEAPONS: Record<string, CombatChoice['kind']> = {
@@ -331,24 +330,32 @@ const CHOICE_WEAPONS: Record<string, CombatChoice['kind']> = {
 
 /**
  * Build the queue of interactive pre-combat choices — attacker's weapons first,
- * then the defender's. The Power phase begins once all are resolved. Pistol is
- * only queued when the holder actually has a card to discard ("if possible" —
- * an empty hand means there's no choice to make).
+ * then the defender's. The Power phase begins once all are resolved. Pistol
+ * and Barbed Wire are only queued when there's actually a card to discard
+ * ("if possible" — an empty hand means there's no choice to make). Barbed
+ * Wire is handled separately from CHOICE_WEAPONS since its chooser is the
+ * *opponent* of the holder, not the holder themselves (see the BARBED_WIRE
+ * CombatChoice variant).
  */
 export function buildPendingChoices(state: GameState, attackerId: string, defenderId: string): CombatChoice[] {
   const choices: CombatChoice[] = [];
-  const add = (playerId: string, side: CombatSide) => {
+  const add = (playerId: string, oppId: string, side: CombatSide) => {
     const player = state.players[playerIndexById(state, playerId)];
     if (!player) return;
     for (const w of weaponsOf(player)) {
+      if (w.name === 'Barbed Wire') {
+        const opp = state.players[playerIndexById(state, oppId)];
+        if (opp && opp.hand.length > 0) choices.push({ kind: 'BARBED_WIRE', playerId: oppId, weaponId: w.id, side });
+        continue;
+      }
       const kind = CHOICE_WEAPONS[w.name];
       if (!kind || kind === 'LEAVING_EVIDENCE') continue;
       if (kind === 'PISTOL' && player.hand.length === 0) continue;
       choices.push({ kind, playerId, weaponId: w.id, side } as CombatChoice);
     }
   };
-  add(attackerId, 'ATTACKER');
-  add(defenderId, 'DEFENDER');
+  add(attackerId, defenderId, 'ATTACKER');
+  add(defenderId, attackerId, 'DEFENDER');
   return choices;
 }
 
@@ -471,21 +478,25 @@ function applyDronesReturn(state: GameState, head: Extract<CombatChoice, { kind:
  * Mutants: copy the *effect* of one weapon belonging to this fight's actual
  * opponent — never any other player — not its full power level. That means
  * weaponCopyPower's conditional bonus (if any), plus its before-combat effect
- * (Hammer draws, Barbed Wire/Mosquitos force a discard, Brass Knuckles
- * steals) fired against that same opponent. A copied Signal Jammer's "may not
- * play Power cards" lockout is applied separately in enterPowerPhase, keyed
- * off copiedWeaponName below.
+ * (Hammer draws, Mosquitos forces a discard, Brass Knuckles steals) fired
+ * against that same opponent. A copied Signal Jammer's "may not play Power
+ * cards" lockout is applied separately in enterPowerPhase, keyed off
+ * copiedWeaponName below. A copied Barbed Wire is a special case — like the
+ * real thing, the copied-from opponent chooses their own discard, so this
+ * chains a fresh BARBED_WIRE choice instead of resolving inline, the same
+ * way applyDrones chains DRONES_RETURN — so, like DRONES, this manages
+ * `combat.pending` itself rather than letting the generic pop-tail handle it.
  */
 function applyMutants(state: GameState, head: Extract<CombatChoice, { kind: 'MUTANTS' }>, input: CombatChoiceInput): GameState {
   const combat = state.combat!;
   const holder = state.players[playerIndexById(state, head.playerId)];
   if (input.kind !== 'MUTANTS' || input.mode !== 'COPY') {
-    return log(state, `${holder.name}'s Mutants copy nothing.`);
+    return advancePendingQueue(log(state, `${holder.name}'s Mutants copy nothing.`));
   }
   const oppId = head.side === 'ATTACKER' ? combat.defender.playerId : combat.attacker.playerId;
   const opp = state.players[playerIndexById(state, oppId)];
   const weapon = opp.inventory.find((c) => c.id === input.opponentWeaponId && c.type === 'WEAPON');
-  if (!weapon) return log(state, 'No such opponent weapon to copy.');
+  if (!weapon) return advancePendingQueue(log(state, 'No such opponent weapon to copy.'));
   const areNeighbors = neighborIds(state, playerIndexById(state, combat.attacker.playerId)).includes(combat.defender.playerId);
   const copied = weaponCopyPower(weapon, holder, opp, areNeighbors);
   const part = head.side === 'ATTACKER' ? combat.attacker : combat.defender;
@@ -493,7 +504,15 @@ function applyMutants(state: GameState, head: Extract<CombatChoice, { kind: 'MUT
   const newCombat = head.side === 'ATTACKER' ? { ...combat, attacker: newPart } : { ...combat, defender: newPart };
   const powerNote = copied ? ` (+${copied} power)` : '';
   const s = log({ ...state, combat: newCombat }, `${holder.name}'s Mutants copy ${weapon.name}'s effect${powerNote}.`);
-  return applyPreCombatWeaponEffect(s, weapon, holder.id, opp.id, head.side === 'ATTACKER');
+
+  if (weapon.name === 'Barbed Wire') {
+    if (opp.hand.length === 0) return advancePendingQueue(s);
+    const rest = newCombat.pending.slice(1);
+    const barbedChoice: CombatChoice = { kind: 'BARBED_WIRE', playerId: opp.id, weaponId: weapon.id, side: head.side };
+    return { ...s, combat: { ...newCombat, pending: [barbedChoice, ...rest] } };
+  }
+
+  return advancePendingQueue(applyPreCombatWeaponEffect(s, weapon, holder.id, opp.id, head.side === 'ATTACKER'));
 }
 
 /** Pistol: the holder chooses which of their own cards to discard before combat. */
@@ -504,6 +523,20 @@ function applyPistol(state: GameState, head: Extract<CombatChoice, { kind: 'PIST
   if (!card) return log(state, `${holder.name} must choose a card from hand to discard for Pistol.`);
   const s = updatePlayer(state, hi, (p) => ({ ...p, hand: p.hand.filter((c) => c.id !== card.id) }));
   return log({ ...s, discardPile: [...s.discardPile, card] }, `${holder.name} discards ${card.name} (Pistol).`);
+}
+
+/**
+ * Barbed Wire: unlike Pistol, it's the holder's *opponent* who chooses which
+ * of their own cards to discard — head.playerId is that opponent (see
+ * buildPendingChoices), not the weapon's holder.
+ */
+function applyBarbedWire(state: GameState, head: Extract<CombatChoice, { kind: 'BARBED_WIRE' }>, input: CombatChoiceInput): GameState {
+  const di = playerIndexById(state, head.playerId);
+  const discarder = state.players[di];
+  const card = input.kind === 'BARBED_WIRE' ? discarder.hand.find((c) => c.id === input.cardId) : undefined;
+  if (!card) return log(state, `${discarder.name} must choose a card from hand to discard for Barbed Wire.`);
+  const s = updatePlayer(state, di, (p) => ({ ...p, hand: p.hand.filter((c) => c.id !== card.id) }));
+  return log({ ...s, discardPile: [...s.discardPile, card] }, `${discarder.name} discards ${card.name} (Barbed Wire).`);
 }
 
 /**
@@ -558,19 +591,32 @@ function applyLeavingEvidence(
  * the generic tail below and by choices (DRONES, NURSE_HEAL) that resolve
  * outside it because they may chain a fresh pending item instead.
  */
+/**
+ * Whether a still-queued choice has already gone dead: a Missile/Molotov
+ * destroy-choice when an earlier one in the same combat already destroyed
+ * the target's last perk (e.g. the winner holds both weapons, or holds one
+ * and copied the other via Mutants), or a Barbed Wire discard when the
+ * discarder's hand is already empty (e.g. their own Pistol resolved first).
+ */
+function isDeadPendingChoice(state: GameState, choice: CombatChoice): boolean {
+  if (choice.kind === 'DESTROY_PERK') {
+    const target = state.players.find((p) => p.id === choice.targetId);
+    return !target?.inventory.some((c) => c.type === 'PERK');
+  }
+  if (choice.kind === 'BARBED_WIRE') {
+    const discarder = state.players.find((p) => p.id === choice.playerId);
+    return !discarder || discarder.hand.length === 0;
+  }
+  return false;
+}
+
 function advancePendingQueue(state: GameState): GameState {
   const combat = state.combat;
   if (!combat) return state;
   let rest = combat.pending.slice(1);
-  // A queued Missile/Molotov destroy-choice can go dead mid-queue — an
-  // earlier one in the same combat already destroyed the target's last perk
-  // (e.g. the winner holds both weapons, or holds one and copied the other
-  // via Mutants). Auto-skip it rather than showing an empty picker.
+  // Auto-skip any dead choices at the front rather than showing an empty picker.
   let head = rest[0];
-  while (head !== undefined && head.kind === 'DESTROY_PERK') {
-    const targetId = head.targetId;
-    const target = state.players.find((p) => p.id === targetId);
-    if (target?.inventory.some((c) => c.type === 'PERK')) break;
+  while (head !== undefined && isDeadPendingChoice(state, head)) {
     rest = rest.slice(1);
     head = rest[0];
   }
@@ -593,19 +639,21 @@ export function applyCombatChoice(state: GameState, input: CombatChoiceInput, rn
   const head = combat.pending[0];
   if (head.kind !== input.kind) return log(state, `Expected a ${head.kind} choice.`);
 
-  // NURSE_HEAL and DRONES each manage their own resulting `combat` (they may
-  // chain a fresh pending item — Leaving Evidence, or the teammate's own
-  // return card — instead of just popping the queue), so they return
-  // directly rather than falling into the generic pop-tail below.
+  // NURSE_HEAL, DRONES, and MUTANTS each manage their own resulting `combat`
+  // (they may chain a fresh pending item — Leaving Evidence, the teammate's
+  // own return card, or — for a Mutants copy of Barbed Wire — the copied-from
+  // opponent's own discard choice — instead of just popping the queue), so
+  // they return directly rather than falling into the generic pop-tail below.
   if (head.kind === 'NURSE_HEAL') return applyNurseHeal(state, head, input);
   if (head.kind === 'DRONES') return applyDrones(state, head, input);
+  if (head.kind === 'MUTANTS') return applyMutants(state, head, input);
 
   let s = state;
   switch (head.kind) {
     case 'PORTAL': s = applyPortal(s, head, input); break;
     case 'DRONES_RETURN': s = applyDronesReturn(s, head, input); break;
-    case 'MUTANTS': s = applyMutants(s, head, input); break;
     case 'PISTOL': s = applyPistol(s, head, input); break;
+    case 'BARBED_WIRE': s = applyBarbedWire(s, head, input); break;
     case 'LEAVING_EVIDENCE': s = applyLeavingEvidence(s, head, input, rng); break;
     case 'DESTROY_PERK': s = applyDestroyPerk(s, head, input); break;
   }

@@ -45,6 +45,7 @@ export function CombatChoicePanel({ state, viewerIndex, onCombatChoice }: Combat
     : head.kind === 'NURSE_HEAL' ? 'Triage'
     : head.kind === 'DRONES_RETURN' ? 'Drones — your card back'
     : head.kind === 'DESTROY_PERK' ? head.weaponName
+    : head.kind === 'BARBED_WIRE' ? 'Barbed Wire'
     : `${holder.name}: ${head.kind[0]}${head.kind.slice(1).toLowerCase()}`;
 
   if (viewer?.id !== holder.id) {
@@ -64,7 +65,9 @@ export function CombatChoicePanel({ state, viewerIndex, onCombatChoice }: Combat
                   ? `Waiting for ${holder.name} to choose a card to give back to ${byId(head.holderId).name} via Drones.`
                   : head.kind === 'DESTROY_PERK'
                     ? `Waiting for ${holder.name} to choose which of ${byId(head.targetId).name}'s perks to destroy with their ${head.weaponName}.`
-                    : `Waiting for ${holder.name} to decide.`}
+                    : head.kind === 'BARBED_WIRE'
+                      ? `Waiting for ${holder.name} to choose a card to discard for Barbed Wire.`
+                      : `Waiting for ${holder.name} to decide.`}
           </p>
         </div>
       </section>
@@ -189,6 +192,23 @@ export function CombatChoicePanel({ state, viewerIndex, onCombatChoice }: Combat
           className="cr-role__use"
           disabled={!myCardId}
           onClick={() => onCombatChoice?.({ kind: 'PISTOL', cardId: myCardId! })}
+        >
+          Discard
+        </button>
+      </>
+    );
+  } else if (head.kind === 'BARBED_WIRE') {
+    // `holder` here is the opponent forced to discard, not the Barbed Wire
+    // holder — the choice belongs to whoever's hand is losing a card.
+    body = (
+      <>
+        <p className="cr-role__sub">Barbed Wire forces you to discard — choose which card:</p>
+        <div className="cr-role__chips">{holder.hand.map((c) => chip(c.name, myCardId === c.id, () => setMyCardId(c.id), c.id))}</div>
+        <button
+          type="button"
+          className="cr-role__use"
+          disabled={!myCardId}
+          onClick={() => onCombatChoice?.({ kind: 'BARBED_WIRE', cardId: myCardId! })}
         >
           Discard
         </button>
