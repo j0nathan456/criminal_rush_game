@@ -91,6 +91,24 @@ describe('<ActionBar />', () => {
     expect(screen.getByText('Combat').closest('button')).not.toBeDisabled();
   });
 
+  it('disables Perk Action at 0 AP when the only usable perk is a paid one', () => {
+    const player = {
+      ...makePlayer('CIVILIAN', 0),
+      inventory: [{ id: 'bank', name: 'Bank', description: '', cost: 3, source: 'PUBLIC' as const, type: 'PERK' as const }],
+    };
+    render(<ActionBar player={player} availability={{ PERK_ACTION: { enabled: true } }} onAction={() => {}} />);
+    expect(screen.getByText('Perk Action').closest('button')).toBeDisabled();
+  });
+
+  it('keeps Perk Action enabled at 0 AP when a Water Bottle is usable, since it costs nothing', () => {
+    const player = {
+      ...makePlayer('CIVILIAN', 0),
+      inventory: [{ id: 'wb', name: 'Water Bottle', description: '', cost: 1, source: 'PUBLIC' as const, type: 'PERK' as const }],
+    };
+    render(<ActionBar player={player} availability={{ PERK_ACTION: { enabled: true } }} onAction={() => {}} />);
+    expect(screen.getByText('Perk Action').closest('button')).not.toBeDisabled();
+  });
+
   it("shows how to actually Play/Sell instead of a role description, since clicking these buttons doesn't do it directly", () => {
     render(<ActionBar player={makePlayer('CIVILIAN', 3)} onAction={() => {}} />);
     expect(screen.getByText('Choose card directly from hand')).toBeInTheDocument();

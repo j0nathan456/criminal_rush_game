@@ -104,10 +104,13 @@ export function ActionBar({ player, maxActions = BASE_ACTIONS_PER_TURN, availabi
           const hasGetawayCar = action.type === 'COMBAT' && player.inventory.some((c) => c.name === 'Getaway Car');
           const displayCost = hasGetawayCar ? Math.max(1, action.cost - 1) : action.cost;
           // Perk Action's real AP cost is per-perk (Water Bottle is free, the
-          // rest cost 1) — the engine enforces it; don't gate the button on a
-          // single flat cost or Water Bottle would be unreachable at 0 AP,
-          // exactly when it's most useful.
-          const tooExpensive = action.type !== 'PERK_ACTION' && displayCost > player.actionsRemaining;
+          // rest cost 1) — only skip the flat-cost gate when a usable Water
+          // Bottle is actually what's reachable at 0 AP; a player sitting on
+          // paid perks alone (Bank, Credit Card, ...) has nothing to click.
+          const hasFreePerk =
+            action.type === 'PERK_ACTION' &&
+            player.inventory.some((c) => c.name === 'Water Bottle' && !player.usedPerkIds?.includes(c.id));
+          const tooExpensive = !hasFreePerk && displayCost > player.actionsRemaining;
           const disabled = tooExpensive || !legal.enabled || !onAction;
           const expensive = displayCost > 1;
 
