@@ -54,6 +54,48 @@ describe('<ActionBar />', () => {
     expect(screen.getByText(/\+1 AP more/)).toBeInTheDocument();
   });
 
+  it('shows Trade at 0 AP, not 1, for a Radio holder who has not used it this turn', () => {
+    const withRadio = {
+      ...makePlayer('CIVILIAN', 3),
+      inventory: [{ id: 'r', name: 'Radio', description: '', cost: 2, source: 'PUBLIC' as const, type: 'PERK' as const }],
+    };
+    render(<ActionBar player={withRadio} onAction={() => {}} />);
+    const tradeButton = screen.getByText('Trade').closest('button')!;
+    expect(within(tradeButton).getByText('0 AP')).toBeInTheDocument();
+    expect(within(tradeButton).queryByText('1 AP')).not.toBeInTheDocument();
+  });
+
+  it("lets a Radio holder trade at 0 AP — Radio's discount, not the flat base price, gates the button", () => {
+    const withRadio = {
+      ...makePlayer('CIVILIAN', 0),
+      inventory: [{ id: 'r', name: 'Radio', description: '', cost: 2, source: 'PUBLIC' as const, type: 'PERK' as const }],
+    };
+    render(<ActionBar player={withRadio} onAction={() => {}} />);
+    expect(screen.getByText('Trade').closest('button')).not.toBeDisabled();
+  });
+
+  it('keeps Trade at 1 AP for a Radio holder who already used the discount this turn', () => {
+    const usedRadio = {
+      ...makePlayer('CIVILIAN', 0),
+      inventory: [{ id: 'r', name: 'Radio', description: '', cost: 2, source: 'PUBLIC' as const, type: 'PERK' as const }],
+      hasUsedRadio: true,
+    };
+    render(<ActionBar player={usedRadio} onAction={() => {}} />);
+    expect(screen.getByText('Trade').closest('button')).toBeDisabled();
+  });
+
+  it("still charges a Radio holder snarled by a Traffic token the full 1 AP, not 0", () => {
+    const snarledRadio = {
+      ...makePlayer('CIVILIAN', 0),
+      inventory: [{ id: 'r', name: 'Radio', description: '', cost: 2, source: 'PUBLIC' as const, type: 'PERK' as const }],
+      trafficToken: true,
+    };
+    render(<ActionBar player={snarledRadio} onAction={() => {}} />);
+    const tradeButton = screen.getByText('Trade').closest('button')!;
+    expect(within(tradeButton).getByText('1 AP')).toBeInTheDocument();
+    expect(tradeButton).toBeDisabled();
+  });
+
   it('shows Role Action for a role with a real Action (Crime Lord)', () => {
     render(<ActionBar player={makePlayer('CRIMINAL', 3, 'crime-lord')} onAction={() => {}} />);
     expect(screen.getByText('Ability Name')).toBeInTheDocument(); // the role's abilityName, not a generic label

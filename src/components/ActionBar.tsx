@@ -102,7 +102,17 @@ export function ActionBar({ player, maxActions = BASE_ACTIONS_PER_TURN, availabi
           // defender, not knowable here since no target is picked yet, so
           // it's left out, same as any other target-dependent cost.
           const hasGetawayCar = action.type === 'COMBAT' && player.inventory.some((c) => c.name === 'Getaway Car');
-          const displayCost = hasGetawayCar ? Math.max(1, action.cost - 1) : action.cost;
+          // Trade's real cost mirrors doTrade's own formula: +1 while snarled
+          // by a Traffic token, −1 for Radio's once-per-turn discount (order
+          // doesn't matter here since it's clamped at 0) — so a Radio holder
+          // reads, and can click, a free first trade even at 0 AP.
+          const usesRadio =
+            action.type === 'TRADE' && player.inventory.some((c) => c.name === 'Radio') && !player.hasUsedRadio;
+          const displayCost = hasGetawayCar
+            ? Math.max(1, action.cost - 1)
+            : action.type === 'TRADE'
+              ? Math.max(0, action.cost + (player.trafficToken ? 1 : 0) - (usesRadio ? 1 : 0))
+              : action.cost;
           // Perk Action's real AP cost is per-perk (Water Bottle is free, the
           // rest cost 1) — only skip the flat-cost gate when a usable Water
           // Bottle is actually what's reachable at 0 AP; a player sitting on
