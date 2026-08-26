@@ -295,6 +295,7 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
         chat={view.chat}
         chatEnabled={view.chatEnabled}
         onSendChat={game.sendChat}
+        busy={game.connecting}
       />
       {game.error && <p className="px-4 text-sm text-crim">{game.error}</p>}
 

@@ -132,6 +132,8 @@ interface GameBoardProps extends GameBoardHandlers {
   /** Room chat, when the host has enabled it (online play only); omit to hide the chat box entirely. */
   chat?: ChatMessage[];
   chatEnabled?: boolean;
+  /** True while a dispatched action's server round-trip is still in flight — see PlayableBoard. */
+  busy?: boolean;
 }
 
 /**
@@ -155,6 +157,7 @@ export function GameBoard({
   buyOpen = false,
   chat,
   chatEnabled = false,
+  busy = false,
   onAction,
   onEndTurn,
   onSelectCard,
@@ -252,6 +255,16 @@ export function GameBoard({
           <span className="text-lg font-extrabold tracking-wide">Criminal Rush</span>
           <span className="hidden text-xs text-fog sm:inline">Save the City… or Control It</span>
         </div>
+        {/* Instant "your click registered" feedback for online play: the
+            board itself (see PlayableBoard's `busy` handling) goes
+            unresponsive for the same brief window, which otherwise looks
+            identical to nothing having happened. */}
+        {busy && (
+          <span className="flex items-center gap-1.5 text-xs text-fog" aria-live="polite">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-amber" aria-hidden="true" />
+            Syncing…
+          </span>
+        )}
       </header>
 
       {/* Prominent active-player indicator — the most conspicuous global state.

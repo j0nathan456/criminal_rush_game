@@ -12,6 +12,16 @@ interface PlayableBoardProps {
   chat?: ChatMessage[];
   chatEnabled?: boolean;
   onSendChat?: (text: string) => void;
+  /**
+   * True while a dispatched action's server round-trip is still in flight
+   * (online play only — see OnlineController's `game.connecting`). Every
+   * handler is already optional throughout GameBoard's tree (every call
+   * site uses `on*?.()`), so withholding them here — rather than teaching
+   * each of dozens of buttons its own busy check — disables the whole
+   * board for that one request, giving instant feedback that the click
+   * registered instead of a silent wait with no visible response.
+   */
+  busy?: boolean;
 }
 
 /**
@@ -20,7 +30,7 @@ interface PlayableBoardProps {
  * is passed straight through rather than via useBoardInteractions — it isn't
  * a GameAction, so it has no business going through the engine dispatch.
  */
-export function PlayableBoard({ state, viewerIndex, dispatch, chat, chatEnabled, onSendChat }: PlayableBoardProps) {
+export function PlayableBoard({ state, viewerIndex, dispatch, chat, chatEnabled, onSendChat, busy }: PlayableBoardProps) {
   const {
     selectedCardId, targeting, notice, roleAbilityOpen, activePerkId, perkPickerOpen, allySupportCardId, eventCardId,
     exposeTargetId, tradeOpen, buyOpen, handlers,
@@ -43,7 +53,8 @@ export function PlayableBoard({ state, viewerIndex, dispatch, chat, chatEnabled,
       chat={chat}
       chatEnabled={chatEnabled}
       onSendChat={onSendChat}
-      {...handlers}
+      busy={busy}
+      {...(busy ? {} : handlers)}
     />
   );
 }

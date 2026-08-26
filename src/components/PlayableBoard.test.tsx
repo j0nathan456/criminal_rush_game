@@ -32,3 +32,29 @@ describe('<PlayableBoard /> — playing an Event card end to end', () => {
     });
   });
 });
+
+describe('<PlayableBoard /> — busy (online action round-trip in flight)', () => {
+  it('shows a syncing indicator and withholds every handler, so a click mid-request is a no-op', () => {
+    const dispatch = vi.fn();
+    render(<PlayableBoard state={MOCK_GAME} viewerIndex={0} dispatch={dispatch} busy />);
+
+    expect(screen.getByText('Syncing…')).toBeInTheDocument();
+
+    // Clicking a hand card would normally open its EventPanel (see the Tax
+    // Collection test above) — with no onSelectCard handler wired up while
+    // busy, it does nothing instead of queuing a second, conflicting action.
+    fireEvent.click(screen.getByAltText('Tax Collection'));
+    expect(screen.queryByLabelText('Event card')).not.toBeInTheDocument();
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('is not shown, and handlers work normally, once the request settles', () => {
+    const dispatch = vi.fn();
+    render(<PlayableBoard state={MOCK_GAME} viewerIndex={0} dispatch={dispatch} busy={false} />);
+
+    expect(screen.queryByText('Syncing…')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByAltText('Tax Collection'));
+    fireEvent.click(screen.getByRole('button', { name: /Play Tax Collection/ }));
+    expect(screen.getByLabelText('Event card')).toBeInTheDocument();
+  });
+});
