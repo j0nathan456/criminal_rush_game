@@ -242,8 +242,12 @@ export function GameBoard({
 
   return (
     <div className="flex min-h-screen flex-col gap-2 p-3">
-      {/* Top bar (compact) */}
-      <header className="flex items-center justify-between gap-3 rounded-xl border border-line/80 bg-gradient-to-r from-civ/10 via-transparent to-crim/10 px-4 py-1.5 backdrop-blur-sm">
+      {/* Top bar (compact). `will-change-transform` forces its own GPU
+          compositing layer up front — without it, Chrome can paint a
+          `backdrop-blur` element solid black for a frame during scroll
+          repaints, which lands right on top of the Evidence Grid below
+          since that's what a scroll-to-top puts under this header. */}
+      <header className="flex items-center justify-between gap-3 rounded-xl border border-line/80 bg-gradient-to-r from-civ/10 via-transparent to-crim/10 px-4 py-1.5 backdrop-blur-sm will-change-transform">
         <div className="flex items-baseline gap-3">
           <span className="text-lg font-extrabold tracking-wide">Criminal Rush</span>
           <span className="hidden text-xs text-fog sm:inline">Save the City… or Control It</span>
