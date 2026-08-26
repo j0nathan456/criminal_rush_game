@@ -23,14 +23,15 @@ import {
   applyCombatChoice,
   attackActionCost,
   attackError,
-  buildPendingChoices,
   enterPowerPhase,
   hasItem,
   otherSide,
   powerCardEligible,
   powerCardValue,
+  resolveAttackerPreCombat,
   resolveCombat,
-  resolvePreCombat,
+  resolveDefenderPreCombat,
+  sidePendingChoices,
 } from './combat.js';
 
 export type GameAction =
@@ -1508,27 +1509,39 @@ function attack(state: GameState, idx: number, player: Player, targetId: string)
   }));
   s = log(s, `${player.name} attacks ${target.name}! (${cost} action${cost === 1 ? '' : 's'})`);
 
-  // Deterministic pre-combat weapon effects (draw/discard/steal).
-  s = resolvePreCombat(s, player.id, target.id);
+  // The attacker's whole before-combat block — deterministic effects
+  // (draw/discard/steal), then any interactive choice (Portal/Drones/
+  // Mutants/Pistol) — resolves in full before the defender's so much as
+  // starts (see CombatState.awaitingDefenderPreCombat / enterDefenderPreCombat).
+  s = resolveAttackerPreCombat(s, player.id, target.id);
   const atk = s.players[playerIndexById(s, player.id)];
   const def = s.players[playerIndexById(s, target.id)];
   const playerCount = s.players.length;
 
-  // Interactive pre-combat choices (Portal / Drones / Mutants / Pistol) are resolved in
-  // the PRE phase before base powers are known; otherwise open the Power phase.
-  const pending = buildPendingChoices(s, atk.id, def.id);
-  const combat: CombatState = {
+  const attackerPending = sidePendingChoices(s, atk.id, def.id, 'ATTACKER');
+  let combat: CombatState = {
     attacker: { playerId: atk.id, basePower: 0, powerCardBonus: 0, passed: false, canPlayPower: true },
     defender: { playerId: def.id, basePower: 0, powerCardBonus: 0, passed: false, canPlayPower: true },
     turn: 'ATTACKER',
     played: [],
     actionCost: cost,
     playerCount,
-    phase: pending.length > 0 ? 'PRE' : 'POWER',
-    pending,
+    phase: 'PRE',
+    pending: attackerPending,
+    awaitingDefenderPreCombat: true,
   };
+  if (attackerPending.length > 0) {
+    s = { ...s, combat };
+    return log(s, `${atk.name} attacks ${def.name}. Resolve pre-combat weapon choices.`);
+  }
+
+  // The attacker had no before-combat effect to wait on — start the
+  // defender's block immediately instead of leaving it deferred.
+  s = resolveDefenderPreCombat(s, atk.id, def.id);
+  const defenderPending = sidePendingChoices(s, def.id, atk.id, 'DEFENDER');
+  combat = { ...combat, pending: defenderPending, awaitingDefenderPreCombat: false };
   s = { ...s, combat };
-  if (pending.length > 0) {
+  if (defenderPending.length > 0) {
     return log(s, `${atk.name} attacks ${def.name}. Resolve pre-combat weapon choices.`);
   }
   return enterPowerPhase(s);

@@ -311,11 +311,21 @@ function preCombatFor(state: GameState, selfId: string, oppId: string, isAttacke
   return s;
 }
 
-/** Resolve every before-combat weapon effect: attacker first, then defender. */
-export function resolvePreCombat(state: GameState, attackerId: string, defenderId: string): GameState {
-  let s = preCombatFor(state, attackerId, defenderId, true);
-  s = preCombatFor(s, defenderId, attackerId, false);
-  return s;
+/**
+ * Resolve one side's deterministic before-combat weapon effects. Split out of
+ * the old combined resolvePreCombat so the attacker's whole PRE block (this,
+ * then their interactive choices) can finish — including anything the player
+ * chooses to draw/discard mid-block — before the defender's block so much as
+ * starts, rather than every deterministic effect (both sides) firing as one
+ * batch ahead of any interactive one (see attack()'s ordering below).
+ */
+export function resolveAttackerPreCombat(state: GameState, attackerId: string, defenderId: string): GameState {
+  return preCombatFor(state, attackerId, defenderId, true);
+}
+
+/** Defender counterpart of resolveAttackerPreCombat — see its docs. */
+export function resolveDefenderPreCombat(state: GameState, attackerId: string, defenderId: string): GameState {
+  return preCombatFor(state, defenderId, attackerId, false);
 }
 
 // --- Interactive pre-combat choices (Portal / Drones / Mutants / Pistol / Barbed Wire) ----
@@ -329,33 +339,27 @@ const CHOICE_WEAPONS: Record<string, CombatChoice['kind']> = {
 };
 
 /**
- * Build the queue of interactive pre-combat choices — attacker's weapons first,
- * then the defender's. The Power phase begins once all are resolved. Pistol
- * and Barbed Wire are only queued when there's actually a card to discard
- * ("if possible" — an empty hand means there's no choice to make). Barbed
- * Wire is handled separately from CHOICE_WEAPONS since its chooser is the
- * *opponent* of the holder, not the holder themselves (see the BARBED_WIRE
- * CombatChoice variant).
+ * Build one side's interactive pre-combat choices. Pistol and Barbed Wire are
+ * only queued when there's actually a card to discard ("if possible" — an
+ * empty hand means there's no choice to make). Barbed Wire is handled
+ * separately from CHOICE_WEAPONS since its chooser is the *opponent* of the
+ * holder, not the holder themselves (see the BARBED_WIRE CombatChoice variant).
  */
-export function buildPendingChoices(state: GameState, attackerId: string, defenderId: string): CombatChoice[] {
+export function sidePendingChoices(state: GameState, playerId: string, oppId: string, side: CombatSide): CombatChoice[] {
   const choices: CombatChoice[] = [];
-  const add = (playerId: string, oppId: string, side: CombatSide) => {
-    const player = state.players[playerIndexById(state, playerId)];
-    if (!player) return;
-    for (const w of weaponsOf(player)) {
-      if (w.name === 'Barbed Wire') {
-        const opp = state.players[playerIndexById(state, oppId)];
-        if (opp && opp.hand.length > 0) choices.push({ kind: 'BARBED_WIRE', playerId: oppId, weaponId: w.id, side });
-        continue;
-      }
-      const kind = CHOICE_WEAPONS[w.name];
-      if (!kind || kind === 'LEAVING_EVIDENCE') continue;
-      if (kind === 'PISTOL' && player.hand.length === 0) continue;
-      choices.push({ kind, playerId, weaponId: w.id, side } as CombatChoice);
+  const player = state.players[playerIndexById(state, playerId)];
+  if (!player) return choices;
+  for (const w of weaponsOf(player)) {
+    if (w.name === 'Barbed Wire') {
+      const opp = state.players[playerIndexById(state, oppId)];
+      if (opp && opp.hand.length > 0) choices.push({ kind: 'BARBED_WIRE', playerId: oppId, weaponId: w.id, side });
+      continue;
     }
-  };
-  add(attackerId, defenderId, 'ATTACKER');
-  add(defenderId, attackerId, 'DEFENDER');
+    const kind = CHOICE_WEAPONS[w.name];
+    if (!kind || kind === 'LEAVING_EVIDENCE') continue;
+    if (kind === 'PISTOL' && player.hand.length === 0) continue;
+    choices.push({ kind, playerId, weaponId: w.id, side } as CombatChoice);
+  }
   return choices;
 }
 
@@ -646,10 +650,34 @@ function advancePendingQueue(state: GameState): GameState {
   }
   let s: GameState = { ...state, combat: { ...combat, pending: rest } };
   if (rest.length === 0) {
-    if (combat.phase === 'PRE') s = enterPowerPhase(s);
-    else if (combat.phase === 'AFTER') s = { ...s, combat: null };
+    if (combat.phase === 'PRE' && combat.awaitingDefenderPreCombat) {
+      // The attacker's whole PRE block (deterministic, then interactive) just
+      // finished — only now does the defender's block start, so their
+      // before-combat effects never jump ahead of the attacker's (see
+      // attack()'s matching ordering comment).
+      s = enterDefenderPreCombat(s);
+    } else if (combat.phase === 'PRE') {
+      s = enterPowerPhase(s);
+    } else if (combat.phase === 'AFTER') {
+      s = { ...s, combat: null };
+    }
   }
   return s;
+}
+
+/**
+ * Resolve the defender's deterministic before-combat effects and queue their
+ * interactive choices, now that the attacker's own PRE block is done. Enters
+ * the Power phase directly if the defender has nothing pending.
+ */
+function enterDefenderPreCombat(state: GameState): GameState {
+  const combat = state.combat!;
+  const attackerId = combat.attacker.playerId;
+  const defenderId = combat.defender.playerId;
+  let s = resolveDefenderPreCombat(state, attackerId, defenderId);
+  const pending = sidePendingChoices(s, defenderId, attackerId, 'DEFENDER');
+  s = { ...s, combat: { ...s.combat!, pending, awaitingDefenderPreCombat: false } };
+  return pending.length > 0 ? s : enterPowerPhase(s);
 }
 
 /**

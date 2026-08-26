@@ -887,32 +887,36 @@ describe('interactive combat — pre-combat choices', () => {
     const s = stateWith([atk, def], { currentPlayerIndex: 0 });
 
     let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
-    // The defender's own Mosquitos already fired automatically pre-combat,
-    // discarding the attacker's card — unrelated to the Mutants copy below.
-    expect(next.players[0].hand).toHaveLength(0);
-    expect(next.discardPile.map((c) => c.id)).toContain('atk-card');
-    expect(next.players[1].hand).toHaveLength(1); // defender's own card untouched so far
+    // The attacker's Mutants choice comes first — the defender's own real
+    // Mosquitos hasn't fired yet (see the attacker-before-defender PRE fix).
+    expect(next.combat!.pending.map((c) => c.kind)).toEqual(['MUTANTS']);
+    expect(next.players[0].hand).toHaveLength(1);
+    expect(next.players[1].hand).toHaveLength(1);
 
     next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'COPY', opponentWeaponId: 'mos' } });
-    // The copied Mosquitos now forces the opponent it was copied from — the
-    // defender — to discard too. Never anyone else.
+    // The copied Mosquitos forces the opponent it was copied from — the
+    // defender — to discard. That was the attacker's last PRE item, so the
+    // defender's own real Mosquitos fires right after, discarding back.
     expect(next.players[1].hand).toHaveLength(0);
     expect(next.discardPile.map((c) => c.id)).toContain('def-card');
+    expect(next.players[0].hand).toHaveLength(0);
+    expect(next.discardPile.map((c) => c.id)).toContain('atk-card');
   });
 
   it('Mutants copying Hammer draws the holder a card, not the opponent', () => {
     const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mut', 'Mutants', 'CHEMICAL', 1)] });
     const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2), inventory: [wpn('ham', 'Hammer', 'MELEE', 2)] });
-    // Two cards: the defender's own Hammer draws the first before the PRE
-    // phase even opens; the Mutants-copied Hammer should draw the second.
-    const s = stateWith([atk, def], { currentPlayerIndex: 0, drawPile: [junk('def-drawn'), junk('atk-drawn')] });
+    // Two cards: the Mutants-copied Hammer draws the first, as part of the
+    // attacker's PRE block; the defender's own real Hammer only fires once
+    // that block finishes (see the attacker-before-defender PRE fix).
+    const s = stateWith([atk, def], { currentPlayerIndex: 0, drawPile: [junk('atk-drawn'), junk('def-drawn')] });
 
     let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
-    expect(next.players[1].hand.map((c) => c.id)).toEqual(['def-drawn']); // defender's own Hammer already fired
+    expect(next.players[1].hand).toHaveLength(0); // defender's own Hammer hasn't fired yet
 
     next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'COPY', opponentWeaponId: 'ham' } });
     expect(next.players[0].hand.map((c) => c.id)).toContain('atk-drawn'); // the copy draws for the holder
-    expect(next.players[1].hand.map((c) => c.id)).toEqual(['def-drawn']); // defender's hand unaffected by the copy
+    expect(next.players[1].hand.map((c) => c.id)).toEqual(['def-drawn']); // now the defender's own Hammer fires too
   });
 
   it('Mutants copying Brass Knuckles steals $1 from the copied-from opponent while the holder is attacking', () => {
@@ -978,22 +982,30 @@ describe('interactive combat — pre-combat choices', () => {
   });
 
   it('DRONES_RETURN inserts ahead of the remaining PRE queue rather than replacing it', () => {
-    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('dr', 'Drones', 'TECH', 2)], hand: [junk('mine')] });
-    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2), inventory: [wpn('por', 'Portal', 'TECH', 0)] });
+    // Both weapons are the attacker's own — Drones' chained DRONES_RETURN
+    // needs a same-side item still queued behind it to prove it inserts
+    // rather than replaces (a defender's weapon wouldn't even be queued yet;
+    // see the attacker-before-defender PRE ordering fix).
+    const atk = mkPlayer({
+      id: 'a', role: role('hitman', 'CRIMINAL', 3),
+      inventory: [wpn('dr', 'Drones', 'TECH', 2), wpn('pis', 'Pistol', 'RANGED', 4)],
+      hand: [junk('mine'), junk('spare')],
+    });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2) });
     const mate = mkPlayer({ id: 'm', role: role('spy', 'CRIMINAL', 4), hand: [junk('theirs')] });
-    const s = stateWith([atk, def, mate], { currentPlayerIndex: 0, drawPile: [junk('x'), junk('y')] });
+    const s = stateWith([atk, def, mate], { currentPlayerIndex: 0 });
 
     let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
-    expect(next.combat!.pending.map((c) => c.kind)).toEqual(['DRONES', 'PORTAL']);
+    expect(next.combat!.pending.map((c) => c.kind)).toEqual(['DRONES', 'PISTOL']);
 
     next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'DRONES', mode: 'EXCHANGE', cardId: 'mine', teammateId: 'm' } });
-    expect(next.combat!.pending.map((c) => c.kind)).toEqual(['DRONES_RETURN', 'PORTAL']);
+    expect(next.combat!.pending.map((c) => c.kind)).toEqual(['DRONES_RETURN', 'PISTOL']);
 
     next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'DRONES_RETURN', cardId: 'theirs' } });
-    expect(next.combat!.pending.map((c) => c.kind)).toEqual(['PORTAL']);
-    expect(next.combat!.phase).toBe('PRE'); // Portal still unresolved
+    expect(next.combat!.pending.map((c) => c.kind)).toEqual(['PISTOL']);
+    expect(next.combat!.phase).toBe('PRE'); // Pistol still unresolved
 
-    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'PORTAL', mode: 'DRAW' } });
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'PISTOL', cardId: 'spare' } });
     expect(next.combat!.phase).toBe('POWER');
   });
 
@@ -1040,6 +1052,42 @@ describe('interactive combat — pre-combat choices', () => {
     expect(next.combat!.phase).toBe('POWER'); // no PRE choice queued — nothing to discard
   });
 
+  it('holding both Hammer and Pistol: the Hammer draw lands first, so the drawn card is already available to discard for Pistol', () => {
+    const atk = mkPlayer({
+      id: 'a', role: role('hitman', 'CRIMINAL', 3),
+      inventory: [wpn('pis', 'Pistol', 'RANGED', 4), wpn('ham', 'Hammer', 'MELEE', 2)],
+      hand: [],
+    });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2) });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0, drawPile: [junk('drawn')] });
+
+    const next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    expect(next.combat!.pending).toEqual([{ kind: 'PISTOL', playerId: 'a', weaponId: 'pis', side: 'ATTACKER' }]);
+    expect(next.players[0].hand.map((c) => c.id)).toEqual(['drawn']); // Hammer's draw already landed
+    const hammerIdx = next.gameLog.findIndex((l) => l.includes('Hammer draws'));
+    const pistolIdx = next.gameLog.findIndex((l) => l.includes('Resolve pre-combat weapon choices'));
+    expect(hammerIdx).toBeGreaterThanOrEqual(0);
+    expect(hammerIdx).toBeLessThan(pistolIdx);
+  });
+
+  it("an attacker's Pistol (interactive) blocks a defender's Hammer (deterministic) from firing first", () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('pis', 'Pistol', 'RANGED', 4)], hand: [junk('mine')] });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2), inventory: [wpn('ham', 'Hammer', 'MELEE', 2)] });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0, drawPile: [junk('drawn')] });
+
+    // Right after ATTACK: the attacker's Pistol is the only pending choice —
+    // the defender's Hammer hasn't fired yet, and won't until Pistol resolves.
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    expect(next.combat!.pending).toEqual([{ kind: 'PISTOL', playerId: 'a', weaponId: 'pis', side: 'ATTACKER' }]);
+    expect(next.gameLog.some((l) => l.includes('Hammer draws'))).toBe(false);
+    expect(next.players[1].hand).toHaveLength(0); // defender hasn't drawn yet
+
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'PISTOL', cardId: 'mine' } });
+    expect(next.combat!.phase).toBe('POWER'); // Hammer had nothing interactive, so PRE drains straight through
+    expect(next.gameLog.some((l) => l.includes("d's Hammer draws"))).toBe(true);
+    expect(next.players[1].hand.map((c) => c.id)).toEqual(['drawn']);
+  });
+
   it('Barbed Wire lets the opponent choose which card to discard, not a random/first one', () => {
     const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('bw', 'Barbed Wire', 'MELEE', 1)] });
     const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2), hand: [junk('keep'), junk('toss')] });
@@ -1080,25 +1128,22 @@ describe('interactive combat — pre-combat choices', () => {
     expect(next.combat!.phase).toBe('POWER');
   });
 
-  it("auto-skips Barbed Wire once the discarder's hand is already empty — e.g. their own Pistol resolved first", () => {
+  it("skips Barbed Wire once the discarder's hand is already empty — e.g. their own Pistol resolved first", () => {
     const atk = mkPlayer({
       id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('pis', 'Pistol', 'RANGED', 4)], hand: [junk('only')],
     });
     const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2), inventory: [wpn('bw', 'Barbed Wire', 'MELEE', 1)] });
     const s = stateWith([atk, def], { currentPlayerIndex: 0 });
 
+    // Only the attacker's Pistol is queued — the defender's Barbed Wire
+    // (which targets the attacker) is deferred until the attacker's whole
+    // PRE block finishes (see the attacker-before-defender PRE fix).
     let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
-    // Both target the attacker's own hand: their own Pistol (attacker's
-    // weapons are queued first) and the defender's Barbed Wire.
-    expect(next.combat!.pending).toEqual([
-      { kind: 'PISTOL', playerId: 'a', weaponId: 'pis', side: 'ATTACKER' },
-      { kind: 'BARBED_WIRE', playerId: 'a', weaponId: 'bw', side: 'DEFENDER' },
-    ]);
+    expect(next.combat!.pending).toEqual([{ kind: 'PISTOL', playerId: 'a', weaponId: 'pis', side: 'ATTACKER' }]);
 
-    // Resolving Pistol empties the attacker's one-card hand — the
-    // still-queued Barbed Wire (also targeting the attacker) is now a dead
-    // choice and must be auto-skipped rather than leaving the player stuck
-    // on an empty picker.
+    // Resolving Pistol empties the attacker's one-card hand — by the time the
+    // defender's Barbed Wire would be queued, there's nothing left for it to
+    // target, so it's skipped outright rather than ever reaching the queue.
     next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'PISTOL', cardId: 'only' } });
     expect(next.combat!.phase).toBe('POWER');
   });
@@ -1117,21 +1162,20 @@ describe('interactive combat — pre-combat choices', () => {
     const s = stateWith([atk, def], { currentPlayerIndex: 0 });
 
     let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
-    // Queued: the attacker's Mutants choice, then the defender's real Barbed
-    // Wire (which targets the attacker, who has a card to lose).
-    expect(next.combat!.pending).toEqual([
-      { kind: 'MUTANTS', playerId: 'a', weaponId: 'mut', side: 'ATTACKER' },
-      { kind: 'BARBED_WIRE', playerId: 'a', weaponId: 'bw', side: 'DEFENDER' },
-    ]);
+    // Only the attacker's Mutants choice is queued — the defender's real
+    // Barbed Wire is deferred until the attacker's PRE block finishes (see
+    // the attacker-before-defender PRE fix).
+    expect(next.combat!.pending).toEqual([{ kind: 'MUTANTS', playerId: 'a', weaponId: 'mut', side: 'ATTACKER' }]);
 
     next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'COPY', opponentWeaponId: 'bw' } });
     // The copy chains its own choice — targeting the defender it was copied
-    // from — ahead of the still-pending real Barbed Wire.
+    // from — in place of the now-empty attacker queue.
     expect(next.combat!.pending[0]).toEqual({ kind: 'BARBED_WIRE', playerId: 'd', weaponId: 'bw', side: 'ATTACKER' });
 
     next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'BARBED_WIRE', cardId: 'toss' } });
     expect(next.players[1].hand.map((c) => c.id)).toEqual(['keep']); // the copy's target discarded
-    // The real Barbed Wire (defender's own weapon, forcing the attacker) still follows.
+    // That was the attacker's last PRE item — now the defender's block
+    // starts, queuing their own real Barbed Wire (forcing the attacker).
     expect(next.combat!.pending[0]).toEqual({ kind: 'BARBED_WIRE', playerId: 'a', weaponId: 'bw', side: 'DEFENDER' });
 
     next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'BARBED_WIRE', cardId: 'atk-card' } });

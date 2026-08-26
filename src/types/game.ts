@@ -152,6 +152,13 @@ export interface CombatState {
   phase: CombatPhase;
   /** Queue of pending interactive choices; the head is the active one. */
   pending: CombatChoice[];
+  /**
+   * True while `pending` holds only the attacker's PRE-phase choices — the
+   * defender's before-combat effects (deterministic and interactive) are
+   * deliberately deferred until this drains, so the attacker's block always
+   * finishes first (see combat.ts's enterDefenderPreCombat).
+   */
+  awaitingDefenderPreCombat?: boolean;
 }
 
 export type PlayerActionType = 
