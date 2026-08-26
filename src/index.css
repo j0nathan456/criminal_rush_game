@@ -28,7 +28,15 @@
   --font-display: "Georgia", "Times New Roman", ui-serif, serif;
   --font-sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
 
-  --shadow-noir: 0 12px 44px rgba(0, 0, 0, 0.55);
+  /* Every `.panel`/`.cr-role`/`.cr-combat` box on the board (there are a
+     dozen-plus visible at once) pairs this with `backdrop-blur-sm` — a soft
+     44px shadow on that many boxes simultaneously is genuinely expensive to
+     rasterize, and losing that race during a scroll is the likely cause of
+     Chrome occasionally "checkerboarding" a panel to a solid black tile
+     (reported: consistent, Chrome-only, right after scrolling post-action).
+     Trimmed the radius/offset here — same soft-shadow character, meaningfully
+     cheaper to paint on every one of those boxes at once. */
+  --shadow-noir: 0 8px 20px rgba(0, 0, 0, 0.5);
 
   /* Exposed as animate-* utilities */
   --animate-fade-in: fade-in 0.45s ease both;

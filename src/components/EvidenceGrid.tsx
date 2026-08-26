@@ -30,7 +30,11 @@ export function EvidenceGrid({ grid, onSlotClick }: EvidenceGridProps) {
 
   return (
     <section
-      className={`panel bg-gradient-to-b from-civ/5 to-transparent ring-1 transition-shadow ${ring}`}
+      // No `transition-shadow`: animating a blurred box-shadow repaints every
+      // frame of the transition, on top of an already-heavy panel (see
+      // --shadow-noir's own comment) — the state just snaps instead now,
+      // which is cheap and still perfectly readable as a status change.
+      className={`panel bg-gradient-to-b from-civ/5 to-transparent ring-1 ${ring}`}
       aria-label="Evidence grid"
     >
       <header className="panel-head">

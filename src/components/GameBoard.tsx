@@ -245,12 +245,8 @@ export function GameBoard({
 
   return (
     <div className="flex min-h-screen flex-col gap-2 p-3">
-      {/* Top bar (compact). `will-change-transform` forces its own GPU
-          compositing layer up front — without it, Chrome can paint a
-          `backdrop-blur` element solid black for a frame during scroll
-          repaints, which lands right on top of the Evidence Grid below
-          since that's what a scroll-to-top puts under this header. */}
-      <header className="flex items-center justify-between gap-3 rounded-xl border border-line/80 bg-gradient-to-r from-civ/10 via-transparent to-crim/10 px-4 py-1.5 backdrop-blur-sm will-change-transform">
+      {/* Top bar (compact) */}
+      <header className="flex items-center justify-between gap-3 rounded-xl border border-line/80 bg-gradient-to-r from-civ/10 via-transparent to-crim/10 px-4 py-1.5 backdrop-blur-sm">
         <div className="flex items-baseline gap-3">
           <span className="text-lg font-extrabold tracking-wide">Criminal Rush</span>
           <span className="hidden text-xs text-fog sm:inline">Save the City… or Control It</span>
@@ -267,15 +263,11 @@ export function GameBoard({
         )}
       </header>
 
-      {/* Prominent active-player indicator — the most conspicuous global state.
-          `will-change-transform`: this banner (and the notice/Bodyguard panel
-          below it) mount and unmount right as an action resolves, reflowing
-          the board grid beneath them — see that grid's own comment for why
-          that's exactly when a fast scroll can leave a black tile behind. */}
+      {/* Prominent active-player indicator — the most conspicuous global state. */}
       {current && !state.winner && (
         <div
           aria-label="Active player"
-          className="flex items-center gap-3 rounded-2xl border-2 px-5 py-3 animate-turn-pulse will-change-transform"
+          className="flex items-center gap-3 rounded-2xl border-2 px-5 py-3 animate-turn-pulse"
           style={{ borderColor: TEAM_META[current.team].color, background: TEAM_META[current.team].soft }}
         >
           <span
@@ -312,7 +304,7 @@ export function GameBoard({
             initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
-            className="flex items-center justify-between gap-3 rounded-lg border border-amber/40 bg-amber/10 px-4 py-2.5 text-amber will-change-transform"
+            className="flex items-center justify-between gap-3 rounded-lg border border-amber/40 bg-amber/10 px-4 py-2.5 text-amber"
           >
             <span>{notice}</span>
           </motion.div>
@@ -328,14 +320,8 @@ export function GameBoard({
           row 2  Players     · Markets       · Case Log
           row 3  Profile     · Hand          · Actions
           Case Log sits closer to the action row than the deck does — it's
-          consulted far more often than the pile counts.
-          `will-change-transform`: this row reflows every time the winner
-          banner / notice / Bodyguard panel above it mounts or unmounts
-          (i.e. right when an action resolves) — without a layer already
-          promoted, a fast scroll landing on that same frame can outrun
-          the browser's raster and leave an unpainted (black) tile behind,
-          exactly over this row. */}
-      <div className="grid grid-cols-1 gap-4 will-change-transform lg:grid-cols-[minmax(260px,1fr)_minmax(800px,3fr)_minmax(350px,1.2fr)]">
+          consulted far more often than the pile counts. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(260px,1fr)_minmax(800px,3fr)_minmax(350px,1.2fr)]">
         {/* Row 1 */}
         <ScoreBoard scores={state.teamScores} targets={state.vpTargets} winner={state.winner} />
         <main className="min-w-0">
