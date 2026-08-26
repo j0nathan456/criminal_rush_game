@@ -38,6 +38,21 @@ describe('<AllySupportPanel />', () => {
     expect(onSubmit).toHaveBeenCalledWith('p1', { allyPayload: { targetId: undefined, cardId: 'm1', category: undefined, mode: undefined } });
   });
 
+  it('offers the actor themself as a target, labeled "(yourself)", to reuse their own Action', () => {
+    const onSubmit = vi.fn();
+    const actor = mkPlayer({ id: 'p0', name: 'Ana', role: role('collector', 'Collector', 'Commission') });
+    const s = stateWith([actor], { publicMarket: [perk('m1', 'Computer')] });
+
+    render(<AllySupportPanel state={s} viewerIndex={0} onSubmit={onSubmit} onCancel={() => {}} />);
+
+    fireEvent.click(screen.getByText('Ana (yourself)'));
+    fireEvent.click(screen.getByText('Commission (role)'));
+    fireEvent.click(screen.getByText('Computer ($2)'));
+    fireEvent.click(screen.getByText('Copy this Action'));
+
+    expect(onSubmit).toHaveBeenCalledWith('p0', { allyPayload: { targetId: undefined, cardId: 'm1', category: undefined, mode: undefined } });
+  });
+
   it('lists a teammate’s actionable perk to copy', () => {
     const onSubmit = vi.fn();
     const actor = mkPlayer({ id: 'p0', name: 'Ana', role: role('mayor', 'Mayor', 'City Hall') });

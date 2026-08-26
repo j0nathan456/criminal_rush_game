@@ -642,10 +642,12 @@ function resolveEvent(state: GameState, idx: number, name: string, targetId: str
       return log(s, `${actor.name} snarls ${victim.name} in a Traffic Jam.`);
     }
     case 'Ally Support': {
-      // Copy a teammate's role OR perk Action, performed by the actor for free.
+      // Copy a role OR perk Action — a teammate's, or the actor's own (the
+      // card reads "a teammate or yourself"; self-copy lets the actor reuse
+      // their own Action a second time this turn) — performed for free.
       const mateIndex = targetId ? playerIndexById(state, targetId) : -1;
       const mate = state.players[mateIndex];
-      if (!mate || mateIndex === idx || mate.team !== actor.team) return log(state, 'Ally Support must copy a teammate.');
+      if (!mate || mate.team !== actor.team) return log(state, 'Ally Support must copy a teammate or yourself.');
       if (mate.isInjured || mate.isCaptured) return log(state, `${mate.name}'s Action cannot be copied while injured or captured.`);
       if (options.allyPerkId) {
         const perk = mate.inventory.find((c) => c.id === options.allyPerkId && c.type !== 'WEAPON');

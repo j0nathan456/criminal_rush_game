@@ -2268,6 +2268,26 @@ describe('gameReducer — Ally Support copies a perk', () => {
     expect(next.players[1].inventory).toHaveLength(1); // teammate keeps their Bank
   });
 
+  it('lets the actor target themself to reuse their own perk a second time this turn', () => {
+    const evt: ActionCard = { id: 'e', name: 'Ally Support', description: '', type: 'EVENT' };
+    const cash: ActionCard = { id: 'm', name: 'Profit', description: '', type: 'MONEY', value: 2 };
+    const top: ActionCard = { id: 't', name: 'x', description: '', type: 'MONEY', value: 1 };
+    const bank: MarketCard = { id: 'pk', name: 'Bank', description: '', cost: 3, source: 'PUBLIC', type: 'PERK' };
+    const s = stateWith(
+      [mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 0, hand: [evt, cash], inventory: [bank], usedPerkIds: ['pk'] })],
+      { drawPile: [top] },
+    );
+    const next = gameReducer(s, {
+      type: 'PLAY_CARD',
+      cardId: 'e',
+      targetId: 'p0',
+      options: { allyPerkId: 'pk', allyPayload: { cardId: 'm' } },
+    });
+    expect(next.players[0].money).toBe(3); // 2 + 1 from Bank, despite already having used it this turn
+    expect(next.players[0].hand.some((c) => c.id === 't')).toBe(true);
+    expect(next.gameLog.at(-2)).toBe("p0 uses Ally Support to copy p0's Bank.");
+  });
+
   it('copies a teammate’s Credit Card at the $1 (non-discard) rate', () => {
     const evt: ActionCard = { id: 'e', name: 'Ally Support', description: '', type: 'EVENT' };
     const cc: MarketCard = { id: 'pk', name: 'Credit Card', description: '', cost: 2, source: 'PUBLIC', type: 'PERK' };

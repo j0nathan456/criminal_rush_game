@@ -76,7 +76,7 @@ describe('<JournalPanel />', () => {
 
     fireEvent.click(screen.getByText('Use Journal'));
     expect(onUse).not.toHaveBeenCalled();
-    expect(screen.getByText('Choose a teammate:')).toBeInTheDocument(); // AllySupportPanel, not EventPanel
+    expect(screen.getByText('Whose Action?')).toBeInTheDocument(); // AllySupportPanel, not EventPanel
 
     fireEvent.click(screen.getByText('Ben'));
     fireEvent.click(screen.getByText('Coffee Machine'));

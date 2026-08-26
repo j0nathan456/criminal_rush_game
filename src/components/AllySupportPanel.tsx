@@ -22,7 +22,9 @@ function copyableActions(player: Player): { hasRole: boolean; perks: Player['inv
 }
 
 /**
- * Drives the Ally Support event: pick a teammate, then copy their role Action
+ * Drives the Ally Support event: pick a teammate — or the actor themself, per
+ * the card's own text ("a teammate or yourself"), letting them reuse their
+ * own role/perk Action a second time this turn — then copy their role Action
  * (rendered via RoleAbilityPanel with a role override) or one of their perk
  * Actions (via PerkActionPanel with a perk override). The actor performs the
  * copied action with their own resources; the engine runs it "for free".
@@ -34,9 +36,7 @@ export function AllySupportPanel({ state, viewerIndex, onSubmit, onCancel }: All
 
   if (!viewer) return null;
 
-  const teammates = state.players.filter(
-    (p) => p.team === viewer.team && p.id !== viewer.id && !p.isInjured && !p.isCaptured,
-  );
+  const candidates = state.players.filter((p) => p.team === viewer.team && !p.isInjured && !p.isCaptured);
   const teammate = teammateId ? state.players.find((p) => p.id === teammateId) : undefined;
 
   // Step 3a: copy the teammate's role Action.
@@ -86,13 +86,15 @@ export function AllySupportPanel({ state, viewerIndex, onSubmit, onCancel }: All
       <header className="cr-role__head" style={{ color: TEAM_META[viewer.team].color }}>
         <h2>🤝 Ally Support</h2>
       </header>
-      <p className="cr-role__desc">Copy a teammate’s role or perk Action.</p>
+      <p className="cr-role__desc">Copy a teammate’s role or perk Action — or your own.</p>
 
       <div className="cr-role__body">
-        <p>Choose a teammate:</p>
+        <p>Whose Action?</p>
         <div className="cr-role__chips">
-          {teammates.length === 0 && <span className="cr-role__empty">No eligible teammates.</span>}
-          {teammates.map((p) => chip(p.name, teammateId === p.id, () => { setTeammateId(p.id); setCopy(undefined); }, p.id))}
+          {candidates.length === 0 && <span className="cr-role__empty">No eligible players.</span>}
+          {candidates.map((p) =>
+            chip(p.id === viewer.id ? `${p.name} (yourself)` : p.name, teammateId === p.id, () => { setTeammateId(p.id); setCopy(undefined); }, p.id),
+          )}
         </div>
 
         {teammate && actions && (
