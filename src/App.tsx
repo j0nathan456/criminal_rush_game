@@ -1,3 +1,4 @@
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { OnlineController } from './components/OnlineController';
 
 /**
@@ -6,7 +7,12 @@ import { OnlineController } from './components/OnlineController';
  * first screen (create / join) is the app's landing page.
  */
 function App() {
-  return <OnlineController />;
+  return (
+    <>
+      <OnlineController />
+      <SpeedInsights />
+    </>
+  );
 }
 
 export default App;
