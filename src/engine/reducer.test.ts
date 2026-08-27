@@ -1363,6 +1363,40 @@ describe('gameReducer — Event cards', () => {
     expect(next.players[0].hand.some((c) => c.id === 'd')).toBe(true); // drew
   });
 
+  it('Market Exchange carries a maxed-out Vitamin\'s tracker and +2 PL to the recipient', () => {
+    const evt: ActionCard = { id: 'e', name: 'Market Exchange', description: '', type: 'EVENT' };
+    const vitamin: MarketCard = { id: 'i1', name: 'Vitamin', description: '', cost: 3, source: 'PUBLIC', type: 'PERK', isPassive: true };
+    const s = stateWith(
+      [
+        mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), hand: [evt], inventory: [vitamin], vitaminStage: 4, powerLevel: 5 }),
+        mkPlayer({ id: 'p1', role: role('attorney', 'CIVILIAN'), powerLevel: 3 }),
+      ],
+      { drawPile: [money('d', 1)] },
+    );
+    const next = gameReducer(s, { type: 'PLAY_CARD', cardId: 'e', targetId: 'p1', options: { inventoryCardId: 'i1' } });
+    expect(next.players[0].vitaminStage).toBe(0);
+    expect(next.players[0].powerLevel).toBe(3); // lost the +2 PL Vitamin had granted
+    expect(next.players[1].vitaminStage).toBe(4);
+    expect(next.players[1].powerLevel).toBe(5); // gained the +2 PL
+  });
+
+  it('Market Exchange carries a partially-advanced Vitamin\'s stage without moving any PL yet', () => {
+    const evt: ActionCard = { id: 'e', name: 'Market Exchange', description: '', type: 'EVENT' };
+    const vitamin: MarketCard = { id: 'i1', name: 'Vitamin', description: '', cost: 3, source: 'PUBLIC', type: 'PERK', isPassive: true };
+    const s = stateWith(
+      [
+        mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), hand: [evt], inventory: [vitamin], vitaminStage: 2, powerLevel: 3 }),
+        mkPlayer({ id: 'p1', role: role('attorney', 'CIVILIAN'), powerLevel: 3 }),
+      ],
+      { drawPile: [money('d', 1)] },
+    );
+    const next = gameReducer(s, { type: 'PLAY_CARD', cardId: 'e', targetId: 'p1', options: { inventoryCardId: 'i1' } });
+    expect(next.players[0].vitaminStage).toBe(0);
+    expect(next.players[0].powerLevel).toBe(3); // no PL banked yet at stage 2, nothing to lose
+    expect(next.players[1].vitaminStage).toBe(2); // recipient's turn will advance to stage 3 next
+    expect(next.players[1].powerLevel).toBe(3);
+  });
+
   it('Spring Cleaning refuses without exactly 3 chosen Market cards', () => {
     const evt: ActionCard = { id: 'e', name: 'Spring Cleaning', description: '', type: 'EVENT' };
     const market: MarketCard[] = ['m1', 'm2', 'm3', 'm4', 'm5'].map((id) => ({

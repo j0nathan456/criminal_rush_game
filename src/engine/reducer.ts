@@ -592,6 +592,16 @@ function resolveEvent(state: GameState, idx: number, name: string, targetId: str
       if (to.inventory.filter((c) => c.type !== 'WEAPON').length >= MAX_PERKS) return log(state, `${to.name} already has 4 perks.`);
       let s = updatePlayer(state, fromIndex, (p) => ({ ...p, inventory: p.inventory.filter((c) => c.id !== perk.id) }));
       s = updatePlayer(s, toIndex, (p) => ({ ...p, inventory: [...p.inventory, perk] }));
+      // Vitamin's tracker (and any +1 PL it's already banked) belongs to the
+      // card, not whoever happened to be holding it — carry the stage over
+      // and move any already-granted PL with it, instead of leaving the
+      // giver with a stat gain from a perk they no longer have.
+      if (perk.name === 'Vitamin') {
+        const stage = from.vitaminStage ?? 0;
+        const plGranted = Math.max(0, Math.min(stage, 4) - 2);
+        s = updatePlayer(s, fromIndex, (p) => ({ ...p, vitaminStage: 0, powerLevel: p.powerLevel - plGranted }));
+        s = updatePlayer(s, toIndex, (p) => ({ ...p, vitaminStage: stage, powerLevel: p.powerLevel + plGranted }));
+      }
       s = gameReducerDraw(s);
       return log(s, `${actor.name} exchanges ${perk.name} with ${mate.name} and draws a card.`);
     }
