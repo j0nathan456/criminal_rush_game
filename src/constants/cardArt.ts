@@ -67,7 +67,7 @@ const DECK_ART = new Set([
 const MARKET_ART = new Set([
   'alarm', 'arrows', 'axe', 'bank', 'barbed-wire', 'bat', 'brass-knuckles', 'bribery',
   'cannon', 'catapult', 'coffee', 'computer', 'corrosion-cannisters', 'corrupt-connections',
-  'credit-card', 'disguise', 'drones', 'electric-baton', 'expand-network', 'express-shipping',
+  'credit-card', 'disguise', 'drones', 'electric-baton', 'express-shipping',
   'getaway-car', 'hacking-key', 'hammer', 'harpoon', 'investment', 'ironworks', 'journal', 'laboratory',
   'machine-gun', 'mafia-alliance', 'magnetic-deflector', 'manipulate', 'missile',
   'molotov-cocktail', 'mosquito', 'mutants', 'nerve-agents', 'parasites', 'pistol',
@@ -80,6 +80,15 @@ function resolve(name: string): string {
   const s = slug(name);
   return NAME_ALIASES[s] ?? s;
 }
+
+/**
+ * Expand Network is printed as 4 separate cards, one per rising price
+ * ($5/$6/$7/$8 — see createGame's expandNetworkPile), each with its own art
+ * showing that price. A single copy's `cost` is always exactly one of the
+ * four (the captured-Criminal surcharge is applied separately at purchase
+ * time, never written back into the card), so it maps 1:1 to a file.
+ */
+const EXPAND_NETWORK_COSTS = [5, 6, 7, 8];
 
 /** Full-face art URL for a role's play mat, or undefined if none exists. */
 export function roleArtUrl(roleId: string): string | undefined {
@@ -98,6 +107,10 @@ export function rolePortraitUrl(roleId: string): string | undefined {
 export function cardArtUrl(card: AnyCard): string | undefined {
   const s = resolve(card.name);
   if ('cost' in card) {
+    if (s === 'expand-network') {
+      const cost = EXPAND_NETWORK_COSTS.includes(card.cost) ? card.cost : EXPAND_NETWORK_COSTS[0];
+      return `${BASE}/market/expand-network-${cost}.png`;
+    }
     return MARKET_ART.has(s) ? `${BASE}/market/${s}.png` : undefined;
   }
   return DECK_ART.has(s) ? `${BASE}/deck/${s}.png` : undefined;

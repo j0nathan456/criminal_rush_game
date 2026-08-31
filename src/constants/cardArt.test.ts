@@ -22,13 +22,18 @@ function filePath(url: string): string {
 }
 
 const deckCards: AnyCard[] = ACTION_CARD_DEFS.map((d) => ({ name: d.name }) as AnyCard);
+// Expand Network is printed as 4 separate cards, one per rising price
+// ($5/$6/$7/$8 — see createGame's expandNetworkPile), each with its own art —
+// represent all 4 costs here so every tier's file is exercised.
+const expandNetworkCards: AnyCard[] = [5, 6, 7, 8].map(
+  (cost) => ({ name: EXPAND_NETWORK.name, cost }) as AnyCard,
+);
 const marketCards: AnyCard[] = [
-  ...MARKET_PERKS,
-  ...MARKET_WEAPONS,
-  ...BLACK_MARKET_PERKS,
-  ...BLACK_MARKET_WEAPONS,
-  EXPAND_NETWORK,
-].map((d) => ({ name: d.name, cost: d.cost }) as AnyCard);
+  ...[...MARKET_PERKS, ...MARKET_WEAPONS, ...BLACK_MARKET_PERKS, ...BLACK_MARKET_WEAPONS].map(
+    (d) => ({ name: d.name, cost: d.cost }) as AnyCard,
+  ),
+  ...expandNetworkCards,
+];
 const allCards = [...deckCards, ...marketCards];
 
 /** Every art file that actually exists on disk, as served URLs. */
