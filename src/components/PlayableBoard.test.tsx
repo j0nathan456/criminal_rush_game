@@ -33,6 +33,58 @@ describe('<PlayableBoard /> — playing an Event card end to end', () => {
   });
 });
 
+describe('<PlayableBoard /> — deck-out warning', () => {
+  // Empty draw pile + a non-empty discard: the next draw reshuffles and
+  // scores both teams a VP (rulebook §5) — exactly the moment to confirm.
+  const aboutToRunOut = {
+    ...MOCK_GAME,
+    drawPile: [],
+    discardPile: [{ id: 'x1', name: 'Filler', description: '', type: 'MONEY' as const }],
+  };
+
+  it('holds the action and asks for confirmation instead of dispatching blind', () => {
+    const dispatch = vi.fn();
+    render(<PlayableBoard state={aboutToRunOut} viewerIndex={0} dispatch={dispatch} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Draw/ }));
+
+    expect(screen.getByText('Deck will run out')).toBeInTheDocument();
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('dispatches the held action on Confirm', () => {
+    const dispatch = vi.fn();
+    render(<PlayableBoard state={aboutToRunOut} viewerIndex={0} dispatch={dispatch} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Draw/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    expect(dispatch).toHaveBeenCalledWith({ type: 'DRAW_CARD' });
+  });
+
+  it('drops the held action on Cancel', () => {
+    const dispatch = vi.fn();
+    render(<PlayableBoard state={aboutToRunOut} viewerIndex={0} dispatch={dispatch} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Draw/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('does not warn when the deck has plenty of cards left', () => {
+    const dispatch = vi.fn();
+    render(<PlayableBoard state={MOCK_GAME} viewerIndex={0} dispatch={dispatch} />);
+
+    // MOCK_GAME's draw and discard piles are both empty, so drawing can't
+    // reshuffle — it should dispatch immediately with no warning.
+    fireEvent.click(screen.getByRole('button', { name: /Draw/ }));
+
+    expect(screen.queryByText('Deck will run out')).not.toBeInTheDocument();
+    expect(dispatch).toHaveBeenCalledWith({ type: 'DRAW_CARD' });
+  });
+});
+
 describe('<PlayableBoard /> — busy (online action round-trip in flight)', () => {
   it('shows a syncing indicator and withholds every handler, so a click mid-request is a no-op', () => {
     const dispatch = vi.fn();

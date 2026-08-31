@@ -3,6 +3,7 @@ import type { GameAction } from '../engine';
 import type { ChatMessage } from '../online/protocol';
 import { GameBoard } from './GameBoard';
 import { useBoardInteractions } from './useBoardInteractions';
+import { DeckWarningModal } from './DeckWarningModal';
 
 interface PlayableBoardProps {
   state: GameState;
@@ -33,28 +34,31 @@ interface PlayableBoardProps {
 export function PlayableBoard({ state, viewerIndex, dispatch, chat, chatEnabled, onSendChat, busy }: PlayableBoardProps) {
   const {
     selectedCardId, targeting, notice, roleAbilityOpen, activePerkId, perkPickerOpen, allySupportCardId, eventCardId,
-    exposeTargetId, tradeOpen, buyOpen, handlers,
+    exposeTargetId, tradeOpen, buyOpen, deckWarningOpen, onConfirmDeckWarning, onCancelDeckWarning, handlers,
   } = useBoardInteractions(state, viewerIndex, dispatch);
   return (
-    <GameBoard
-      state={state}
-      viewerIndex={viewerIndex}
-      selectedCardId={selectedCardId}
-      targeting={targeting}
-      notice={notice}
-      roleAbilityOpen={roleAbilityOpen}
-      activePerkId={activePerkId}
-      perkPickerOpen={perkPickerOpen}
-      allySupportCardId={allySupportCardId}
-      eventCardId={eventCardId}
-      exposeTargetId={exposeTargetId}
-      tradeOpen={tradeOpen}
-      buyOpen={buyOpen}
-      chat={chat}
-      chatEnabled={chatEnabled}
-      onSendChat={onSendChat}
-      busy={busy}
-      {...(busy ? {} : handlers)}
-    />
+    <>
+      <GameBoard
+        state={state}
+        viewerIndex={viewerIndex}
+        selectedCardId={selectedCardId}
+        targeting={targeting}
+        notice={notice}
+        roleAbilityOpen={roleAbilityOpen}
+        activePerkId={activePerkId}
+        perkPickerOpen={perkPickerOpen}
+        allySupportCardId={allySupportCardId}
+        eventCardId={eventCardId}
+        exposeTargetId={exposeTargetId}
+        tradeOpen={tradeOpen}
+        buyOpen={buyOpen}
+        chat={chat}
+        chatEnabled={chatEnabled}
+        onSendChat={onSendChat}
+        busy={busy}
+        {...(busy ? {} : handlers)}
+      />
+      <DeckWarningModal open={deckWarningOpen} onConfirm={onConfirmDeckWarning} onCancel={onCancelDeckWarning} />
+    </>
   );
 }

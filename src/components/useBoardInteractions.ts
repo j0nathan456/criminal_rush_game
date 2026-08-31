@@ -10,7 +10,21 @@ import { useState } from 'react';
 import type { GameState } from '../types/game';
 import type { AnyCard, EvidenceCategory } from '../types/cards';
 import type { GameAction, RoleAbilityPayload, PerkPayload, EventOptions, TradeItem } from '../engine';
-import { ACTIONABLE_PERKS } from '../engine';
+import { ACTIONABLE_PERKS, gameReducer } from '../engine';
+
+/**
+ * Whether dispatching `action` right now would exhaust the draw pile and
+ * trigger the deck-out reshuffle (both teams score a VP — rulebook §5). Runs
+ * the real reducer speculatively and checks for its log line rather than
+ * re-deriving which actions draw and how many cards: `gameReducer` is pure
+ * and the reshuffle itself never shuffles (see drawCard/gameReducerDraw), so
+ * this speculative run can't diverge from — or consume randomness meant
+ * for — the real dispatch that follows a confirm.
+ */
+function wouldDeckRunOut(state: GameState, action: GameAction): boolean {
+  const next = gameReducer(state, action);
+  return next.gameLog.slice(state.gameLog.length).some((entry) => entry.includes('deck ran out'));
+}
 import type { ActionMeta } from '../constants/theme';
 import type { GameBoardHandlers, TargetMode } from './GameBoard';
 import { CONFIGURABLE_EVENTS } from './panelConstants';
@@ -35,6 +49,12 @@ export interface BoardInteractions {
   tradeOpen: boolean;
   /** Whether the Market/Black Market buy picker is open for the viewer. */
   buyOpen: boolean;
+  /** Whether the "deck will run out" confirmation is open. */
+  deckWarningOpen: boolean;
+  /** Proceed with the action that was held pending the deck-out warning. */
+  onConfirmDeckWarning: () => void;
+  /** Abandon the action that was held pending the deck-out warning. */
+  onCancelDeckWarning: () => void;
   handlers: GameBoardHandlers;
   /** Clear transient selection/targeting (e.g. after ending a turn). */
   reset: () => void;
@@ -56,9 +76,31 @@ export function useBoardInteractions(
   const [exposeTargetId, setExposeTargetId] = useState<string | null>(null);
   const [tradeOpen, setTradeOpen] = useState(false);
   const [buyOpen, setBuyOpen] = useState(false);
+  const [pendingDeckAction, setPendingDeckAction] = useState<GameAction | null>(null);
 
   const viewer = state.players[viewerIndex];
   const selectedCard = viewer?.hand.find((c) => c.id === selectedCardId);
+
+  /**
+   * Every game-affecting dispatch in this hook routes through here instead of
+   * the raw `dispatch` prop, so the deck-out warning applies uniformly no
+   * matter which action would trigger it (drawing, burning evidence, a perk
+   * that draws, ...) without each call site needing to know about it.
+   */
+  const guardedDispatch = (action: GameAction) => {
+    if (wouldDeckRunOut(state, action)) {
+      setPendingDeckAction(action);
+      return;
+    }
+    dispatch(action);
+  };
+
+  const onConfirmDeckWarning = () => {
+    if (pendingDeckAction) dispatch(pendingDeckAction);
+    setPendingDeckAction(null);
+  };
+
+  const onCancelDeckWarning = () => setPendingDeckAction(null);
 
   const reset = () => {
     setSelectedCardId(null);
@@ -99,7 +141,7 @@ export function useBoardInteractions(
       setEventCardId(card.id);
       return;
     }
-    dispatch({ type: 'PLAY_CARD', cardId: card.id });
+    guardedDispatch({ type: 'PLAY_CARD', cardId: card.id });
     setSelectedCardId(null);
   };
 
@@ -107,7 +149,7 @@ export function useBoardInteractions(
     setNotice(null);
     switch (action.type) {
       case 'DRAW_CARD':
-        dispatch({ type: 'DRAW_CARD' });
+        guardedDispatch({ type: 'DRAW_CARD' });
         setSelectedCardId(null);
         break;
       case 'PLAY_CARD':
@@ -153,7 +195,7 @@ export function useBoardInteractions(
         break;
       case 'SPECIAL_GOAL':
         if (viewer?.team === 'CIVILIAN') setTargeting('expose');
-        else dispatch({ type: 'EXPAND_NETWORK' });
+        else guardedDispatch({ type: 'EXPAND_NETWORK' });
         break;
       case 'COMBAT':
         setTargeting('attack');
@@ -171,7 +213,7 @@ export function useBoardInteractions(
 
   const onPlayEvidence = (category: EvidenceCategory) => {
     if (selectedCard && selectedCard.type === 'EVIDENCE') {
-      dispatch({ type: 'PLAY_CARD', cardId: selectedCard.id, category });
+      guardedDispatch({ type: 'PLAY_CARD', cardId: selectedCard.id, category });
       setSelectedCardId(null);
     } else {
       setNotice('Select an Evidence card in your hand first, then click a category.');
@@ -180,7 +222,7 @@ export function useBoardInteractions(
 
   const onCashInEvidence = () => {
     if (selectedCard && selectedCard.type === 'EVIDENCE') {
-      dispatch({ type: 'CASH_IN_EVIDENCE', cardId: selectedCard.id });
+      guardedDispatch({ type: 'CASH_IN_EVIDENCE', cardId: selectedCard.id });
       setSelectedCardId(null);
     } else {
       setNotice('Select an Evidence card in your hand first.');
@@ -195,13 +237,13 @@ export function useBoardInteractions(
 
   const onSelectTarget = (playerId: string) => {
     if (targeting === 'attack') {
-      dispatch({ type: 'ATTACK', targetId: playerId });
+      guardedDispatch({ type: 'ATTACK', targetId: playerId });
     } else if (targeting === 'expose') {
       // A category with more than one card needs the exposer to choose which
       // is spent — open that follow-up instead of dispatching blind.
       const needsChoice = Object.values(state.evidenceGrid).some((slot) => slot.cards.length > 1);
       if (needsChoice) setExposeTargetId(playerId);
-      else dispatch({ type: 'EXPOSE', targetId: playerId });
+      else guardedDispatch({ type: 'EXPOSE', targetId: playerId });
     }
     setTargeting(null);
   };
@@ -209,7 +251,7 @@ export function useBoardInteractions(
   const handlers: GameBoardHandlers = {
     onAction,
     onEndTurn: () => {
-      dispatch({ type: 'END_TURN' });
+      guardedDispatch({ type: 'END_TURN' });
       reset();
     },
     onSelectCard,
@@ -218,21 +260,21 @@ export function useBoardInteractions(
     onCancelEvidencePlay,
     onPlaySelected,
     onBuy: (card) => {
-      dispatch({ type: 'PURCHASE', cardId: card.id });
+      guardedDispatch({ type: 'PURCHASE', cardId: card.id });
       setSelectedCardId(null);
       setBuyOpen(false);
     },
     onCancelBuy: () => setBuyOpen(false),
-    onSell: (card) => dispatch({ type: 'SELL', cardId: card.id }),
+    onSell: (card) => guardedDispatch({ type: 'SELL', cardId: card.id }),
     onSelectTarget,
     onCancelTargeting: () => setTargeting(null),
     onPlayPower: (cardId, side, byPlayerId, mirrorTargetCardId) =>
-      dispatch({ type: 'PLAY_POWER', cardId, side, byPlayerId, mirrorTargetCardId }),
-    onPassCombat: (side) => dispatch({ type: 'PASS_COMBAT', side }),
-    onDiscardMoney: (side, cardIds) => dispatch({ type: 'COMBAT_DISCARD_MONEY', side, cardIds }),
-    onCombatChoice: (input) => dispatch({ type: 'COMBAT_CHOICE', input }),
+      guardedDispatch({ type: 'PLAY_POWER', cardId, side, byPlayerId, mirrorTargetCardId }),
+    onPassCombat: (side) => guardedDispatch({ type: 'PASS_COMBAT', side }),
+    onDiscardMoney: (side, cardIds) => guardedDispatch({ type: 'COMBAT_DISCARD_MONEY', side, cardIds }),
+    onCombatChoice: (input) => guardedDispatch({ type: 'COMBAT_CHOICE', input }),
     onSubmitRoleAbility: (payload: RoleAbilityPayload) => {
-      dispatch({ type: 'USE_ROLE_ABILITY', payload });
+      guardedDispatch({ type: 'USE_ROLE_ABILITY', payload });
       setRoleAbilityOpen(false);
     },
     onCancelRoleAbility: () => setRoleAbilityOpen(false),
@@ -242,14 +284,14 @@ export function useBoardInteractions(
     },
     onCancelPerkPicker: () => setPerkPickerOpen(false),
     onSubmitPerk: (perkId: string, payload: PerkPayload) => {
-      dispatch({ type: 'USE_PERK', perkId, payload });
+      guardedDispatch({ type: 'USE_PERK', perkId, payload });
       setActivePerkId(null);
     },
     onCancelPerk: () => setActivePerkId(null),
-    onClearTraffic: () => dispatch({ type: 'CLEAR_TRAFFIC' }),
+    onClearTraffic: () => guardedDispatch({ type: 'CLEAR_TRAFFIC' }),
     onSubmitAllySupport: (teammateId: string, options: EventOptions) => {
       if (allySupportCardId) {
-        dispatch({ type: 'PLAY_CARD', cardId: allySupportCardId, targetId: teammateId, options });
+        guardedDispatch({ type: 'PLAY_CARD', cardId: allySupportCardId, targetId: teammateId, options });
       }
       setAllySupportCardId(null);
       setSelectedCardId(null);
@@ -257,52 +299,53 @@ export function useBoardInteractions(
     onCancelAllySupport: () => setAllySupportCardId(null),
     onSubmitEvent: (targetId: string | undefined, options: EventOptions) => {
       if (eventCardId) {
-        dispatch({ type: 'PLAY_CARD', cardId: eventCardId, targetId, options });
+        guardedDispatch({ type: 'PLAY_CARD', cardId: eventCardId, targetId, options });
       }
       setEventCardId(null);
       setSelectedCardId(null);
     },
     onCancelEvent: () => setEventCardId(null),
-    onUseMarketDiscount: (cardId: string) => dispatch({ type: 'USE_MARKET_DISCOUNT', cardId }),
-    onSkipMarketDiscount: () => dispatch({ type: 'SKIP_MARKET_DISCOUNT' }),
-    onResolveThreaten: (mode: 'MONEY' | 'DISCARD', cardId?: string) => dispatch({ type: 'RESOLVE_THREATEN', mode, cardId }),
-    onResolveBodyguardSetup: (targetId: string) => dispatch({ type: 'RESOLVE_BODYGUARD_SETUP', targetId }),
+    onUseMarketDiscount: (cardId: string) => guardedDispatch({ type: 'USE_MARKET_DISCOUNT', cardId }),
+    onSkipMarketDiscount: () => guardedDispatch({ type: 'SKIP_MARKET_DISCOUNT' }),
+    onResolveThreaten: (mode: 'MONEY' | 'DISCARD', cardId?: string) => guardedDispatch({ type: 'RESOLVE_THREATEN', mode, cardId }),
+    onResolveBodyguardSetup: (targetId: string) => guardedDispatch({ type: 'RESOLVE_BODYGUARD_SETUP', targetId }),
     onResolveSheriff: (cardId: string, category?: EvidenceCategory) =>
-      dispatch({ type: 'RESOLVE_SHERIFF', cardId, category }),
+      guardedDispatch({ type: 'RESOLVE_SHERIFF', cardId, category }),
     onResolveShadyPress: (cardId: string, eventTargetId?: string, eventOptions?: EventOptions) =>
-      dispatch({ type: 'RESOLVE_SHADY_PRESS', cardId, eventTargetId, eventOptions }),
-    onResolveManipulate: (cardId: string) => dispatch({ type: 'RESOLVE_MANIPULATE', cardId }),
+      guardedDispatch({ type: 'RESOLVE_SHADY_PRESS', cardId, eventTargetId, eventOptions }),
+    onResolveManipulate: (cardId: string) => guardedDispatch({ type: 'RESOLVE_MANIPULATE', cardId }),
     onSubmitExpose: (targetId, evidenceChoices) => {
-      dispatch({ type: 'EXPOSE', targetId, evidenceChoices });
+      guardedDispatch({ type: 'EXPOSE', targetId, evidenceChoices });
       setExposeTargetId(null);
     },
     onCancelExpose: () => setExposeTargetId(null),
     onInitiateTrade: (targetId: string, give: TradeItem) => {
-      dispatch({ type: 'INITIATE_TRADE', targetId, give });
+      guardedDispatch({ type: 'INITIATE_TRADE', targetId, give });
       setTradeOpen(false);
     },
-    onResolveTradeReturn: (give: TradeItem | null) => dispatch({ type: 'RESOLVE_TRADE_RETURN', give }),
+    onResolveTradeReturn: (give: TradeItem | null) => guardedDispatch({ type: 'RESOLVE_TRADE_RETURN', give }),
     onCancelTrade: () => setTradeOpen(false),
-    onResolveExpressShipping: (mode: 'MONEY' | 'DRAW') => dispatch({ type: 'RESOLVE_EXPRESS_SHIPPING', mode }),
+    onResolveExpressShipping: (mode: 'MONEY' | 'DRAW') => guardedDispatch({ type: 'RESOLVE_EXPRESS_SHIPPING', mode }),
     onUseJournal: (targetId: string | undefined, options: EventOptions) =>
-      dispatch({ type: 'RESOLVE_JOURNAL', use: true, targetId, options }),
-    onDeclineJournal: () => dispatch({ type: 'RESOLVE_JOURNAL', use: false }),
-    onUseEvidenceBurn: () => dispatch({ type: 'RESOLVE_EVIDENCE_BURN', use: true }),
-    onDeclineEvidenceBurn: () => dispatch({ type: 'RESOLVE_EVIDENCE_BURN', use: false }),
+      guardedDispatch({ type: 'RESOLVE_JOURNAL', use: true, targetId, options }),
+    onDeclineJournal: () => guardedDispatch({ type: 'RESOLVE_JOURNAL', use: false }),
+    onUseEvidenceBurn: () => guardedDispatch({ type: 'RESOLVE_EVIDENCE_BURN', use: true }),
+    onDeclineEvidenceBurn: () => guardedDispatch({ type: 'RESOLVE_EVIDENCE_BURN', use: false }),
     onResolveEvidencePlay: (mode: 'DECLINE' | 'GRID' | 'CASH', category?: EvidenceCategory) =>
-      dispatch({ type: 'RESOLVE_EVIDENCE_PLAY', mode, category }),
+      guardedDispatch({ type: 'RESOLVE_EVIDENCE_PLAY', mode, category }),
     onResolveRecyclingBin: (cardId: string | undefined, mode: 'MONEY' | 'DRAW' | undefined) =>
-      dispatch({ type: 'RESOLVE_RECYCLING_BIN', cardId, mode }),
+      guardedDispatch({ type: 'RESOLVE_RECYCLING_BIN', cardId, mode }),
     onResolveGetawayCarGift: (give: boolean, teammateId?: string, cardId?: string) =>
-      dispatch({ type: 'RESOLVE_GETAWAY_CAR_GIFT', give, teammateId, cardId }),
+      guardedDispatch({ type: 'RESOLVE_GETAWAY_CAR_GIFT', give, teammateId, cardId }),
     onResolveBribery: (targetId: string, category: EvidenceCategory, cardId: string) =>
-      dispatch({ type: 'RESOLVE_BRIBERY', targetId, category, cardId }),
-    onResolveTrashCan: (cardId: string) => dispatch({ type: 'RESOLVE_TRASH_CAN', cardId }),
-    onResolveCoffeeRecipient: (recipientId: string) => dispatch({ type: 'RESOLVE_COFFEE_RECIPIENT', recipientId }),
+      guardedDispatch({ type: 'RESOLVE_BRIBERY', targetId, category, cardId }),
+    onResolveTrashCan: (cardId: string) => guardedDispatch({ type: 'RESOLVE_TRASH_CAN', cardId }),
+    onResolveCoffeeRecipient: (recipientId: string) => guardedDispatch({ type: 'RESOLVE_COFFEE_RECIPIENT', recipientId }),
   };
 
   return {
     selectedCardId, targeting, notice, roleAbilityOpen, activePerkId, perkPickerOpen, allySupportCardId, eventCardId,
-    exposeTargetId, tradeOpen, buyOpen, handlers, reset,
+    exposeTargetId, tradeOpen, buyOpen, deckWarningOpen: pendingDeckAction !== null, onConfirmDeckWarning, onCancelDeckWarning,
+    handlers, reset,
   };
 }
