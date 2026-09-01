@@ -1046,16 +1046,20 @@ function resolveManipulate(state: GameState, cardId: string): GameState {
   const card = pending.cards.find((c) => c.id === cardId);
   if (!card) return log(state, 'Choose one of the revealed cards.');
 
+  // Card identity stays hidden in the log for anything landing in a hand or
+  // on top of the deck — the same "only hand contents are private" model as
+  // the rest of the game, extended to the deck's top since that's the next
+  // draw for whoever goes there. The discard pile is openly browsable at any
+  // time, so naming what lands there (below) reveals nothing new.
   if (pending.phase === 'KEEP') {
     const remaining = pending.cards.filter((c) => c.id !== cardId);
     let s = updatePlayer(state, idx, (p) => ({ ...p, hand: [...p.hand, card] }));
     if (remaining.length <= 1) {
       s = { ...s, drawPile: [...remaining, ...s.drawPile], pendingManipulate: null };
-      const topNote = remaining.length ? ` ${remaining[0].name} goes back on top.` : '';
-      return log(s, `${player.name} keeps ${card.name} from Manipulate.${topNote}`);
+      return log(s, `${player.name} keeps a card from Manipulate.`);
     }
     s = { ...s, pendingManipulate: { ...pending, cards: remaining, phase: 'TOP' } };
-    return log(s, `${player.name} keeps ${card.name} from Manipulate.`);
+    return log(s, `${player.name} keeps a card from Manipulate.`);
   }
 
   const rest = pending.cards.filter((c) => c.id !== cardId);
@@ -1066,7 +1070,7 @@ function resolveManipulate(state: GameState, cardId: string): GameState {
     pendingManipulate: null,
   };
   const discardNote = rest.length ? ` Discards ${rest.map((c) => c.name).join(', ')}.` : '';
-  return log(s, `${player.name} puts ${card.name} back on top of the deck.${discardNote}`);
+  return log(s, `${player.name} puts a card back on top of the deck.${discardNote}`);
 }
 
 /**

@@ -2155,6 +2155,26 @@ describe('gameReducer — remaining perks & events', () => {
     expect(done.pendingManipulate).toBeNull();
   });
 
+  it("Manipulate's log never names the card kept into hand or the one put back on top — only what's discarded (openly visible in the pile anyway)", () => {
+    const c = (id: string): ActionCard => ({ id, name: id, description: '', type: 'MONEY', value: 1 });
+    const manip = perk('pk', 'Manipulate', { source: 'BLACK_MARKET' });
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL'), inventory: [manip] })], {
+      drawPile: [c('secret-a'), c('secret-b'), c('secret-c'), c('d')],
+    });
+    const revealed = gameReducer(s, { type: 'USE_PERK', perkId: 'pk' });
+    const kept = gameReducer(revealed, { type: 'RESOLVE_MANIPULATE', cardId: 'secret-b' });
+    expect(kept.gameLog.at(-1)).toBe('p0 keeps a card from Manipulate.');
+
+    const done = gameReducer(kept, { type: 'RESOLVE_MANIPULATE', cardId: 'secret-c' });
+    // The kept-to-hand and put-back-on-top cards' names never appear in the
+    // log; the discarded one (secret-a) does, since the discard pile is
+    // openly browsable regardless.
+    const combinedLog = done.gameLog.join(' | ');
+    expect(combinedLog).not.toContain('secret-b');
+    expect(combinedLog).not.toContain('secret-c');
+    expect(done.gameLog.at(-1)).toBe('p0 puts a card back on top of the deck. Discards secret-a.');
+  });
+
   it('Manipulate with only 2 cards left in the deck: the leftover goes back on top, nothing to discard', () => {
     const c = (id: string): ActionCard => ({ id, name: id, description: '', type: 'MONEY', value: 1 });
     const manip = perk('pk', 'Manipulate', { source: 'BLACK_MARKET' });
