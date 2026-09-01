@@ -61,10 +61,15 @@ export function PerkActionPanel({ state, viewerIndex, perkId, onSubmit, onCancel
       body = (<><p>Play a Money card for +$1 value (and draw):</p>{cardRow(viewer.hand.filter((c) => c.type === 'MONEY'), 'No Money cards in hand.')}</>);
       canSubmit = !!cardId;
       break;
-    case 'Recycling Bin':
-      body = (<><p>Discard a card to recover one of the same type from the discard:</p>{cardRow(viewer.hand, 'Your hand is empty.')}</>);
+    case 'Recycling Bin': {
+      // Only a card whose type already has a match in the discard is a
+      // legal choice — there's nothing to recycle it into otherwise (see
+      // reducer's Recycling Bin case).
+      const recyclable = viewer.hand.filter((c) => state.discardPile.some((d) => d.type === c.type));
+      body = (<><p>Discard a card to recover one of the same type from the discard:</p>{cardRow(recyclable, 'No card in hand has a matching type in the discard.')}</>);
       canSubmit = !!cardId;
       break;
+    }
     case 'Alarm Clock':
       body = (<><p>Play an Event card (then draw and gain $1):</p>{cardRow(viewer.hand.filter((c) => c.type === 'EVENT'), 'No Event cards in hand.')}</>);
       canSubmit = !!cardId;

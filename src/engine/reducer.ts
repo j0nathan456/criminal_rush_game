@@ -2130,9 +2130,14 @@ function applyPerk(
     case 'Recycling Bin': {
       // Discard the chosen card now; which same-type replacement to take (if
       // any) and the $1-or-draw payout are the player's own follow-up
-      // choices — see pendingRecyclingBin/resolveRecyclingBin.
+      // choices — see pendingRecyclingBin/resolveRecyclingBin. There must
+      // already be a same-type card in the discard to recycle into, or this
+      // is just "discard anything for a free $1" — no recycling involved.
       const disc = player.hand.find((c) => c.id === payload.cardId);
       if (!disc) return log(state, 'Recycling Bin needs a card from your hand to discard.');
+      if (!state.discardPile.some((c) => c.type === disc.type)) {
+        return log(state, `No matching card in the discard to recycle ${disc.name} into.`);
+      }
       let s = updatePlayer(state, idx, (p) => ({ ...p, hand: p.hand.filter((c) => c.id !== disc.id) }));
       s = { ...s, discardPile: [...s.discardPile, disc] };
       s = log(spend(s), `${player.name} discards ${disc.name} with the Recycling Bin.`);

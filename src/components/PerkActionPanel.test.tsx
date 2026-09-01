@@ -32,6 +32,41 @@ describe('<PerkActionPanel />', () => {
     expect(onSubmit).toHaveBeenCalledWith('bank', { cardId: 'm1', marketCardId: undefined, targetId: undefined, discardForBonus: false });
   });
 
+  it("Recycling Bin: only offers hand cards whose type already has a match in the discard — nothing to recycle a type into otherwise", () => {
+    const onSubmit = vi.fn();
+    const junk: ActionCard = { id: 'h1', name: 'Boost', description: '', type: 'POWER', power: 1 };
+    const orphan: ActionCard = { id: 'h2', name: 'Metal Chain', description: '', type: 'EVIDENCE', evidenceCategories: ['MEANS'] };
+    const oldPower: ActionCard = { id: 'd1', name: 'Surge', description: '', type: 'POWER', power: 2 };
+    const p = mkPlayer({ id: 'p0', name: 'Ana', hand: [junk, orphan], inventory: [perk('bin', 'Recycling Bin')] });
+    render(
+      <PerkActionPanel
+        state={stateWith([p], { discardPile: [oldPower] })}
+        viewerIndex={0} perkId="bin" onSubmit={onSubmit} onCancel={() => {}}
+      />,
+    );
+
+    expect(screen.getByText('Boost')).toBeInTheDocument(); // POWER — matches d1
+    expect(screen.queryByText('Metal Chain')).not.toBeInTheDocument(); // EVIDENCE — no match in the discard
+
+    fireEvent.click(screen.getByText('Boost'));
+    fireEvent.click(screen.getByText('Use'));
+    expect(onSubmit).toHaveBeenCalledWith('bin', { cardId: 'h1', marketCardId: undefined, targetId: undefined, discardForBonus: false });
+  });
+
+  it('Recycling Bin: offers nothing when no hand card has a matching type in the discard', () => {
+    const orphan: ActionCard = { id: 'h2', name: 'Metal Chain', description: '', type: 'EVIDENCE', evidenceCategories: ['MEANS'] };
+    const unrelated: ActionCard = { id: 'd1', name: 'Profit', description: '', type: 'MONEY', value: 2 };
+    const p = mkPlayer({ id: 'p0', name: 'Ana', hand: [orphan], inventory: [perk('bin', 'Recycling Bin')] });
+    render(
+      <PerkActionPanel
+        state={stateWith([p], { discardPile: [unrelated] })}
+        viewerIndex={0} perkId="bin" onSubmit={vi.fn()} onCancel={() => {}}
+      />,
+    );
+    expect(screen.getByText('No card in hand has a matching type in the discard.')).toBeInTheDocument();
+    expect(screen.getByText('Use').closest('button')).toBeDisabled();
+  });
+
   it('Water Bottle: no input needed, submits immediately', () => {
     const onSubmit = vi.fn();
     const p = mkPlayer({ id: 'p0', name: 'Ana', inventory: [perk('wb', 'Water Bottle')] });

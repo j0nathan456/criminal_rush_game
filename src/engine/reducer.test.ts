@@ -1879,34 +1879,44 @@ describe('gameReducer — USE_PERK', () => {
   it('Recycling Bin: cannot take back the card it just discarded, even though its type trivially matches', () => {
     const bin = perk('pk', 'Recycling Bin');
     const junkCard: ActionCard = { id: 'h1', name: 'Boost', description: '', type: 'POWER', power: 1 };
-    const s = stateWith([mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), hand: [junkCard], inventory: [bin] })]);
+    const oldPower: ActionCard = { id: 'd1', name: 'Surge', description: '', type: 'POWER', power: 2 };
+    const s = stateWith(
+      [mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), hand: [junkCard], inventory: [bin] })],
+      { discardPile: [oldPower] },
+    );
     const discarded = gameReducer(s, { type: 'USE_PERK', perkId: 'pk', payload: { cardId: 'h1' } });
-    // Attempting to "take" the very card just discarded is rejected — treated as no match.
+    // Attempting to "take" the very card just discarded is rejected — treated as no match,
+    // even though a genuinely different Power card (d1) is legitimately available.
     const next = gameReducer(discarded, { type: 'RESOLVE_RECYCLING_BIN', cardId: 'h1' });
     expect(next.players[0].hand).toHaveLength(0);
-    expect(next.discardPile.map((c) => c.id)).toEqual(['h1']);
+    expect(next.discardPile.map((c) => c.id)).toEqual(['d1', 'h1']);
     expect(next.pendingRecyclingBin?.phase).toBe('REWARD');
   });
 
-  it('Recycling Bin: with no same-type card in the discard, acknowledges it and still offers the reward', () => {
+  it('Recycling Bin: refuses to discard a card whose type has no match in the discard — no free $1/draw without an actual recycle', () => {
     const bin = perk('pk', 'Recycling Bin');
     const junkCard: ActionCard = { id: 'h1', name: 'Boost', description: '', type: 'POWER', power: 1 };
     const unrelated: ActionCard = { id: 'd1', name: 'Profit', description: '', type: 'MONEY', value: 2 };
     const s = stateWith(
-      [mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), hand: [junkCard], inventory: [bin] })],
+      [mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), hand: [junkCard], inventory: [bin], actionsRemaining: 3 })],
       { discardPile: [unrelated] },
     );
-    const discarded = gameReducer(s, { type: 'USE_PERK', perkId: 'pk', payload: { cardId: 'h1' } });
-    const next = gameReducer(discarded, { type: 'RESOLVE_RECYCLING_BIN' });
-    expect(next.players[0].hand).toHaveLength(0);
-    expect(next.discardPile.map((c) => c.id)).toEqual(['d1', 'h1']); // untouched
-    expect(next.pendingRecyclingBin?.phase).toBe('REWARD');
+    const next = gameReducer(s, { type: 'USE_PERK', perkId: 'pk', payload: { cardId: 'h1' } });
+    expect(next.players[0].hand.map((c) => c.id)).toEqual(['h1']); // never discarded
+    expect(next.discardPile.map((c) => c.id)).toEqual(['d1']); // untouched
+    expect(next.players[0].actionsRemaining).toBe(3); // action not spent
+    expect(next.pendingRecyclingBin).toBeNull();
+    expect(next.gameLog.at(-1)).toMatch(/no matching card/i);
   });
 
   it('Recycling Bin: blocks other actions until the pending choice is resolved', () => {
     const bin = perk('pk', 'Recycling Bin');
     const junkCard: ActionCard = { id: 'h1', name: 'Boost', description: '', type: 'POWER', power: 1 };
-    const s = stateWith([mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), hand: [junkCard], inventory: [bin] })]);
+    const oldPower: ActionCard = { id: 'd1', name: 'Surge', description: '', type: 'POWER', power: 2 };
+    const s = stateWith(
+      [mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), hand: [junkCard], inventory: [bin] })],
+      { discardPile: [oldPower] },
+    );
     const discarded = gameReducer(s, { type: 'USE_PERK', perkId: 'pk', payload: { cardId: 'h1' } });
     const blocked = gameReducer(discarded, { type: 'DRAW_CARD' });
     expect(blocked.pendingRecyclingBin).toBeTruthy(); // still pending — draw was refused
@@ -1915,7 +1925,11 @@ describe('gameReducer — USE_PERK', () => {
   it('Recycling Bin: REWARD choice of $1 pays out and clears the pending state', () => {
     const bin = perk('pk', 'Recycling Bin');
     const junkCard: ActionCard = { id: 'h1', name: 'Boost', description: '', type: 'POWER', power: 1 };
-    const s = stateWith([mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 2, hand: [junkCard], inventory: [bin] })]);
+    const oldPower: ActionCard = { id: 'd1', name: 'Surge', description: '', type: 'POWER', power: 2 };
+    const s = stateWith(
+      [mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), money: 2, hand: [junkCard], inventory: [bin] })],
+      { discardPile: [oldPower] },
+    );
     const discarded = gameReducer(s, { type: 'USE_PERK', perkId: 'pk', payload: { cardId: 'h1' } });
     const acked = gameReducer(discarded, { type: 'RESOLVE_RECYCLING_BIN' });
     const next = gameReducer(acked, { type: 'RESOLVE_RECYCLING_BIN', mode: 'MONEY' });
@@ -1926,10 +1940,11 @@ describe('gameReducer — USE_PERK', () => {
   it('Recycling Bin: REWARD choice of a draw pulls a card and clears the pending state', () => {
     const bin = perk('pk', 'Recycling Bin');
     const junkCard: ActionCard = { id: 'h1', name: 'Boost', description: '', type: 'POWER', power: 1 };
+    const oldPower: ActionCard = { id: 'd1', name: 'Surge', description: '', type: 'POWER', power: 2 };
     const top: ActionCard = { id: 't', name: 'x', description: '', type: 'MONEY', value: 1 };
     const s = stateWith(
       [mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), hand: [junkCard], inventory: [bin] })],
-      { drawPile: [top] },
+      { discardPile: [oldPower], drawPile: [top] },
     );
     const discarded = gameReducer(s, { type: 'USE_PERK', perkId: 'pk', payload: { cardId: 'h1' } });
     const acked = gameReducer(discarded, { type: 'RESOLVE_RECYCLING_BIN' });
