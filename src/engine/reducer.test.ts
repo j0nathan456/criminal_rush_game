@@ -2179,6 +2179,97 @@ describe('gameReducer — remaining perks & events', () => {
     expect(blocked.pendingTrashCan).toEqual({ playerId: 'p1' });
   });
 
+  it("Loan Shark's Favor pays out $5 minus the combined VP scored so far, on purchase", () => {
+    const loan = perk('pk', "Loan Shark's Favor", { cost: 0, source: 'BLACK_MARKET' });
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL'), money: 0 })], {
+      blackMarket: [loan],
+      teamScores: { CIVILIAN: 1, CRIMINAL: 2 },
+    });
+    const next = gameReducer(s, { type: 'PURCHASE', cardId: 'pk' });
+    expect(next.players[0].money).toBe(2); // $5 - (1 + 2) combined VP
+    expect(next.players[0].inventory.some((c) => c.name === "Loan Shark's Favor")).toBe(true);
+  });
+
+  it("Loan Shark's Favor pays out $0, never negative, once combined VP reaches 5", () => {
+    const loan = perk('pk', "Loan Shark's Favor", { cost: 0, source: 'BLACK_MARKET' });
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL'), money: 0 })], {
+      blackMarket: [loan],
+      teamScores: { CIVILIAN: 3, CRIMINAL: 4 },
+    });
+    const next = gameReducer(s, { type: 'PURCHASE', cardId: 'pk' });
+    expect(next.players[0].money).toBe(0);
+    expect(next.gameLog.at(-1)).toBe("p0's Loan Shark's Favor pays out $0.");
+  });
+
+  it("Loan Shark's Favor cannot be sold — directly, or via Business Opportunity", () => {
+    const loan = perk('pk', "Loan Shark's Favor", { cost: 0, source: 'BLACK_MARKET' });
+    const s = stateWith([mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL'), inventory: [loan] })]);
+
+    const soldDirect = gameReducer(s, { type: 'SELL', cardId: 'pk' });
+    expect(soldDirect.players[0].inventory).toHaveLength(1);
+
+    const evt: ActionCard = { id: 'e', name: 'Business Opportunity', description: '', type: 'EVENT' };
+    const s2 = stateWith([mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL'), inventory: [loan], hand: [evt] })]);
+    const soldViaEvent = gameReducer(s2, { type: 'PLAY_CARD', cardId: 'e', options: { inventoryCardId: 'pk' } });
+    expect(soldViaEvent.players[0].inventory.some((c) => c.id === 'pk')).toBe(true);
+  });
+
+  it("Loan Shark's Favor cannot be given away via Market Exchange", () => {
+    const loan = perk('pk', "Loan Shark's Favor", { cost: 0, source: 'BLACK_MARKET' });
+    const evt: ActionCard = { id: 'e', name: 'Market Exchange', description: '', type: 'EVENT' };
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL'), inventory: [loan], hand: [evt] }),
+      mkPlayer({ id: 'p1', role: role('spy', 'CRIMINAL') }),
+    ]);
+    const next = gameReducer(s, {
+      type: 'PLAY_CARD', cardId: 'e', targetId: 'p1', options: { inventoryCardId: 'pk' },
+    });
+    expect(next.players[0].inventory.some((c) => c.id === 'pk')).toBe(true);
+    expect(next.players[1].inventory).toHaveLength(0);
+  });
+
+  it("Loan Shark's Favor forces a discard of the holder's own choosing at start of turn", () => {
+    const loan = perk('pk', "Loan Shark's Favor", { cost: 0, source: 'BLACK_MARKET' });
+    const c1: ActionCard = { id: 'c1', name: 'Profit', description: '', type: 'MONEY', value: 2 };
+    const c2: ActionCard = { id: 'c2', name: 'Boost', description: '', type: 'POWER', power: 1 };
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('sheriff', 'CIVILIAN') }),
+      mkPlayer({ id: 'p1', role: role('hitman', 'CRIMINAL'), inventory: [loan], hand: [c1, c2] }),
+    ]);
+    const started = gameReducer(s, { type: 'END_TURN' });
+    expect(started.pendingLoanSharkDiscard).toEqual({ playerId: 'p1' });
+    expect(started.players[1].hand).toHaveLength(2); // untouched until resolved
+
+    // p1 discards c2, not c1 — a real choice, not "always the first".
+    const resolved = gameReducer(started, { type: 'RESOLVE_LOAN_SHARK_DISCARD', cardId: 'c2' });
+    expect(resolved.pendingLoanSharkDiscard).toBeNull();
+    expect(resolved.players[1].hand.map((c) => c.id)).toEqual(['c1']);
+    expect(resolved.discardPile.some((c) => c.id === 'c2')).toBe(true);
+  });
+
+  it("Loan Shark's Favor blocks other actions until the discard is resolved", () => {
+    const loan = perk('pk', "Loan Shark's Favor", { cost: 0, source: 'BLACK_MARKET' });
+    const c1: ActionCard = { id: 'c1', name: 'Profit', description: '', type: 'MONEY', value: 2 };
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('sheriff', 'CIVILIAN') }),
+      mkPlayer({ id: 'p1', role: role('hitman', 'CRIMINAL'), inventory: [loan], hand: [c1] }),
+    ]);
+    const started = gameReducer(s, { type: 'END_TURN' });
+    const blocked = gameReducer(started, { type: 'DRAW_CARD' });
+    expect(blocked.players[1].hand).toHaveLength(1); // refused — still pending
+    expect(blocked.pendingLoanSharkDiscard).toEqual({ playerId: 'p1' });
+  });
+
+  it("Loan Shark's Favor asks nothing at start of turn when the holder's hand is already empty", () => {
+    const loan = perk('pk', "Loan Shark's Favor", { cost: 0, source: 'BLACK_MARKET' });
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('sheriff', 'CIVILIAN') }),
+      mkPlayer({ id: 'p1', role: role('hitman', 'CRIMINAL'), inventory: [loan], hand: [] }),
+    ]);
+    const started = gameReducer(s, { type: 'END_TURN' });
+    expect(started.pendingLoanSharkDiscard).toBeNull();
+  });
+
   it('Manipulate reveals the top 3, lets the player choose which to keep and which goes back on top', () => {
     const c = (id: string): ActionCard => ({ id, name: id, description: '', type: 'MONEY', value: 1 });
     const manip = perk('pk', 'Manipulate', { source: 'BLACK_MARKET' });

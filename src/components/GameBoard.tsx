@@ -44,6 +44,7 @@ import { GetawayCarPanel } from './GetawayCarPanel';
 import { BriberyPanel } from './BriberyPanel';
 import { TrashCanPanel } from './TrashCanPanel';
 import { CoffeeRecipientPanel } from './CoffeeRecipientPanel';
+import { LoanSharkDiscardPanel } from './LoanSharkDiscardPanel';
 import { ChatPanel } from './ChatPanel';
 import { MarketPickerPanel } from './MarketPickerPanel';
 import { TargetPicker } from './TargetPicker';
@@ -102,6 +103,7 @@ export interface GameBoardHandlers {
   onResolveBribery?: (targetId: string, category: EvidenceCategory, cardId: string) => void;
   onResolveTrashCan?: (cardId: string) => void;
   onResolveCoffeeRecipient?: (recipientId: string) => void;
+  onResolveLoanSharkDiscard?: (cardId: string) => void;
   onSendChat?: (text: string) => void;
 }
 
@@ -208,6 +210,7 @@ export function GameBoard({
   onResolveBribery,
   onResolveTrashCan,
   onResolveCoffeeRecipient,
+  onResolveLoanSharkDiscard,
   onSendChat,
 }: GameBoardProps) {
   const viewer = state.players[viewerIndex];
@@ -393,7 +396,7 @@ export function GameBoard({
                 </button>
               )}
               {selectedCard && selectedCard.type === 'EVIDENCE' && viewer.team === 'CIVILIAN' && isViewersTurn &&
-                !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingShadyPress && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingEvidencePlay && !state.pendingRecyclingBin && !state.pendingGetawayCarGift && !state.pendingBribery && !state.pendingTrashCan && !state.pendingCoffeeRecipient && !state.winner && (
+                !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingShadyPress && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingEvidencePlay && !state.pendingRecyclingBin && !state.pendingGetawayCarGift && !state.pendingBribery && !state.pendingTrashCan && !state.pendingCoffeeRecipient && !state.pendingLoanSharkDiscard && !state.winner && (
                   <EvidencePlayPanel
                     card={selectedCard}
                     team={viewer.team}
@@ -417,10 +420,10 @@ export function GameBoard({
               {state.pendingShadyPress && !state.combat && !state.winner && (
                 <ShadyPressPanel state={state} viewerIndex={viewerIndex} onResolve={onResolveShadyPress} />
               )}
-              {targeting && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingShadyPress && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingEvidencePlay && !state.pendingRecyclingBin && !state.pendingGetawayCarGift && !state.pendingBribery && !state.pendingTrashCan && !state.pendingCoffeeRecipient && !state.winner && (
+              {targeting && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingShadyPress && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingEvidencePlay && !state.pendingRecyclingBin && !state.pendingGetawayCarGift && !state.pendingBribery && !state.pendingTrashCan && !state.pendingCoffeeRecipient && !state.pendingLoanSharkDiscard && !state.winner && (
                 <TargetPicker state={state} viewerIndex={viewerIndex} mode={targeting} onSelectTarget={onSelectTarget} onCancel={onCancelTargeting} />
               )}
-              {exposeTargetId && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingShadyPress && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingEvidencePlay && !state.pendingRecyclingBin && !state.pendingGetawayCarGift && !state.pendingBribery && !state.pendingTrashCan && !state.pendingCoffeeRecipient && !state.winner && (
+              {exposeTargetId && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingShadyPress && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingEvidencePlay && !state.pendingRecyclingBin && !state.pendingGetawayCarGift && !state.pendingBribery && !state.pendingTrashCan && !state.pendingCoffeeRecipient && !state.pendingLoanSharkDiscard && !state.winner && (
                 <ExposeEvidencePanel
                   state={state}
                   viewerIndex={viewerIndex}
@@ -429,31 +432,31 @@ export function GameBoard({
                   onCancel={onCancelExpose}
                 />
               )}
-              {buyOpen && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingShadyPress && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingEvidencePlay && !state.pendingRecyclingBin && !state.pendingGetawayCarGift && !state.pendingBribery && !state.pendingTrashCan && !state.pendingCoffeeRecipient && !state.winner && (
+              {buyOpen && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingShadyPress && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingEvidencePlay && !state.pendingRecyclingBin && !state.pendingGetawayCarGift && !state.pendingBribery && !state.pendingTrashCan && !state.pendingCoffeeRecipient && !state.pendingLoanSharkDiscard && !state.winner && (
                 <MarketPickerPanel state={state} viewerIndex={viewerIndex} onBuy={onBuy} onCancel={onCancelBuy} />
               )}
-              {roleAbilityOpen && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingShadyPress && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingEvidencePlay && !state.pendingRecyclingBin && !state.pendingGetawayCarGift && !state.pendingBribery && !state.pendingTrashCan && !state.pendingCoffeeRecipient && !state.winner && (
+              {roleAbilityOpen && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingShadyPress && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingEvidencePlay && !state.pendingRecyclingBin && !state.pendingGetawayCarGift && !state.pendingBribery && !state.pendingTrashCan && !state.pendingCoffeeRecipient && !state.pendingLoanSharkDiscard && !state.winner && (
                 <RoleAbilityPanel state={state} viewerIndex={viewerIndex} onSubmit={onSubmitRoleAbility} onCancel={onCancelRoleAbility} />
               )}
-              {perkPickerOpen && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingShadyPress && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingEvidencePlay && !state.pendingRecyclingBin && !state.pendingGetawayCarGift && !state.pendingBribery && !state.pendingTrashCan && !state.pendingCoffeeRecipient && !state.winner && (
+              {perkPickerOpen && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingShadyPress && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingEvidencePlay && !state.pendingRecyclingBin && !state.pendingGetawayCarGift && !state.pendingBribery && !state.pendingTrashCan && !state.pendingCoffeeRecipient && !state.pendingLoanSharkDiscard && !state.winner && (
                 <PerkPickerPanel viewer={viewer} onSelect={onSelectPerk} onCancel={onCancelPerkPicker} />
               )}
-              {activePerkId && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingShadyPress && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingEvidencePlay && !state.pendingRecyclingBin && !state.pendingGetawayCarGift && !state.pendingBribery && !state.pendingTrashCan && !state.pendingCoffeeRecipient && !state.winner && (
+              {activePerkId && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingShadyPress && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingEvidencePlay && !state.pendingRecyclingBin && !state.pendingGetawayCarGift && !state.pendingBribery && !state.pendingTrashCan && !state.pendingCoffeeRecipient && !state.pendingLoanSharkDiscard && !state.winner && (
                 <PerkActionPanel state={state} viewerIndex={viewerIndex} perkId={activePerkId} onSubmit={onSubmitPerk} onCancel={onCancelPerk} />
               )}
               {state.pendingManipulate && !state.combat && !state.winner && (
                 <ManipulatePanel state={state} viewerIndex={viewerIndex} onResolve={onResolveManipulate} />
               )}
-              {allySupportCardId && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingShadyPress && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingEvidencePlay && !state.pendingRecyclingBin && !state.pendingGetawayCarGift && !state.pendingBribery && !state.pendingTrashCan && !state.pendingCoffeeRecipient && !state.winner && (
+              {allySupportCardId && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingShadyPress && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingEvidencePlay && !state.pendingRecyclingBin && !state.pendingGetawayCarGift && !state.pendingBribery && !state.pendingTrashCan && !state.pendingCoffeeRecipient && !state.pendingLoanSharkDiscard && !state.winner && (
                 <AllySupportPanel state={state} viewerIndex={viewerIndex} onSubmit={onSubmitAllySupport} onCancel={onCancelAllySupport} />
               )}
-              {eventCardId && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingShadyPress && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingEvidencePlay && !state.pendingRecyclingBin && !state.pendingGetawayCarGift && !state.pendingBribery && !state.pendingTrashCan && !state.pendingCoffeeRecipient && !state.winner && (() => {
+              {eventCardId && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingShadyPress && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingEvidencePlay && !state.pendingRecyclingBin && !state.pendingGetawayCarGift && !state.pendingBribery && !state.pendingTrashCan && !state.pendingCoffeeRecipient && !state.pendingLoanSharkDiscard && !state.winner && (() => {
                 const eventCard = viewer.hand.find((c) => c.id === eventCardId);
                 return eventCard ? (
                   <EventPanel state={state} viewerIndex={viewerIndex} card={eventCard} onSubmit={onSubmitEvent} onCancel={onCancelEvent} />
                 ) : null;
               })()}
-              {state.pendingMarketDiscount?.playerId === viewer.id && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingShadyPress && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingEvidencePlay && !state.pendingRecyclingBin && !state.pendingGetawayCarGift && !state.pendingBribery && !state.pendingTrashCan && !state.pendingCoffeeRecipient && !state.winner && (
+              {state.pendingMarketDiscount?.playerId === viewer.id && !state.combat && !state.pendingThreaten && !state.pendingTrade && !state.pendingExpressShipping && !state.pendingSheriff && !state.pendingShadyPress && !state.pendingManipulate && !state.pendingBodyguardSetup && !state.pendingJournal && !state.pendingEvidenceBurn && !state.pendingEvidencePlay && !state.pendingRecyclingBin && !state.pendingGetawayCarGift && !state.pendingBribery && !state.pendingTrashCan && !state.pendingCoffeeRecipient && !state.pendingLoanSharkDiscard && !state.winner && (
                 <MarketDiscountPanel
                   state={state}
                   viewerIndex={viewerIndex}
@@ -498,6 +501,9 @@ export function GameBoard({
               )}
               {state.pendingCoffeeRecipient && !state.combat && !state.winner && (
                 <CoffeeRecipientPanel state={state} viewerIndex={viewerIndex} onResolve={onResolveCoffeeRecipient} />
+              )}
+              {state.pendingLoanSharkDiscard && !state.pendingTrashCan && !state.pendingGetawayCarGift && !state.combat && !state.winner && (
+                <LoanSharkDiscardPanel state={state} viewerIndex={viewerIndex} onResolve={onResolveLoanSharkDiscard} />
               )}
 
               {/* Sits after every action-resolution panel above, never between

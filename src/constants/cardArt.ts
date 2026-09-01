@@ -69,7 +69,7 @@ const MARKET_ART = new Set([
   'cannon', 'catapult', 'coffee', 'computer', 'corrosion-cannisters', 'corrupt-connections',
   'credit-card', 'disguise', 'drones', 'electric-baton', 'express-shipping',
   'getaway-car', 'hacking-key', 'hammer', 'harpoon', 'investment', 'ironworks', 'journal', 'laboratory',
-  'machine-gun', 'mafia-alliance', 'magnetic-deflector', 'manipulate', 'missile',
+  'loan-sharks-favor', 'machine-gun', 'mafia-alliance', 'magnetic-deflector', 'manipulate', 'missile',
   'molotov-cocktail', 'mosquito', 'mutants', 'nerve-agents', 'parasites', 'pistol',
   'pocket-knife', 'portal', 'radio', 'recycling-bin', 'robot-soldier', 'satellite-ban',
   'shady-press', 'switch-blade', 'toxic-gas', 'trash-can', 'viruses', 'vitamin',

@@ -69,6 +69,7 @@ export type GameAction =
   | { type: 'RESOLVE_BRIBERY'; targetId: string; category: EvidenceCategory; cardId: string }
   | { type: 'RESOLVE_TRASH_CAN'; cardId: string }
   | { type: 'RESOLVE_COFFEE_RECIPIENT'; recipientId: string }
+  | { type: 'RESOLVE_LOAN_SHARK_DISCARD'; cardId: string }
   | { type: 'END_TURN' };
 
 /**
@@ -196,6 +197,7 @@ export function emptyGameState(): GameState {
     pendingBribery: null,
     pendingTrashCan: null,
     pendingCoffeeRecipient: null,
+    pendingLoanSharkDiscard: null,
   };
 }
 
@@ -361,6 +363,12 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
     return log(state, 'Choose who gets the Coffee token before taking other actions.');
   }
 
+  // Loan Shark's Favor's start-of-turn discard has no "may" — once triggered
+  // it must be resolved before anything else, same as Bribery's sell trigger.
+  if (state.pendingLoanSharkDiscard && action.type !== 'RESOLVE_LOAN_SHARK_DISCARD') {
+    return log(state, "Resolve Loan Shark's Favor before taking other actions.");
+  }
+
   switch (action.type) {
     case 'DRAW_CARD':
       return drawCard(state, idx, player);
@@ -430,6 +438,8 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
       return resolveTrashCan(state, action.cardId);
     case 'RESOLVE_COFFEE_RECIPIENT':
       return resolveCoffeeRecipient(state, action.recipientId);
+    case 'RESOLVE_LOAN_SHARK_DISCARD':
+      return resolveLoanSharkDiscard(state, action.cardId);
     case 'END_TURN':
       return endTurn(state, idx);
     default:
@@ -594,6 +604,7 @@ function resolveEvent(state: GameState, idx: number, name: string, targetId: str
       const to = state.players[toIndex];
       const perk = from.inventory.find((c) => c.id === options.inventoryCardId && c.type === 'PERK');
       if (!perk) return log(state, 'That is not a perk to exchange.');
+      if (perk.name === "Loan Shark's Favor") return log(state, "Loan Shark's Favor cannot be given away.");
       if (to.inventory.filter((c) => c.type !== 'WEAPON').length >= MAX_PERKS) return log(state, `${to.name} already has 4 perks.`);
       let s = updatePlayer(state, fromIndex, (p) => ({ ...p, inventory: p.inventory.filter((c) => c.id !== perk.id) }));
       s = updatePlayer(s, toIndex, (p) => ({ ...p, inventory: [...p.inventory, perk] }));
@@ -614,7 +625,9 @@ function resolveEvent(state: GameState, idx: number, name: string, targetId: str
       // Sell one owned perk/weapon for its cost + $1.
       const item = actor.inventory.find((c) => c.id === options.inventoryCardId);
       if (!item) return log(state, 'Choose a perk or weapon to sell.');
-      if (item.type === 'SPECIAL' || item.name === 'Investment') return log(state, `${item.name} cannot be sold.`);
+      if (item.type === 'SPECIAL' || item.name === 'Investment' || item.name === "Loan Shark's Favor") {
+        return log(state, `${item.name} cannot be sold.`);
+      }
       const payout = item.cost + 1;
       const s = updatePlayer(state, idx, (p) => ({
         ...p,
@@ -750,6 +763,7 @@ function sellItem(state: GameState, idx: number, player: Player, cardId: string)
   if (!card) return log(state, 'That item is not in your inventory.');
   if (card.type === 'SPECIAL') return log(state, `${card.name} cannot be sold.`);
   if (card.name === 'Investment') return log(state, 'Investment cannot be sold.');
+  if (card.name === "Loan Shark's Favor") return log(state, "Loan Shark's Favor cannot be sold.");
 
   let s = updatePlayer(state, idx, (p) => ({
     ...p,
@@ -1307,6 +1321,28 @@ function resolveTrashCan(state: GameState, cardId: string): GameState {
 }
 
 /**
+ * Resolve Loan Shark's Favor's start-of-turn discard (see
+ * pendingLoanSharkDiscard): the holder picks which of their own cards to
+ * discard — not a random or automatic pick. An invalid pick (card no longer
+ * in hand) logs and stays pending, same as Trash Can's "stays pending"
+ * pattern.
+ */
+function resolveLoanSharkDiscard(state: GameState, cardId: string): GameState {
+  const pending = state.pendingLoanSharkDiscard;
+  if (!pending) return state;
+  const idx = playerIndexById(state, pending.playerId);
+  const player = state.players[idx];
+  if (!player) return { ...state, pendingLoanSharkDiscard: null };
+
+  const card = player.hand.find((c) => c.id === cardId);
+  if (!card) return log(state, 'Choose a card from your hand to discard.');
+
+  let s = updatePlayer(state, idx, (p) => ({ ...p, hand: p.hand.filter((c) => c.id !== card.id) }));
+  s = { ...s, discardPile: [...s.discardPile, card], pendingLoanSharkDiscard: null };
+  return log(s, `${player.name} discards ${card.name} for Loan Shark's Favor.`);
+}
+
+/**
  * Resolve Coffee Machine's post-purchase choice (see pendingCoffeeRecipient):
  * hand the token to the buyer or a teammate. An invalid pick (not the buyer,
  * not a teammate) logs and stays pending, same as Getaway Car's/Trade's
@@ -1449,6 +1485,17 @@ function doPurchase(
   // pendingCoffeeRecipient/resolveCoffeeRecipient) — never assumed here.
   if (card.name === 'Coffee Machine') {
     s = { ...s, pendingCoffeeRecipient: { playerId: player.id } };
+  }
+
+  // Loan Shark's Favor: gain $5 minus the VP scored so far by both teams
+  // combined, floored at $0 — the later in the game it's bought, the less
+  // it pays out, so Criminals can't just bank it as a free late-game close.
+  if (card.name === "Loan Shark's Favor") {
+    const gain = Math.max(0, 5 - (s.teamScores.CIVILIAN + s.teamScores.CRIMINAL));
+    if (gain > 0) {
+      s = updatePlayer(s, idx, (p) => ({ ...p, money: p.money + gain }));
+    }
+    s = log(s, `${player.name}'s Loan Shark's Favor pays out $${gain}.`);
   }
 
   // Expand Network (and any vp-bearing card) scores instantly for the buyer's team.
@@ -2387,6 +2434,14 @@ function applyStartOfTurn(state: GameState, index: number): GameState {
     if (hasTeammate && current.hand.length > 0) {
       s = { ...s, pendingGetawayCarGift: { playerId: current.id } };
     }
+  }
+
+  // Loan Shark's Favor: the card text has no "may," so the holder must
+  // discard a card of their own choosing (see resolveLoanSharkDiscard) —
+  // only when they actually have one. Uses the current hand, not the stale
+  // `player` snapshot, since Computer/Laboratory may have just drawn.
+  if (has("Loan Shark's Favor") && s.players[index].hand.length > 0) {
+    s = { ...s, pendingLoanSharkDiscard: { playerId: player.id } };
   }
 
   return s;

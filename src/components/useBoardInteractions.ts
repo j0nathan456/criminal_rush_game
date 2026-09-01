@@ -341,6 +341,7 @@ export function useBoardInteractions(
       guardedDispatch({ type: 'RESOLVE_BRIBERY', targetId, category, cardId }),
     onResolveTrashCan: (cardId: string) => guardedDispatch({ type: 'RESOLVE_TRASH_CAN', cardId }),
     onResolveCoffeeRecipient: (recipientId: string) => guardedDispatch({ type: 'RESOLVE_COFFEE_RECIPIENT', recipientId }),
+    onResolveLoanSharkDiscard: (cardId: string) => guardedDispatch({ type: 'RESOLVE_LOAN_SHARK_DISCARD', cardId }),
   };
 
   return {

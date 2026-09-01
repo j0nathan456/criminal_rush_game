@@ -143,6 +143,7 @@ export const BLACK_MARKET_PERKS: CardDef<MarketCard>[] = [
   { name: 'Shady Press', description: 'Action: choose an opponent, see all their Event cards, and play one immediately.', cost: 2, source: 'BLACK_MARKET', type: 'PERK', copies: 1 },
   { name: 'Corrupt Connections', description: 'Start of turn: gain an extra action this turn.', cost: 3, source: 'BLACK_MARKET', type: 'PERK', isPassive: true, copies: 1 },
   { name: 'Disguise', description: 'On purchase, draw 2 cards. Cannot be Exposed while held. Start of turn: discard it.', cost: 1, source: 'BLACK_MARKET', type: 'PERK', copies: 1 },
+  { name: "Loan Shark's Favor", description: 'On purchase, gain $5 minus VP scored so far by both teams (min $0). Start of turn: discard 1 card if you have any. Cannot be sold or given away.', cost: 0, source: 'BLACK_MARKET', type: 'PERK', isPassive: true, copies: 1 },
 ];
 
 export const BLACK_MARKET_WEAPONS: CardDef<MarketCard>[] = [

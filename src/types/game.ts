@@ -409,4 +409,12 @@ export interface GameState {
    * always leads here.
    */
   pendingCoffeeRecipient?: { playerId: string } | null;
+
+  /**
+   * Loan Shark's Favor's start-of-turn discard (see applyStartOfTurn): the
+   * card text has no "may," so once triggered it must be resolved before
+   * anything else — same as Bribery's sell trigger. Only set when the
+   * holder actually has a card in hand to discard; otherwise nothing fires.
+   */
+  pendingLoanSharkDiscard?: { playerId: string } | null;
 }

@@ -222,7 +222,7 @@ Attacker vs. defender (person initiating = attacker).
 | Parasites | $4 | Chemical | Power = equal to opponent's role base PL |
 | Mosquitos | $5 | Chemical | +3 power. Before combat: randomly make opponent discard a card. |
 
-#### Black Market — 3 perks (+ Expand Network) available at a time, cheapest→priciest ordering for Expand Network purchases. 10 perks + 4 Expand Network total.
+#### Black Market — 3 perks (+ Expand Network) available at a time, cheapest→priciest ordering for Expand Network purchases. 11 perks + 4 Expand Network total.
 | Name | Cost | Effect |
 |---|---|---|
 | Hacked Passwords | $3 | Action: choose a player, randomly steal a card from their hand. |
@@ -235,6 +235,7 @@ Attacker vs. defender (person initiating = attacker).
 | Shady Press | $2 | Action: choose a player, see all their Event cards, choose 1 to play immediately. (If they hold exactly 1 unplayable Event card, e.g. Business Opportunity with nothing to sell, discard it instead.) |
 | Corrupt Connections | $3 | Start of turn: gain an extra action this turn. |
 | Disguise | $1 | On purchase, draw 2 cards. Cannot be Exposed while holding this. Start of turn: discard this perk. |
+| Loan Shark's Favor | $0 | On purchase, gain $5 minus the combined VP scored so far by both teams (min $0). Start of turn: discard 1 card (holder's choice) if you have any. Cannot be sold or given away. |
 | **Expand Network** | $5-$8 (rises with each purchase) | Gain 1 VP on acquisition. Cannot be sold/traded. +$1 more if buyer is a captured Criminal. 4 copies. |
 
 #### Black Market — Weapons (8 total).
