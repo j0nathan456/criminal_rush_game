@@ -5,7 +5,6 @@ import { MIN_PLAYERS, MAX_PLAYERS } from '../online/room';
 import { TEAM_META } from '../constants/theme';
 import { PlayableBoard } from './PlayableBoard';
 import { HowToPlay } from './HowToPlay';
-import { StatsPanel } from './StatsPanel';
 import { panelIn, backdrop } from '../ui/motion';
 
 interface OnlineControllerProps {
@@ -23,9 +22,7 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [showRules, setShowRules] = useState(false);
-  const [showStats, setShowStats] = useState(false);
   const rules = <HowToPlay open={showRules} onClose={() => setShowRules(false)} />;
-  const stats = <StatsPanel open={showStats} onClose={() => setShowStats(false)} />;
 
   const leave = () => {
     game.leave();
@@ -116,13 +113,6 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
           >
             📖 New here? How to Play
           </button>
-          <button
-            type="button"
-            className="btn btn-ghost mt-2 w-full text-sm text-teal"
-            onClick={() => setShowStats(true)}
-          >
-            📊 Game Stats
-          </button>
 
           <div className="gold-rule my-5" />
           <div className="flex flex-col items-center gap-1 text-center text-xs text-fog/70">
@@ -148,7 +138,6 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
           </div>
         </motion.div>
         {rules}
-        {stats}
       </div>
     );
   }

@@ -16,10 +16,6 @@ const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const supabase = url && serviceRoleKey ? createClient(url, serviceRoleKey) : null;
 
-export function statsConfigured(): boolean {
-  return supabase !== null;
-}
-
 /**
  * Record a finished online game: player count, winning team, duration, and
  * an anonymized per-player role/team breakdown (see completed_game_players —
