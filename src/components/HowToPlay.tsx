@@ -48,6 +48,14 @@ export function HowToPlay({ open, onClose }: HowToPlayProps) {
             </header>
 
             <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
+              <a
+                href="https://canva.link/9mjgtbwwu5a4hto"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-semibold text-teal hover:underline"
+              >
+                📄 Read the full rule book
+              </a>
               {HOW_TO_PLAY.map((section) => (
                 <section key={section.title}>
                   <h3 className="mb-1.5 flex items-center gap-2 text-base font-bold text-chalk">
