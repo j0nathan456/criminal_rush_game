@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { applyAction, viewFor } from '../src/online/room.js';
 import { getRoom, saveRoom } from './_store.js';
+import { recordCompletedGame } from './_stats.js';
 import { gameReducer } from '../src/engine/index.js';
 import type { GameAction } from '../src/engine/index.js';
 import { body, fail } from './_lib.js';
@@ -23,6 +24,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     const updated = applyAction(room, { token, action, reducer: gameReducer });
     await saveRoom(updated);
+
+    // The game just finished this action (winner went null -> set) — record
+    // it for stats. Best-effort: recordCompletedGame never throws.
+    if (!room.state?.winner && updated.state?.winner) {
+      await recordCompletedGame(updated);
+    }
 
     res.status(200).json({ view: viewFor(updated, token) });
   } catch (err) {

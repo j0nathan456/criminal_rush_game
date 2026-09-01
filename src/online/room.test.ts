@@ -82,19 +82,21 @@ describe('room lifecycle', () => {
     const full = roomWith(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']);
     expect(() => joinRoom(full, 'x', 'Extra')).toThrow(RoomError);
 
-    const started = startRoom(roomWith(['A', 'B', 'C', 'D']), { token: 't0', newGame });
+    const started = startRoom(roomWith(['A', 'B', 'C', 'D']), { token: 't0', newGame, now: 0 });
     expect(() => joinRoom(started, 'x', 'Late')).toThrow(RoomError);
   });
 
   it('only lets the host start, and only with enough players', () => {
-    expect(() => startRoom(roomWith(['A', 'B', 'C']), { token: 't0', newGame })).toThrow(
+    expect(() => startRoom(roomWith(['A', 'B', 'C']), { token: 't0', newGame, now: 0 })).toThrow(
       new RegExp(`at least ${MIN_PLAYERS}`),
     );
-    expect(() => startRoom(roomWith(['A', 'B', 'C', 'D']), { token: 't1', newGame })).toThrow(/host/);
+    expect(() => startRoom(roomWith(['A', 'B', 'C', 'D']), { token: 't1', newGame, now: 0 })).toThrow(/host/);
 
-    const started = startRoom(roomWith(['A', 'B', 'C', 'D']), { token: 't0', newGame });
+    const started = startRoom(roomWith(['A', 'B', 'C', 'D']), { token: 't0', newGame, now: 12345 });
     expect(started.started).toBe(true);
     expect(started.state?.players).toHaveLength(4);
+    // Distinct from createdAt (lobby-open time) — this is when play actually began.
+    expect(started.startedAt).toBe(12345);
   });
 });
 
@@ -108,7 +110,7 @@ describe('chat', () => {
     const enabled = setChatEnabled(room, { hostToken: 't0', enabled: true });
     expect(enabled.chatEnabled).toBe(true);
 
-    const started = startRoom(enabled, { token: 't0', newGame });
+    const started = startRoom(enabled, { token: 't0', newGame, now: 0 });
     expect(() => setChatEnabled(started, { hostToken: 't0', enabled: false })).toThrow(/before the game starts/);
   });
 
@@ -122,7 +124,7 @@ describe('chat', () => {
 
   it('posts a message, trims it, caps it at MAX_CHAT_MESSAGE_LENGTH, and colors it by the sender\'s team', () => {
     const enabled = setChatEnabled(roomWith(['A', 'B', 'C', 'D']), { hostToken: 't0', enabled: true });
-    const started = startRoom(enabled, { token: 't0', newGame });
+    const started = startRoom(enabled, { token: 't0', newGame, now: 0 });
     const state = started.state as GameState;
     const overLong = '!'.repeat(MAX_CHAT_MESSAGE_LENGTH + 50);
 
@@ -136,13 +138,13 @@ describe('chat', () => {
 
   it('rejects a blank message', () => {
     const enabled = setChatEnabled(roomWith(['A', 'B', 'C', 'D']), { hostToken: 't0', enabled: true });
-    const started = startRoom(enabled, { token: 't0', newGame });
+    const started = startRoom(enabled, { token: 't0', newGame, now: 0 });
     expect(() => postChatMessage(started, { token: 't0', text: '   ', now: 0, id: 'm1' })).toThrow(/empty/);
   });
 
   it('caps history so the room record does not grow without bound', () => {
     const enabled = setChatEnabled(roomWith(['A', 'B', 'C', 'D']), { hostToken: 't0', enabled: true });
-    let room = startRoom(enabled, { token: 't0', newGame });
+    let room = startRoom(enabled, { token: 't0', newGame, now: 0 });
     for (let i = 0; i < 205; i++) {
       room = postChatMessage(room, { token: 't0', text: `msg ${i}`, now: i, id: `m${i}` });
     }
@@ -152,7 +154,7 @@ describe('chat', () => {
 
   it('is public in viewFor for every player, unlike hands/draw pile', () => {
     const enabled = setChatEnabled(roomWith(['A', 'B', 'C', 'D']), { hostToken: 't0', enabled: true });
-    const started = startRoom(enabled, { token: 't0', newGame });
+    const started = startRoom(enabled, { token: 't0', newGame, now: 0 });
     const withMsg = postChatMessage(started, { token: 't0', text: 'hello table', now: 0, id: 'm1' });
 
     expect(viewFor(withMsg, 't0').chat).toHaveLength(1);
@@ -163,7 +165,7 @@ describe('chat', () => {
 
 describe('applyAction', () => {
   it('applies an action from the current player and rejects others', () => {
-    const started = startRoom(roomWith(['A', 'B', 'C', 'D']), { token: 't0', newGame });
+    const started = startRoom(roomWith(['A', 'B', 'C', 'D']), { token: 't0', newGame, now: 0 });
     const state = started.state as GameState;
     const currentSeat = state.currentPlayerIndex;
     const currentToken = tokenFor(state.players[currentSeat]);
@@ -185,7 +187,7 @@ describe('applyAction', () => {
   });
 
   it('authorizes COMBAT_CHOICE against the pending choice\'s actual decider, not the current turn', () => {
-    const started = startRoom(roomWith(['A', 'B', 'C', 'D']), { token: 't0', newGame });
+    const started = startRoom(roomWith(['A', 'B', 'C', 'D']), { token: 't0', newGame, now: 0 });
     const state = started.state as GameState;
     const currentSeat = state.currentPlayerIndex;
     const deciderSeat = (currentSeat + 1) % 4; // e.g. the injured defender in Leaving Evidence — not the current player
@@ -215,7 +217,7 @@ describe('applyAction', () => {
   });
 
   it('only lets a combatant PASS_COMBAT for their own side', () => {
-    const started = startRoom(roomWith(['A', 'B', 'C', 'D']), { token: 't0', newGame });
+    const started = startRoom(roomWith(['A', 'B', 'C', 'D']), { token: 't0', newGame, now: 0 });
     const state = started.state as GameState;
     const attackerSeat = state.currentPlayerIndex;
     const defenderSeat = (attackerSeat + 1) % 4;
@@ -242,7 +244,7 @@ describe('applyAction', () => {
   });
 
   it('authorizes RESOLVE_THREATEN against the Arsonist\'s target, not the current turn', () => {
-    const started = startRoom(roomWith(['A', 'B', 'C', 'D']), { token: 't0', newGame });
+    const started = startRoom(roomWith(['A', 'B', 'C', 'D']), { token: 't0', newGame, now: 0 });
     const state = started.state as GameState;
     const currentSeat = state.currentPlayerIndex;
     const targetSeat = (currentSeat + 1) % 4;
@@ -257,7 +259,7 @@ describe('applyAction', () => {
   });
 
   it("authorizes RESOLVE_BODYGUARD_SETUP against the Bodyguard, not the current turn", () => {
-    const started = startRoom(roomWith(['A', 'B', 'C', 'D']), { token: 't0', newGame });
+    const started = startRoom(roomWith(['A', 'B', 'C', 'D']), { token: 't0', newGame, now: 0 });
     const state = started.state as GameState;
     const currentSeat = state.currentPlayerIndex;
     // Team is now assigned independently of seat, so find an actual same-team
@@ -276,7 +278,7 @@ describe('applyAction', () => {
   });
 
   it('authorizes RESOLVE_TRADE_RETURN against the recipient, not the initiator', () => {
-    const started = startRoom(roomWith(['A', 'B', 'C', 'D']), { token: 't0', newGame });
+    const started = startRoom(roomWith(['A', 'B', 'C', 'D']), { token: 't0', newGame, now: 0 });
     const state = started.state as GameState;
     const initiatorSeat = state.currentPlayerIndex;
     const recipientSeat = (initiatorSeat + 1) % 4;
@@ -437,7 +439,7 @@ describe('leaveRoom', () => {
   });
 
   it('does not remove seats once the game has started', () => {
-    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev']), { token: 't0', newGame });
+    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev']), { token: 't0', newGame, now: 0 });
     expect(leaveRoom(started, 't1').players).toHaveLength(4);
   });
 
@@ -475,14 +477,14 @@ describe('kickPlayer', () => {
   });
 
   it('refuses once the game has started', () => {
-    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev']), { token: 't0', newGame });
+    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev']), { token: 't0', newGame, now: 0 });
     expect(() => kickPlayer(started, { hostToken: 't0', targetSeat: 1 })).toThrow(/game has started/);
   });
 });
 
 describe('rejoinRoom', () => {
   it('reissues a token for the seat matching the given name', () => {
-    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev']), { token: 't0', newGame });
+    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev']), { token: 't0', newGame, now: 0 });
     const after = rejoinRoom(started, 'new-token', 'Ben');
 
     const ben = after.players.find((p) => p.name === 'Ben');
@@ -492,13 +494,13 @@ describe('rejoinRoom', () => {
   });
 
   it('matches case-insensitively and trims whitespace', () => {
-    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev']), { token: 't0', newGame });
+    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev']), { token: 't0', newGame, now: 0 });
     const after = rejoinRoom(started, 'new-token', '  ben  ');
     expect(after.players.find((p) => p.name === 'Ben')?.token).toBe('new-token');
   });
 
   it("the old token stops working once someone rejoins Ben's seat", () => {
-    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev']), { token: 't0', newGame });
+    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev']), { token: 't0', newGame, now: 0 });
     const after = rejoinRoom(started, 'new-token', 'Ben');
     expect(after.players.some((p) => p.token === 't1')).toBe(false); // Ben's original token
   });
@@ -509,29 +511,29 @@ describe('rejoinRoom', () => {
   });
 
   it('refuses a blank name', () => {
-    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev']), { token: 't0', newGame });
+    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev']), { token: 't0', newGame, now: 0 });
     expect(() => rejoinRoom(started, 'x', '   ')).toThrow(/enter the name/i);
   });
 
   it('refuses a name that matches no seat', () => {
-    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev']), { token: 't0', newGame });
+    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev']), { token: 't0', newGame, now: 0 });
     expect(() => rejoinRoom(started, 'x', 'Zed')).toThrow(/no player/i);
   });
 
   it('refuses an ambiguous name shared by more than one seat', () => {
-    const started = startRoom(roomWith(['Ava', 'Ben', 'Ben', 'Dev']), { token: 't0', newGame });
+    const started = startRoom(roomWith(['Ava', 'Ben', 'Ben', 'Dev']), { token: 't0', newGame, now: 0 });
     expect(() => rejoinRoom(started, 'x', 'Ben')).toThrow(/more than one player/i);
   });
 });
 
 describe('playAgain', () => {
   function finishedRoom(): Room {
-    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev']), { token: 't0', newGame });
+    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev']), { token: 't0', newGame, now: 0 });
     return { ...started, state: { ...started.state!, winner: 'CIVILIAN' } };
   }
 
   it('refuses while the game is still in progress', () => {
-    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev']), { token: 't0', newGame });
+    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev']), { token: 't0', newGame, now: 0 });
     expect(() => playAgain(started, 't0', 'Ava')).toThrow(/still in progress/);
   });
 
@@ -591,7 +593,7 @@ describe('playAgain', () => {
 
 describe('rematch lobby (playAgain + viewFor + startRoom/kick/chat/leave)', () => {
   function finishedRoom(): Room {
-    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev']), { token: 't0', newGame });
+    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev']), { token: 't0', newGame, now: 0 });
     return { ...started, state: { ...started.state!, winner: 'CIVILIAN' } };
   }
 
@@ -629,7 +631,7 @@ describe('rematch lobby (playAgain + viewFor + startRoom/kick/chat/leave)', () =
       't0',
       'Ava',
     );
-    const promoted = startRoom(withLobby, { token: 't2', newGame }); // Cara, the lobby host
+    const promoted = startRoom(withLobby, { token: 't2', newGame, now: 0 }); // Cara, the lobby host
 
     expect(promoted.code).toBe(room.code);
     expect(promoted.started).toBe(true);
@@ -640,7 +642,7 @@ describe('rematch lobby (playAgain + viewFor + startRoom/kick/chat/leave)', () =
   });
 
   it("leaves out a player who never joined the rematch, once it's started", () => {
-    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev', 'Eli']), { token: 't0', newGame });
+    const started = startRoom(roomWith(['Ava', 'Ben', 'Cara', 'Dev', 'Eli']), { token: 't0', newGame, now: 0 });
     const room: Room = { ...started, state: { ...started.state!, winner: 'CIVILIAN' } };
     // Everyone but Ava (t0) rejoins for the rematch — still enough for MIN_PLAYERS.
     const withLobby = playAgain(
@@ -648,7 +650,7 @@ describe('rematch lobby (playAgain + viewFor + startRoom/kick/chat/leave)', () =
       't4',
       'Eli',
     );
-    const promoted = startRoom(withLobby, { token: 't2', newGame });
+    const promoted = startRoom(withLobby, { token: 't2', newGame, now: 0 });
 
     expect(viewFor(promoted, 't0').yourSeat).toBe(-1);
   });

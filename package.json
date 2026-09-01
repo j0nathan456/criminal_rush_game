@@ -12,6 +12,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.112.4",
     "@upstash/redis": "^1.38.2",
     "framer-motion": "^13.1.0",
     "react": "^19.2.8",

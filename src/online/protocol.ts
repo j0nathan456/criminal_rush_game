@@ -35,6 +35,8 @@ export interface Room {
   code: string;
   createdAt: number;
   started: boolean;
+  /** Set by startRoom — when actual play began, not when the lobby opened (see createdAt). */
+  startedAt?: number;
   players: RoomPlayer[];
   /** Null until the host starts; then the full authoritative game state. */
   state: GameState | null;

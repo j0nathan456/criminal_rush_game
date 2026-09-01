@@ -20,7 +20,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       return;
     }
 
-    const updated = startRoom(room, { token, newGame });
+    const updated = startRoom(room, { token, newGame, now: Date.now() });
     await saveRoom(updated);
 
     res.status(200).json({ view: viewFor(updated, token) });

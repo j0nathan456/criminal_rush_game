@@ -175,6 +175,8 @@ export function kickPlayer(room: Room, { hostToken, targetSeat }: KickPlayerInpu
 export interface StartRoomInput {
   token: string;
   newGame: (playerNames: string[]) => GameState;
+  /** Caller-supplied so this stays a pure function (see createRoom's `now`). */
+  now: number;
 }
 
 /**
@@ -185,9 +187,9 @@ export interface StartRoomInput {
  * never clicked "Play again" simply isn't part of the new game, same as not
  * joining before any other room's host starts it.
  */
-export function startRoom(room: Room, { token, newGame }: StartRoomInput): Room {
+export function startRoom(room: Room, { token, newGame, now }: StartRoomInput): Room {
   if (inRematch(room, token)) {
-    const promoted = startRoom(room.rematch!, { token, newGame });
+    const promoted = startRoom(room.rematch!, { token, newGame, now });
     return { ...promoted, createdAt: room.createdAt, rematch: null };
   }
   if (room.started) throw new RoomError('Game already started.');
@@ -196,7 +198,7 @@ export function startRoom(room: Room, { token, newGame }: StartRoomInput): Room 
     throw new RoomError(`Need at least ${MIN_PLAYERS} players to start.`);
   }
   const names = [...room.players].sort((a, b) => a.seat - b.seat).map((p) => p.name);
-  return { ...room, started: true, state: newGame(names) };
+  return { ...room, started: true, startedAt: now, state: newGame(names) };
 }
 
 export interface SetChatEnabledInput {
