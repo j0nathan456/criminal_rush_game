@@ -49,11 +49,13 @@ export async function recordCompletedGame(room: Room): Promise<void> {
   // `seat` here is the player's index in state.players — turn order, not
   // lobby join order (see protocol.ts's own note on the two diverging) —
   // kept in case turn position ever turns out to correlate with winning.
+  const winner = room.state.winner;
   const players = room.state.players.map((p, seat) => ({
     game_id: game.id as string,
     seat,
     team: p.team,
     role_id: p.role.id,
+    won: p.team === winner,
   }));
   const { error: playersError } = await supabase.from('completed_game_players').insert(players);
   if (playersError) console.error('Failed to record completed game players', playersError);
