@@ -9,7 +9,7 @@
 export { createGame } from './createGame.js';
 export type { CreateGameOptions } from './createGame.js';
 
-export { gameReducer, emptyGameState } from './reducer.js';
+export { gameReducer, emptyGameState, MAX_WEAPONS } from './reducer.js';
 export type { GameAction, RoleAbilityPayload, EventOptions, TradeItem, PerkPayload } from './reducer.js';
 
 export { determineWinner } from './scoring.js';

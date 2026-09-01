@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { GameState } from '../types/game';
 import type { AnyCard, MarketCard } from '../types/cards';
+import { MAX_WEAPONS } from '../engine';
 import { TEAM_META } from '../constants/theme';
 
 export interface MarketPickerPanelProps {
@@ -56,8 +57,11 @@ export function MarketPickerPanel({ state, viewerIndex, onBuy, onCancel }: Marke
   // Expand Network — mirrors doPurchase's own surcharge, so the button
   // always shows what buying will actually cost. Only what the viewer can
   // actually afford is offered here — an unaffordable card is a dead end,
-  // not a choice.
+  // not a choice. Same for a weapon once the viewer already holds the max
+  // (2) — there'd be nowhere for it to go (see doPurchase's own cap check).
+  const weaponCapReached = viewer.inventory.filter((c) => c.type === 'WEAPON').length >= MAX_WEAPONS;
   const affordable = cards
+    .filter((c) => !(weaponCapReached && c.type === 'WEAPON'))
     .map((c) => ({ card: c, cost: c.cost + (c.type === 'SPECIAL' && viewer.isCaptured ? 1 : 0) }))
     .filter(({ cost }) => cost <= viewer.money);
 

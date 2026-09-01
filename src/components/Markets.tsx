@@ -1,5 +1,6 @@
 import type { GameState, Player } from '../types/game';
 import type { AnyCard } from '../types/cards';
+import { MAX_WEAPONS } from '../engine';
 import { Market } from './Market';
 
 interface MarketsProps {
@@ -17,6 +18,7 @@ interface MarketsProps {
 export function Markets({ state, viewer, isViewersTurn, onBuy }: MarketsProps) {
   const isCriminal = viewer?.team === 'CRIMINAL';
   const canBuyBlackMarket = isViewersTurn && isCriminal;
+  const weaponCapReached = (viewer?.inventory.filter((c) => c.type === 'WEAPON').length ?? 0) >= MAX_WEAPONS;
 
   return (
     <div className="flex h-full flex-col gap-4">
@@ -25,6 +27,7 @@ export function Markets({ state, viewer, isViewersTurn, onBuy }: MarketsProps) {
         subtitle="5 cards · open to all"
         cards={state.publicMarket}
         affordableUpTo={viewer?.money}
+        weaponCapReached={weaponCapReached}
         onBuy={isViewersTurn ? onBuy : undefined}
         variant="public"
       />
@@ -33,6 +36,7 @@ export function Markets({ state, viewer, isViewersTurn, onBuy }: MarketsProps) {
         subtitle={isCriminal ? 'Criminals only · buy to Expand Network' : 'Criminals only · you can observe'}
         cards={state.blackMarket}
         affordableUpTo={canBuyBlackMarket ? viewer?.money : undefined}
+        weaponCapReached={weaponCapReached}
         onBuy={canBuyBlackMarket ? onBuy : undefined}
         variant="black"
       />

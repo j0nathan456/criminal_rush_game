@@ -57,6 +57,27 @@ describe('<MarketPickerPanel /> — Civilian', () => {
     expect(screen.getByText('Cheap ($1)')).toBeInTheDocument();
     expect(screen.queryByText('Computer ($3)')).not.toBeInTheDocument();
   });
+
+  it('hides any weapon once the viewer already holds the max (2) — there is nowhere for a third to go', () => {
+    const axe: MarketCard = { id: 'w1', name: 'Axe', description: '', cost: 3, source: 'PUBLIC', type: 'WEAPON', weaponType: 'MELEE', power: 3 };
+    const bat: MarketCard = { id: 'w2', name: 'Bat', description: '', cost: 2, source: 'PUBLIC', type: 'WEAPON', weaponType: 'MELEE', power: 2 };
+    const viewer = mkPlayer({ id: 'p0', name: 'Ana', role: role('mayor', 'CIVILIAN'), money: 10, inventory: [axe, bat] });
+    const newWeapon: MarketCard = { id: 'm3', name: 'Arrows', description: '', cost: 3, source: 'PUBLIC', type: 'WEAPON', weaponType: 'RANGED', power: 2 };
+    const s = stateWith([viewer], { publicMarket: [computer, newWeapon] });
+    render(<MarketPickerPanel state={s} viewerIndex={0} onBuy={vi.fn()} onCancel={vi.fn()} />);
+    // A perk is still offered — only the weapon slot is full.
+    expect(screen.getByText('Computer ($3)')).toBeInTheDocument();
+    expect(screen.queryByText('Arrows ($3)')).not.toBeInTheDocument();
+  });
+
+  it('still offers a weapon with only 1 held — the cap is 2, not 1', () => {
+    const bat: MarketCard = { id: 'w2', name: 'Bat', description: '', cost: 2, source: 'PUBLIC', type: 'WEAPON', weaponType: 'MELEE', power: 2 };
+    const viewer = mkPlayer({ id: 'p0', name: 'Ana', role: role('mayor', 'CIVILIAN'), money: 10, inventory: [bat] });
+    const newWeapon: MarketCard = { id: 'm3', name: 'Arrows', description: '', cost: 3, source: 'PUBLIC', type: 'WEAPON', weaponType: 'RANGED', power: 2 };
+    const s = stateWith([viewer], { publicMarket: [newWeapon] });
+    render(<MarketPickerPanel state={s} viewerIndex={0} onBuy={vi.fn()} onCancel={vi.fn()} />);
+    expect(screen.getByText('Arrows ($3)')).toBeInTheDocument();
+  });
 });
 
 describe('<MarketPickerPanel /> — Criminal', () => {

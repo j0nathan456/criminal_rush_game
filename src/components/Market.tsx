@@ -7,15 +7,18 @@ interface MarketProps {
   cards: MarketCard[];
   /** Money the viewing player has, used to disable cards they cannot afford. */
   affordableUpTo?: number;
+  /** True once the viewer already holds the max weapons (2) — dims any further weapon. */
+  weaponCapReached?: boolean;
   onBuy?: (card: AnyCard) => void;
   variant?: 'public' | 'black';
 }
 
 /**
  * A market row — the public Market or the Criminals-only Black Market. Cards
- * over the player's budget are dimmed.
+ * over the player's budget are dimmed, as is any weapon once the viewer
+ * already holds the max (2) — there'd be nowhere for it to go.
  */
-export function Market({ title, subtitle, cards, affordableUpTo, onBuy, variant = 'public' }: MarketProps) {
+export function Market({ title, subtitle, cards, affordableUpTo, weaponCapReached, onBuy, variant = 'public' }: MarketProps) {
   return (
     <section
       className={`panel ${variant === 'black' ? 'border-crim/30 bg-gradient-to-b from-crim/10 to-transparent' : ''}`}
@@ -31,7 +34,7 @@ export function Market({ title, subtitle, cards, affordableUpTo, onBuy, variant 
           <Card
             key={card.id}
             card={card}
-            disabled={affordableUpTo !== undefined && card.cost > affordableUpTo}
+            disabled={(affordableUpTo !== undefined && card.cost > affordableUpTo) || (weaponCapReached && card.type === 'WEAPON')}
             onClick={onBuy}
           />
         ))}

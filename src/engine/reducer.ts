@@ -144,7 +144,7 @@ export interface EventOptions {
 }
 
 const MAX_PERKS = 4;
-const MAX_WEAPONS = 2;
+export const MAX_WEAPONS = 2;
 
 /** Face-up market sizes (rulebook p.3): 5 public, Expand Network + 3 rotating black. */
 export const PUBLIC_MARKET_SIZE = 5;
