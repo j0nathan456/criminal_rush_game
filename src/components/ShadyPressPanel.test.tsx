@@ -74,6 +74,125 @@ describe('<ShadyPressPanel />', () => {
     expect(onResolve).toHaveBeenCalledWith('e1', 'p2', expect.objectContaining({}));
   });
 
+  it('routes a forced Market Access through its own follow-up (buy at $1 off, from the presser\'s money)', () => {
+    const onResolve = vi.fn();
+    const evt: ActionCard = { id: 'e1', name: 'Market Access', description: '', type: 'EVENT' };
+    const presser = mkPlayer({ id: 'p0', name: 'Ana', role: role('hitman', 'CRIMINAL'), money: 1 });
+    const target = mkPlayer({ id: 'p1', name: 'Ben', role: role('mayor', 'CIVILIAN') });
+    const s = stateWith([presser, target], {
+      pendingShadyPress: { pressId: 'p0', targetId: 'p1', perkCardId: 'sp', cards: [evt] },
+      publicMarket: [{ id: 'm1', name: 'Radio', description: '', cost: 2, source: 'PUBLIC', type: 'PERK' }],
+    });
+    render(<ShadyPressPanel state={s} viewerIndex={0} onResolve={onResolve} />);
+
+    fireEvent.click(screen.getByText('Market Access'));
+    fireEvent.click(screen.getByText('Radio ($1)')); // $2 base, $1 off
+    fireEvent.click(screen.getByText('Play Market Access'));
+    expect(onResolve).toHaveBeenCalledWith('e1', undefined, expect.objectContaining({ marketCardId: 'm1' }));
+  });
+
+  it("routes a forced Gain Influence through its own follow-up (steals for the presser, from an opponent of the presser's team)", () => {
+    const onResolve = vi.fn();
+    const evt: ActionCard = { id: 'e1', name: 'Gain Influence', description: '', type: 'EVENT' };
+    const presser = mkPlayer({ id: 'p0', name: 'Ana', role: role('hitman', 'CRIMINAL') });
+    const target = mkPlayer({ id: 'p1', name: 'Ben', role: role('mayor', 'CIVILIAN') });
+    const victim = mkPlayer({ id: 'p2', name: 'Cara', role: role('sheriff', 'CIVILIAN'), hand: [{ id: 'c9', name: 'Profit', description: '', type: 'MONEY' as const }] });
+    const s = stateWith([presser, target, victim], {
+      pendingShadyPress: { pressId: 'p0', targetId: 'p1', perkCardId: 'sp', cards: [evt] },
+    });
+    render(<ShadyPressPanel state={s} viewerIndex={0} onResolve={onResolve} />);
+
+    fireEvent.click(screen.getByText('Gain Influence'));
+    fireEvent.click(screen.getByText('Cara'));
+    fireEvent.click(screen.getByText('Play Gain Influence'));
+    expect(onResolve).toHaveBeenCalledWith('e1', 'p2', expect.objectContaining({}));
+  });
+
+  it("routes a forced Market Exchange through its own follow-up, scoped to the presser's own team and inventory", () => {
+    const onResolve = vi.fn();
+    const evt: ActionCard = { id: 'e1', name: 'Market Exchange', description: '', type: 'EVENT' };
+    const own = { id: 'pk1', name: 'Radio', description: '', cost: 2, source: 'PUBLIC' as const, type: 'PERK' as const };
+    const presser = mkPlayer({ id: 'p0', name: 'Ana', role: role('hitman', 'CRIMINAL'), inventory: [own] });
+    const target = mkPlayer({ id: 'p1', name: 'Ben', role: role('mayor', 'CIVILIAN') });
+    const mate = mkPlayer({ id: 'p2', name: 'Cara', role: role('smuggler', 'CRIMINAL') });
+    const s = stateWith([presser, target, mate], {
+      pendingShadyPress: { pressId: 'p0', targetId: 'p1', perkCardId: 'sp', cards: [evt] },
+    });
+    render(<ShadyPressPanel state={s} viewerIndex={0} onResolve={onResolve} />);
+
+    fireEvent.click(screen.getByText('Market Exchange'));
+    fireEvent.click(screen.getByText('Cara')); // presser's Criminal teammate, not Ben
+    fireEvent.click(screen.getByText('Give a perk'));
+    fireEvent.click(screen.getByText('Radio')); // from the presser's own inventory
+    fireEvent.click(screen.getByText('Play Market Exchange'));
+    expect(onResolve).toHaveBeenCalledWith('e1', 'p2', expect.objectContaining({ inventoryCardId: 'pk1', takePerk: false }));
+  });
+
+  it('routes a forced Spring Cleaning through its own follow-up (discard 3 Market cards)', () => {
+    const onResolve = vi.fn();
+    const evt: ActionCard = { id: 'e1', name: 'Spring Cleaning', description: '', type: 'EVENT' };
+    const presser = mkPlayer({ id: 'p0', name: 'Ana', role: role('hitman', 'CRIMINAL') });
+    const target = mkPlayer({ id: 'p1', name: 'Ben', role: role('mayor', 'CIVILIAN') });
+    const market = ['m1', 'm2', 'm3', 'm4'].map((id) => ({ id, name: id, description: '', cost: 2, source: 'PUBLIC' as const, type: 'PERK' as const }));
+    const s = stateWith([presser, target], {
+      pendingShadyPress: { pressId: 'p0', targetId: 'p1', perkCardId: 'sp', cards: [evt] },
+      publicMarket: market,
+    });
+    render(<ShadyPressPanel state={s} viewerIndex={0} onResolve={onResolve} />);
+
+    fireEvent.click(screen.getByText('Spring Cleaning'));
+    fireEvent.click(screen.getByText('m1 ($2)'));
+    fireEvent.click(screen.getByText('m2 ($2)'));
+    fireEvent.click(screen.getByText('m3 ($2)'));
+    fireEvent.click(screen.getByText('Play Spring Cleaning'));
+    expect(onResolve).toHaveBeenCalledWith('e1', undefined, expect.objectContaining({ discardMarketIds: ['m1', 'm2', 'm3'] }));
+  });
+
+  it("routes a forced Traffic Jam through its own follow-up (snarls an opponent of the presser's team)", () => {
+    const onResolve = vi.fn();
+    const evt: ActionCard = { id: 'e1', name: 'Traffic Jam', description: '', type: 'EVENT' };
+    const presser = mkPlayer({ id: 'p0', name: 'Ana', role: role('hitman', 'CRIMINAL') });
+    const target = mkPlayer({ id: 'p1', name: 'Ben', role: role('mayor', 'CIVILIAN') });
+    const s = stateWith([presser, target], {
+      pendingShadyPress: { pressId: 'p0', targetId: 'p1', perkCardId: 'sp', cards: [evt] },
+    });
+    render(<ShadyPressPanel state={s} viewerIndex={0} onResolve={onResolve} />);
+
+    fireEvent.click(screen.getByText('Traffic Jam'));
+    fireEvent.click(screen.getByText('Ben'));
+    fireEvent.click(screen.getByText('Play Traffic Jam'));
+    expect(onResolve).toHaveBeenCalledWith('e1', 'p1', expect.objectContaining({}));
+  });
+
+  it("a forced Ally Support opens its own dedicated flow instead of discarding with no effect", () => {
+    const onResolve = vi.fn();
+    const evt: ActionCard = { id: 'e1', name: 'Ally Support', description: '', type: 'EVENT' };
+    const presser = mkPlayer({ id: 'p0', name: 'Ana', role: role('hitman', 'CRIMINAL') });
+    const target = mkPlayer({ id: 'p1', name: 'Ben', role: role('mayor', 'CIVILIAN') });
+    // The presser's own teammate, whose role Action gets copied — mirrors the
+    // reported bug (a Criminal forces a Civilian's Ally Support to copy their
+    // own teammate's Action).
+    const mate = mkPlayer({ id: 'p2', name: 'Cara', role: role('collector', 'CRIMINAL') });
+    const s = stateWith([presser, target, mate], {
+      pendingShadyPress: { pressId: 'p0', targetId: 'p1', perkCardId: 'sp', cards: [evt] },
+      publicMarket: [{ id: 'm1', name: 'Computer', description: '', cost: 2, source: 'PUBLIC', type: 'PERK' }],
+    });
+    render(<ShadyPressPanel state={s} viewerIndex={0} onResolve={onResolve} />);
+
+    fireEvent.click(screen.getByText('Ally Support'));
+    // Not the generic "Play card" button — AllySupportPanel's own teammate/
+    // Action picker, scoped to the presser's team (not the target's).
+    expect(screen.queryByText('Play card')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('Cara'));
+    fireEvent.click(screen.getByText(/\(role\)/));
+    fireEvent.click(screen.getByText('Computer ($2)'));
+    fireEvent.click(screen.getByText('Copy this Action'));
+
+    expect(onResolve).toHaveBeenCalledWith('e1', 'p2', {
+      allyPayload: { targetId: undefined, cardId: 'm1', category: undefined, mode: undefined },
+    });
+  });
+
   it("offers to discard a forced Business Opportunity instead of getting stuck when the presser has nothing to sell", () => {
     const onResolve = vi.fn();
     const evt: ActionCard = { id: 'e1', name: 'Business Opportunity', description: '', type: 'EVENT' };

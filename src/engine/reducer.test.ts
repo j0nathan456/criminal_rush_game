@@ -2252,6 +2252,68 @@ describe('gameReducer — remaining perks & events', () => {
     expect(next.players[0].actionsRemaining).toBe(2); // but the action is still spent
     expect(next.pendingShadyPress).toBeNull(); // nothing to resolve — already wasted
   });
+
+  it('Shady Press forces Market Exchange: target AND options both flow through together, scoped to the presser\'s own team/inventory', () => {
+    const press = perk('pk', 'Shady Press', { source: 'BLACK_MARKET' });
+    const own = perk('pk1', 'Radio');
+    const evt: ActionCard = { id: 'v', name: 'Market Exchange', description: '', type: 'EVENT' };
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL'), inventory: [press, own] }), // presser
+      mkPlayer({ id: 'p1', role: role('mayor', 'CIVILIAN'), hand: [evt] }), // supplies the card
+      mkPlayer({ id: 'p2', role: role('smuggler', 'CRIMINAL') }), // presser's actual teammate
+    ]);
+    const pressed = gameReducer(s, { type: 'USE_PERK', perkId: 'pk', payload: { targetId: 'p1' } });
+    const next = gameReducer(pressed, {
+      type: 'RESOLVE_SHADY_PRESS', cardId: 'v', eventTargetId: 'p2',
+      eventOptions: { inventoryCardId: 'pk1', takePerk: false },
+    });
+    // The perk moved from the presser (p0) to their real teammate (p2) — not
+    // to or from p1, who only supplied the forced card.
+    expect(next.players[0].inventory.map((c) => c.id)).toEqual(['pk']); // Radio given away
+    expect(next.players[1].inventory).toHaveLength(0);
+    expect(next.players[2].inventory.map((c) => c.id)).toEqual(['pk1']);
+  });
+
+  it('Shady Press forces Spring Cleaning: options-only (no target) still reaches the presser, whose pendingMarketDiscount gets set — not the target\'s', () => {
+    const press = perk('pk', 'Shady Press', { source: 'BLACK_MARKET' });
+    const evt: ActionCard = { id: 'v', name: 'Spring Cleaning', description: '', type: 'EVENT' };
+    const market = ['m1', 'm2', 'm3', 'm4'].map((id) => perk(id, id));
+    const s = stateWith(
+      [
+        mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL'), inventory: [press] }),
+        mkPlayer({ id: 'p1', role: role('mayor', 'CIVILIAN'), hand: [evt] }),
+      ],
+      { publicMarket: market },
+    );
+    const pressed = gameReducer(s, { type: 'USE_PERK', perkId: 'pk', payload: { targetId: 'p1' } });
+    const next = gameReducer(pressed, {
+      type: 'RESOLVE_SHADY_PRESS', cardId: 'v',
+      eventOptions: { discardMarketIds: ['m1', 'm2', 'm3'] },
+    });
+    expect(next.publicMarket.map((c) => c.id)).not.toContain('m1');
+    expect(next.pendingMarketDiscount).toEqual({ playerId: 'p0', amount: 1 }); // presser, not p1
+  });
+
+  it('Shady Press forces Ally Support end to end: the presser copies their own teammate\'s role Action', () => {
+    const press = perk('pk', 'Shady Press', { source: 'BLACK_MARKET' });
+    const evt: ActionCard = { id: 'v', name: 'Ally Support', description: '', type: 'EVENT' };
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('robber', 'CRIMINAL'), money: 0, inventory: [press] }), // presser
+      mkPlayer({ id: 'p1', role: role('mayor', 'CIVILIAN'), hand: [evt] }), // supplies the card
+      mkPlayer({ id: 'p2', role: role('robber', 'CRIMINAL') }), // presser's real teammate, also a Robber
+      mkPlayer({ id: 'p3', role: role('attorney', 'CIVILIAN'), money: 5 }), // steal victim
+    ]);
+    const pressed = gameReducer(s, { type: 'USE_PERK', perkId: 'pk', payload: { targetId: 'p1' } });
+    const next = gameReducer(pressed, {
+      type: 'RESOLVE_SHADY_PRESS', cardId: 'v', eventTargetId: 'p2',
+      eventOptions: { allyPayload: { targetId: 'p3', mode: 'MONEY' } },
+    });
+    // The presser (p0) performs the copied steal, benefiting themself — not p2
+    // (whose Action was copied) and not p1 (who only supplied the card).
+    expect(next.players[0].money).toBe(1);
+    expect(next.players[3].money).toBe(4);
+    expect(next.players[1].hand).toHaveLength(0); // Ally Support itself was spent
+  });
 });
 
 describe('createGame / rules corners', () => {

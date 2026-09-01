@@ -160,7 +160,8 @@ export function EventPanel({
     case 'Market Exchange': {
       const direction = takePerk === true ? 'TAKE' : takePerk === false ? 'GIVE' : undefined;
       const givableFrom = takePerk ? target?.inventory : viewer.inventory;
-      const perks = (givableFrom ?? []).filter((c) => c.type === 'PERK' && c.id !== excludeInventoryCardId);
+      const isGivablePerk = (c: MarketCard) => c.type === 'PERK' && c.id !== excludeInventoryCardId;
+      const perks = (givableFrom ?? []).filter(isGivablePerk);
       body = (
         <>
           <p>Choose a teammate to exchange a perk with:</p>
@@ -183,7 +184,15 @@ export function EventPanel({
         </>
       );
       canSubmit = !!targetId && takePerk !== undefined && !!inventoryCardId;
-      impossible = teammates.length === 0;
+      // Not just "no teammate at all": with a teammate but nothing to move in
+      // either direction (the viewer's only perk is excluded, e.g. the Shady
+      // Press card still resolving, and the teammate has none either),
+      // canSubmit could never become true — without this, the presser would
+      // be stuck with no legal choice and no way to back out (Cancel just
+      // returns to picking a different revealed card, not an option if this
+      // is the only one).
+      impossible = teammates.length === 0
+        || (viewer.inventory.filter(isGivablePerk).length === 0 && !teammates.some((m) => m.inventory.some(isGivablePerk)));
       break;
     }
     case 'Spring Cleaning': {

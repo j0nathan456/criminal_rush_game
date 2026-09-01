@@ -3,6 +3,7 @@ import type { GameState } from '../types/game';
 import type { EventOptions } from '../engine';
 import { TEAM_META } from '../constants/theme';
 import { EventPanel } from './EventPanel';
+import { AllySupportPanel } from './AllySupportPanel';
 import { CONFIGURABLE_EVENTS } from './panelConstants';
 
 export interface ShadyPressPanelProps {
@@ -41,6 +42,19 @@ export function ShadyPressPanel({ state, viewerIndex, onResolve }: ShadyPressPan
   }
 
   const chosenCard = cardId ? pending.cards.find((c) => c.id === cardId) : undefined;
+  if (chosenCard && chosenCard.name === 'Ally Support') {
+    // Ally Support has its own dedicated flow (see panelConstants), not
+    // EventPanel — the presser is the one performing the copied Action, so
+    // "a teammate or yourself" resolves against the presser's own team.
+    return (
+      <AllySupportPanel
+        state={state}
+        viewerIndex={viewerIndex}
+        onSubmit={(teammateId, options) => onResolve?.(chosenCard.id, teammateId, options)}
+        onCancel={() => setCardId(undefined)}
+      />
+    );
+  }
   if (chosenCard && CONFIGURABLE_EVENTS.has(chosenCard.name)) {
     return (
       <EventPanel
