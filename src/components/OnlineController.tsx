@@ -58,7 +58,7 @@ export function OnlineController({ onExit }: OnlineControllerProps) {
           <input
             id="player-name"
             className="input"
-            placeholder="e.g. Ava"
+            placeholder="e.g. Arkin"
             value={name}
             maxLength={20}
             onChange={(e) => setName(e.target.value)}
