@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { GameState, CombatChoiceInput } from '../types/game';
+import { neighborIds, mutantsReachIsBinding } from '../engine';
 import { TEAM_META, CATEGORY_META } from '../constants/theme';
 
 export interface CombatChoicePanelProps {
@@ -158,12 +159,29 @@ export function CombatChoicePanel({ state, viewerIndex, onCombatChoice }: Combat
     );
   } else if (head.kind === 'MUTANTS') {
     const oppId = head.side === 'ATTACKER' ? combat.defender.playerId : combat.attacker.playerId;
-    const oppWeapons = byId(oppId).inventory.filter((c) => c.type === 'WEAPON');
+    const opp = byId(oppId);
+    const attackerIndex = state.players.findIndex((p) => p.id === combat.attacker.playerId);
+    const areNeighbors = neighborIds(state, attackerIndex).includes(combat.defender.playerId);
+    // Reaching a non-neighbor with only Mutants (no Catapult/Machine Gun of
+    // the holder's own) was legal solely on the promise to copy the target's
+    // Catapult/Machine Gun — that promise is binding, so only those weapons
+    // are offered, and there's no backing out with "copy nothing".
+    const bindingReach = head.side === 'ATTACKER' && mutantsReachIsBinding(holder, areNeighbors);
+    const oppWeapons = opp.inventory.filter(
+      (c) => c.type === 'WEAPON' && (!bindingReach || c.name === 'Catapult' || c.name === 'Machine Gun'),
+    );
     body = (
       <>
-        <button type="button" className="cr-role__cancel" onClick={() => onCombatChoice?.({ kind: 'MUTANTS', mode: 'SKIP' })}>
-          Copy nothing
-        </button>
+        {!bindingReach && (
+          <button type="button" className="cr-role__cancel" onClick={() => onCombatChoice?.({ kind: 'MUTANTS', mode: 'SKIP' })}>
+            Copy nothing
+          </button>
+        )}
+        {bindingReach && (
+          <p className="cr-role__sub">
+            Reaching {opp.name} without a neighbor relied on Mutants — you must copy their Catapult or Machine Gun.
+          </p>
+        )}
         {oppWeapons.length > 0 && (
           <div className="cr-choice__block">
             <p className="cr-role__sub">Copy one of the opponent’s weapons:</p>

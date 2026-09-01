@@ -208,6 +208,18 @@ function canReachNonNeighbors(player: Player, target: Player): boolean {
 }
 
 /**
+ * Whether reaching this fight's opponent at all depended on the promise to
+ * copy their Catapult/Machine Gun — true only when `attacker` isn't a
+ * neighbor and has no Catapult/Machine Gun of their own, so the *only* thing
+ * that made this attack legal was Mutants' extended reach (see
+ * canReachNonNeighbors). That promise is binding once the attack is spent:
+ * applyMutants refuses "copy nothing" or copying anything else in this case.
+ */
+export function mutantsReachIsBinding(attacker: Player, areNeighbors: boolean): boolean {
+  return !areNeighbors && !hasItem(attacker, 'Catapult') && !hasItem(attacker, 'Machine Gun');
+}
+
+/**
  * Validate an attack. Returns an error message, or null if the attack is legal.
  * Civilians may only strike exposed, uncaptured Criminals; Criminals may only
  * strike Civilians who are not already injured.
@@ -508,24 +520,43 @@ function applyDronesReturn(state: GameState, head: Extract<CombatChoice, { kind:
  * weaponCopyPower's conditional bonus (if any), plus its before-combat effect
  * (Hammer draws, Mosquitos forces a discard, Brass Knuckles steals) fired
  * against that same opponent. A copied Signal Jammer's "may not play Power
- * cards" lockout is applied separately in enterPowerPhase, keyed off
- * copiedWeaponName below. A copied Barbed Wire is a special case — like the
- * real thing, the copied-from opponent chooses their own discard, so this
- * chains a fresh BARBED_WIRE choice instead of resolving inline, the same
+ * cards" lockout, a copied Viruses' after-combat token, and a copied Machine
+ * Gun's Power-phase discard-for-power are all applied separately (see
+ * enterPowerPhase / applyVirusTokens / combatDiscardMoney), each keyed off
+ * copiedWeaponName below the same way. A copied Barbed Wire or Pistol is a
+ * special case — like the real thing, whoever actually chooses the discard
+ * (the copied-from opponent for Barbed Wire, the holder themself for Pistol)
+ * needs their own fresh choice queued rather than resolved inline, the same
  * way applyDrones chains DRONES_RETURN — so, like DRONES, this manages
  * `combat.pending` itself rather than letting the generic pop-tail handle it.
+ * (Portal and Drones are never actually reachable here: both are Black
+ * Market/Criminal-only, so a Mutants holder — always a Criminal, always
+ * fighting a Civilian opponent — can never face an opponent holding either.)
+ * If reaching this opponent at all depended on the promise to copy their
+ * Catapult/Machine Gun (see mutantsReachIsBinding), that promise is binding
+ * — "copy nothing" and copying anything else are refused, forcing a retry.
  */
 function applyMutants(state: GameState, head: Extract<CombatChoice, { kind: 'MUTANTS' }>, input: CombatChoiceInput): GameState {
   const combat = state.combat!;
   const holder = state.players[playerIndexById(state, head.playerId)];
+  const oppId = head.side === 'ATTACKER' ? combat.defender.playerId : combat.attacker.playerId;
+  const opp = state.players[playerIndexById(state, oppId)];
+  const areNeighbors = neighborIds(state, playerIndexById(state, combat.attacker.playerId)).includes(combat.defender.playerId);
+
+  if (head.side === 'ATTACKER' && mutantsReachIsBinding(holder, areNeighbors)) {
+    const required = opp.inventory.filter((c) => c.type === 'WEAPON' && (c.name === 'Catapult' || c.name === 'Machine Gun'));
+    const chosenId = input.kind === 'MUTANTS' && input.mode === 'COPY' ? input.opponentWeaponId : undefined;
+    if (!required.some((w) => w.id === chosenId)) {
+      const names = required.map((w) => w.name).join(' or ');
+      return log(state, `${holder.name} reached ${opp.name} with Mutants — must copy their ${names}.`);
+    }
+  }
+
   if (input.kind !== 'MUTANTS' || input.mode !== 'COPY') {
     return advancePendingQueue(log(state, `${holder.name}'s Mutants copy nothing.`));
   }
-  const oppId = head.side === 'ATTACKER' ? combat.defender.playerId : combat.attacker.playerId;
-  const opp = state.players[playerIndexById(state, oppId)];
   const weapon = opp.inventory.find((c) => c.id === input.opponentWeaponId && c.type === 'WEAPON');
   if (!weapon) return advancePendingQueue(log(state, 'No such opponent weapon to copy.'));
-  const areNeighbors = neighborIds(state, playerIndexById(state, combat.attacker.playerId)).includes(combat.defender.playerId);
   const copied = weaponCopyPower(weapon, holder, opp, areNeighbors);
   const part = head.side === 'ATTACKER' ? combat.attacker : combat.defender;
   const newPart = { ...part, copiedWeaponPower: (part.copiedWeaponPower ?? 0) + copied, copiedWeaponName: weapon.name };
@@ -538,6 +569,13 @@ function applyMutants(state: GameState, head: Extract<CombatChoice, { kind: 'MUT
     const rest = newCombat.pending.slice(1);
     const barbedChoice: CombatChoice = { kind: 'BARBED_WIRE', playerId: opp.id, weaponId: weapon.id, side: head.side };
     return { ...s, combat: { ...newCombat, pending: [barbedChoice, ...rest] } };
+  }
+
+  if (weapon.name === 'Pistol') {
+    if (holder.hand.length === 0) return advancePendingQueue(s);
+    const rest = newCombat.pending.slice(1);
+    const pistolChoice: CombatChoice = { kind: 'PISTOL', playerId: holder.id, weaponId: weapon.id, side: head.side };
+    return { ...s, combat: { ...newCombat, pending: [pistolChoice, ...rest] } };
   }
 
   return advancePendingQueue(applyPreCombatWeaponEffect(s, weapon, holder.id, opp.id, head.side === 'ATTACKER'));
@@ -851,19 +889,23 @@ function applyDestroyPerk(state: GameState, head: Extract<CombatChoice, { kind: 
   return s;
 }
 
-/** Viruses: after combat, each combatant with Viruses gives the other a Virus token. */
-function applyVirusTokens(state: GameState, attacker: Player, defender: Player): GameState {
+/**
+ * Viruses: after combat, each combatant with Viruses (literally, or copied
+ * via Mutants — same copiedWeaponName check queueMissileChoice/
+ * queueMolotovChoices already use) gives the other a Virus token.
+ */
+function applyVirusTokens(state: GameState, combat: CombatState, attacker: Player, defender: Player): GameState {
   let s = state;
-  const give = (fromId: string, toId: string) => {
+  const give = (fromId: string, toId: string, copiedWeaponName: string | undefined) => {
     const from = s.players[playerIndexById(s, fromId)];
-    if (!hasItem(from, 'Viruses')) return;
+    if (!hasItem(from, 'Viruses') && copiedWeaponName !== 'Viruses') return;
     const ti = playerIndexById(s, toId);
     const to = s.players[ti];
     s = updatePlayer(s, ti, (p) => ({ ...p, virusTokens: (p.virusTokens ?? 0) + 1 }));
     s = log(s, `${from.name}'s Viruses give ${to.name} a Virus token (−1 action next turn).`);
   };
-  give(attacker.id, defender.id);
-  give(defender.id, attacker.id);
+  give(attacker.id, defender.id, combat.attacker.copiedWeaponName);
+  give(defender.id, attacker.id, combat.defender.copiedWeaponName);
   return s;
 }
 
@@ -944,7 +986,7 @@ export function resolveCombat(state: GameState): GameState {
 
   if (!attackerWins) {
     s = log(s, `${attacker.name}'s attack fails.`);
-    s = applyVirusTokens(s, attacker, defender);
+    s = applyVirusTokens(s, combat, attacker, defender);
     // A repelling defender "wins" this combat too — their own (or a
     // Mutants-copied) Missile still destroys a perk, same as an attacker's
     // win, just with the roles reversed.
@@ -957,13 +999,13 @@ export function resolveCombat(state: GameState): GameState {
     const defIdx = playerIndexById(s, defender.id);
     s = updatePlayer(s, defIdx, (p) => ({ ...p, isCaptured: true, isExposed: false }));
     s = applyScore(s, 'CIVILIAN', 1, `${attacker.name} captures ${defender.name}! Civilians score a VP.`);
-    s = applyVirusTokens(s, attacker, defender);
+    s = applyVirusTokens(s, combat, attacker, defender);
     const destroyChoices = [...queueMissileChoice(combat, attacker, defender, 'ATTACKER'), ...molotovChoices];
     return withPendingPrefix(combat, destroyChoices, { ...s, combat: null });
   }
 
   s = applyScore(s, 'CRIMINAL', 1, `${attacker.name} defeats ${defender.name}! Criminals score a VP.`);
-  s = applyVirusTokens(s, attacker, defender);
+  s = applyVirusTokens(s, combat, attacker, defender);
   const destroyChoices = [...queueMissileChoice(combat, attacker, defender, 'ATTACKER'), ...molotovChoices];
 
   if (defender.role.id === 'vigilante') {

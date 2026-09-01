@@ -1660,7 +1660,8 @@ function playPower(
 
 /**
  * Machine Gun: during the Power phase its holder may discard any number of
- * Money cards, each adding +1 power to their side.
+ * Money cards, each adding +1 power to their side — literally, or copied via
+ * Mutants (same copiedWeaponName check the other copyable effects use).
  */
 function combatDiscardMoney(state: GameState, side: CombatSide, cardIds: string[]): GameState {
   const combat = state.combat;
@@ -1670,7 +1671,7 @@ function combatDiscardMoney(state: GameState, side: CombatSide, cardIds: string[
   const { self, other } = sideParts(combat, side);
   const pIdx = playerIndexById(state, self.playerId);
   const p = state.players[pIdx];
-  if (!hasItem(p, 'Machine Gun')) return log(state, `${p.name} has no Machine Gun.`);
+  if (!hasItem(p, 'Machine Gun') && self.copiedWeaponName !== 'Machine Gun') return log(state, `${p.name} has no Machine Gun.`);
 
   const money = p.hand.filter((c) => cardIds.includes(c.id) && c.type === 'MONEY');
   if (money.length === 0) return log(state, 'No Money cards to discard.');

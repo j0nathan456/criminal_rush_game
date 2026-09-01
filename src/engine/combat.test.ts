@@ -875,6 +875,77 @@ describe('interactive combat — pre-combat choices', () => {
     expect(next.combat).toBeFalsy();
   });
 
+  it('reaching a non-neighbor via Mutants binds the holder to actually copy the Catapult that justified the reach', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mut', 'Mutants', 'CHEMICAL', 1)] });
+    const neighbor1 = mkPlayer({ id: 'n1', role: role('mayor', 'CIVILIAN', 2) });
+    const farTarget = mkPlayer({
+      id: 'far', role: role('sheriff', 'CIVILIAN', 3),
+      inventory: [wpn('cat', 'Catapult', 'RANGED', 2), wpn('bat', 'Bat', 'MELEE', 2)],
+    });
+    const neighbor2 = mkPlayer({ id: 'n2', role: role('attorney', 'CIVILIAN', 3) });
+    const s = stateWith([atk, neighbor1, farTarget, neighbor2], { currentPlayerIndex: 0 });
+    const pressed = gameReducer(s, { type: 'ATTACK', targetId: 'far' });
+
+    // "Copy nothing" is refused — the extended reach was only legal on the
+    // promise to copy Catapult, so there's no backing out now.
+    let next = gameReducer(pressed, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'SKIP' } });
+    expect(next.combat!.pending).toEqual([{ kind: 'MUTANTS', playerId: 'a', weaponId: 'mut', side: 'ATTACKER' }]); // still pending
+    expect(next.combat!.attacker.copiedWeaponName).toBeUndefined();
+
+    // Copying the unrelated Bat instead is refused too — only Catapult
+    // (the weapon that actually justified reaching a non-neighbor) counts.
+    next = gameReducer(pressed, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'COPY', opponentWeaponId: 'bat' } });
+    expect(next.combat!.pending).toEqual([{ kind: 'MUTANTS', playerId: 'a', weaponId: 'mut', side: 'ATTACKER' }]);
+    expect(next.combat!.attacker.copiedWeaponName).toBeUndefined();
+
+    // Copying Catapult itself is the only way through.
+    next = gameReducer(pressed, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'COPY', opponentWeaponId: 'cat' } });
+    expect(next.combat!.attacker.copiedWeaponName).toBe('Catapult');
+    expect(next.combat!.phase).toBe('POWER');
+  });
+
+  it('reaching a non-neighbor via Mutants binds the holder to copy Machine Gun the same way it does Catapult', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mut', 'Mutants', 'CHEMICAL', 1)] });
+    const neighbor1 = mkPlayer({ id: 'n1', role: role('mayor', 'CIVILIAN', 2) });
+    const farTarget = mkPlayer({ id: 'far', role: role('sheriff', 'CIVILIAN', 3), inventory: [wpn('mg', 'Machine Gun', 'RANGED', 3)] });
+    const neighbor2 = mkPlayer({ id: 'n2', role: role('attorney', 'CIVILIAN', 3) });
+    const s = stateWith([atk, neighbor1, farTarget, neighbor2], { currentPlayerIndex: 0 });
+    const pressed = gameReducer(s, { type: 'ATTACK', targetId: 'far' });
+
+    let next = gameReducer(pressed, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'SKIP' } });
+    expect(next.combat!.attacker.copiedWeaponName).toBeUndefined(); // refused
+
+    next = gameReducer(pressed, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'COPY', opponentWeaponId: 'mg' } });
+    expect(next.combat!.attacker.copiedWeaponName).toBe('Machine Gun');
+  });
+
+  it('does not bind the copy when the holder is a neighbor — reach never depended on Mutants there', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mut', 'Mutants', 'CHEMICAL', 1)] });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2), inventory: [wpn('cat', 'Catapult', 'RANGED', 2)] });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 }); // 2 seats — always neighbors
+    const pressed = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+
+    const next = gameReducer(pressed, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'SKIP' } });
+    expect(next.combat!.phase).toBe('POWER'); // "copy nothing" went through — not binding here
+  });
+
+  it('does not bind the copy when the holder already reaches non-neighbors on their own Catapult', () => {
+    // The holder carries both Mutants and their own Catapult — the reach
+    // never depended on the promise to copy the far target's Machine Gun,
+    // so there's nothing binding about it.
+    const atk = mkPlayer({
+      id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mut', 'Mutants', 'CHEMICAL', 1), wpn('cat', 'Catapult', 'RANGED', 2)],
+    });
+    const neighbor1 = mkPlayer({ id: 'n1', role: role('mayor', 'CIVILIAN', 2) });
+    const farTarget = mkPlayer({ id: 'far', role: role('sheriff', 'CIVILIAN', 3), inventory: [wpn('mg', 'Machine Gun', 'RANGED', 3)] });
+    const neighbor2 = mkPlayer({ id: 'n2', role: role('attorney', 'CIVILIAN', 3) });
+    const s = stateWith([atk, neighbor1, farTarget, neighbor2], { currentPlayerIndex: 0 });
+    const pressed = gameReducer(s, { type: 'ATTACK', targetId: 'far' });
+
+    const next = gameReducer(pressed, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'SKIP' } });
+    expect(next.combat!.phase).toBe('POWER'); // "copy nothing" went through
+  });
+
   it('Mutants copying Mosquitos also forces this fight’s opponent to discard — not just its power', () => {
     const atk = mkPlayer({
       id: 'a', role: role('hitman', 'CRIMINAL', 3),
@@ -928,6 +999,70 @@ describe('interactive combat — pre-combat choices', () => {
     next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'COPY', opponentWeaponId: 'bk' } });
     expect(next.players[0].money).toBe(1);
     expect(next.players[1].money).toBe(2);
+  });
+
+  it('Mutants copying Pistol queues a fresh discard choice for the holder themself, not the copied-from opponent', () => {
+    const atk = mkPlayer({
+      id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mut', 'Mutants', 'CHEMICAL', 1)], hand: [junk('keep'), junk('toss')],
+    });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2), inventory: [wpn('pis', 'Pistol', 'RANGED', 4)] });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    expect(next.combat!.pending).toEqual([{ kind: 'MUTANTS', playerId: 'a', weaponId: 'mut', side: 'ATTACKER' }]);
+
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'COPY', opponentWeaponId: 'pis' } });
+    // The copy chains its own PISTOL choice for the holder (not the
+    // opponent, unlike Barbed Wire's chain — Pistol's chooser is the weapon's
+    // own holder even when it's a copy).
+    expect(next.combat!.pending[0]).toEqual({ kind: 'PISTOL', playerId: 'a', weaponId: 'pis', side: 'ATTACKER' });
+
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'PISTOL', cardId: 'toss' } });
+    expect(next.players[0].hand.map((c) => c.id)).toEqual(['keep']); // the holder's own hand, not the opponent's
+    expect(next.combat!.phase).toBe('POWER');
+  });
+
+  it('Mutants copying Pistol is skipped ("if possible") when the holder has nothing to discard, same as the real Pistol', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mut', 'Mutants', 'CHEMICAL', 1)] }); // empty hand
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2), inventory: [wpn('pis', 'Pistol', 'RANGED', 4)] });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'COPY', opponentWeaponId: 'pis' } });
+    expect(next.combat!.phase).toBe('POWER'); // no PISTOL choice queued — nothing to discard
+  });
+
+  it('Mutants copying Viruses still hands the copied-from opponent a Virus token after combat', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mut', 'Mutants', 'CHEMICAL', 1)] });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2), inventory: [wpn('vir', 'Viruses', 'CHEMICAL', 2)] });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'COPY', opponentWeaponId: 'vir' } });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'ATTACKER' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'DEFENDER' });
+
+    // The copy gives the defender a token from the attacker's side; the
+    // defender's own real Viruses fires too, in the other direction — both
+    // are expected, since copying doesn't stop the original from working.
+    expect(next.players[1].virusTokens).toBe(1); // from the attacker's copied Viruses
+    expect(next.players[0].virusTokens).toBe(1); // from the defender's own real Viruses
+  });
+
+  it('Mutants copying Machine Gun lets the holder also discard Money for +1 power each in the Power phase', () => {
+    const atk = mkPlayer({
+      id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mut', 'Mutants', 'CHEMICAL', 1)], hand: [junk('m1'), junk('m2')],
+    });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2), inventory: [wpn('mg', 'Machine Gun', 'RANGED', 3)] });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'MUTANTS', mode: 'COPY', opponentWeaponId: 'mg' } });
+    expect(next.combat!.phase).toBe('POWER');
+
+    next = gameReducer(next, { type: 'COMBAT_DISCARD_MONEY', side: 'ATTACKER', cardIds: ['m1', 'm2'] });
+    expect(next.combat!.attacker.powerCardBonus).toBe(2);
+    expect(next.players[0].hand).toHaveLength(0);
   });
 
   it('Mutants only affects the direct combat opponent — a third player is untouched', () => {

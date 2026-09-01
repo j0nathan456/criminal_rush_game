@@ -31,6 +31,7 @@ export {
   hasItem,
   attackError,
   attackActionCost,
+  mutantsReachIsBinding,
   resolveAttackerPreCombat,
   resolveDefenderPreCombat,
   powerCardEligible,
