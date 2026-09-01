@@ -643,6 +643,23 @@ describe('interactive combat — pre-combat choices', () => {
     expect(discardIdx).toBeGreaterThan(tradeIdx);
   });
 
+  it('Mosquitos discards a genuinely random card from the victim’s hand, not always the first', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('mos', 'Mosquitos', 'CHEMICAL', 3)] });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2), hand: [junk('c0'), junk('c1'), junk('c2'), junk('c3')] });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+
+    // seed(1) and seed(7) land on different indices into the 4-card hand —
+    // proving the discard varies with rng rather than always taking hand[0].
+    const first = gameReducer(s, { type: 'ATTACK', targetId: 'd' }, seeded(1));
+    const second = gameReducer(s, { type: 'ATTACK', targetId: 'd' }, seeded(7));
+    const discardedFirst = ['c0', 'c1', 'c2', 'c3'].find((id) => !first.players[1].hand.some((c) => c.id === id));
+    const discardedSecond = ['c0', 'c1', 'c2', 'c3'].find((id) => !second.players[1].hand.some((c) => c.id === id));
+    expect(first.players[1].hand).toHaveLength(3);
+    expect(discardedFirst).toBe('c2'); // seed(1) selects index 2
+    expect(discardedSecond).toBe('c0'); // seed(7) selects index 0
+    expect(discardedFirst).not.toBe(discardedSecond); // different seeds pick different cards
+  });
+
   it('Portal SWAP for Hammer draws the new holder a card', () => {
     const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), money: 3, inventory: [wpn('por', 'Portal', 'TECH', 0)] });
     const mate = mkPlayer({ id: 'm', role: role('spy', 'CRIMINAL', 4), inventory: [wpn('ham', 'Hammer', 'MELEE', 2)] });

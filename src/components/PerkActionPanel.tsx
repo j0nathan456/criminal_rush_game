@@ -3,6 +3,9 @@ import type { GameState } from '../types/game';
 import type { ActionCard, MarketCard } from '../types/cards';
 import type { PerkPayload } from '../engine';
 import { TEAM_META } from '../constants/theme';
+import { EventPanel } from './EventPanel';
+import { AllySupportPanel } from './AllySupportPanel';
+import { CONFIGURABLE_EVENTS } from './panelConstants';
 
 export interface PerkActionPanelProps {
   state: GameState;
@@ -32,6 +35,39 @@ export function PerkActionPanel({ state, viewerIndex, perkId, onSubmit, onCancel
   if (!viewer) return null;
   const perk = perkOverride ?? viewer.inventory.find((c) => c.id === perkId);
   if (!perk) return null;
+
+  // Alarm Clock's own forced Event card needs its own target/options
+  // gathered once picked — Ally Support has its own dedicated flow
+  // (AllySupportPanel), everything else in CONFIGURABLE_EVENTS goes through
+  // EventPanel, same routing ShadyPressPanel uses for a forced Event. No
+  // excludeInventoryCardId/forceDiscardIfImpossible here (unlike Shady
+  // Press): the Event card hasn't been spent yet — Cancel is a safe way out,
+  // and Alarm Clock itself is a perfectly legal Market Exchange/Business
+  // Opportunity choice, not something mid-resolution to protect from itself.
+  if (perk.name === 'Alarm Clock' && cardId) {
+    const chosenCard = viewer.hand.find((c) => c.id === cardId && c.type === 'EVENT');
+    if (chosenCard?.name === 'Ally Support') {
+      return (
+        <AllySupportPanel
+          state={state}
+          viewerIndex={viewerIndex}
+          onSubmit={(teammateId, options) => onSubmit?.(perkId, { cardId, targetId: teammateId, eventOptions: options })}
+          onCancel={() => setCardId(undefined)}
+        />
+      );
+    }
+    if (chosenCard && CONFIGURABLE_EVENTS.has(chosenCard.name)) {
+      return (
+        <EventPanel
+          state={state}
+          viewerIndex={viewerIndex}
+          card={chosenCard}
+          onSubmit={(eventTargetId, eventOptions) => onSubmit?.(perkId, { cardId, targetId: eventTargetId, eventOptions })}
+          onCancel={() => setCardId(undefined)}
+        />
+      );
+    }
+  }
 
   const teammates = state.players.filter((p) => p.team === viewer.team && p.id !== viewer.id);
   const others = state.players.filter((p) => p.id !== viewer.id);

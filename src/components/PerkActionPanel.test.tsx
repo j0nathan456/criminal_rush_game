@@ -124,4 +124,57 @@ describe('<PerkActionPanel />', () => {
     fireEvent.click(screen.getByText('Use'));
     expect(onSubmit).toHaveBeenCalledWith('sp', { cardId: undefined, marketCardId: undefined, targetId: 'p1', discardForBonus: false });
   });
+
+  it('Alarm Clock playing Market Exchange opens its own follow-up once the Event card is picked, offering Alarm Clock itself as a giveable perk', () => {
+    const onSubmit = vi.fn();
+    const evt: ActionCard = { id: 'e1', name: 'Market Exchange', description: '', type: 'EVENT' };
+    const clock = perk('ac', 'Alarm Clock');
+    const viewer = mkPlayer({ id: 'p0', name: 'Ana', hand: [evt], inventory: [clock] });
+    const mate = mkPlayer({ id: 'p1', name: 'Ben' });
+    render(<PerkActionPanel state={stateWith([viewer, mate])} viewerIndex={0} perkId="ac" onSubmit={onSubmit} onCancel={() => {}} />);
+
+    fireEvent.click(screen.getByText('Market Exchange'));
+    expect(screen.getByText('Choose a teammate to exchange a perk with:')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Ben'));
+    fireEvent.click(screen.getByText('Give a perk'));
+    // Alarm Clock itself is offered — not excluded the way Shady Press
+    // excludes itself, since it isn't mid-resolution the same way.
+    fireEvent.click(screen.getByText('Alarm Clock'));
+    fireEvent.click(screen.getByRole('button', { name: /Play Market Exchange/ }));
+
+    expect(onSubmit).toHaveBeenCalledWith('ac', {
+      cardId: 'e1', targetId: 'p1',
+      eventOptions: { marketCardId: undefined, inventoryCardId: 'ac', takePerk: false, discardMarketIds: [] },
+    });
+  });
+
+  it('Alarm Clock playing Business Opportunity opens its own follow-up, offering Alarm Clock itself as a sellable item', () => {
+    const onSubmit = vi.fn();
+    const evt: ActionCard = { id: 'e1', name: 'Business Opportunity', description: '', type: 'EVENT' };
+    const clock = perk('ac', 'Alarm Clock');
+    const viewer = mkPlayer({ id: 'p0', name: 'Ana', hand: [evt], inventory: [clock] });
+    render(<PerkActionPanel state={stateWith([viewer])} viewerIndex={0} perkId="ac" onSubmit={onSubmit} onCancel={() => {}} />);
+
+    fireEvent.click(screen.getByText('Business Opportunity'));
+    expect(screen.getByText('Sell a perk or weapon for its cost + $1:')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Alarm Clock'));
+    fireEvent.click(screen.getByRole('button', { name: /Play Business Opportunity/ }));
+
+    expect(onSubmit).toHaveBeenCalledWith('ac', {
+      cardId: 'e1', targetId: undefined,
+      eventOptions: { marketCardId: undefined, inventoryCardId: 'ac', takePerk: undefined, discardMarketIds: [] },
+    });
+  });
+
+  it('Alarm Clock playing a non-configurable Event (Lottery) needs no follow-up — the plain Use button submits it directly', () => {
+    const onSubmit = vi.fn();
+    const evt: ActionCard = { id: 'e1', name: 'Lottery', description: '', type: 'EVENT' };
+    const viewer = mkPlayer({ id: 'p0', name: 'Ana', hand: [evt], inventory: [perk('ac', 'Alarm Clock')] });
+    render(<PerkActionPanel state={stateWith([viewer])} viewerIndex={0} perkId="ac" onSubmit={onSubmit} onCancel={() => {}} />);
+
+    fireEvent.click(screen.getByText('Lottery'));
+    fireEvent.click(screen.getByText('Use'));
+    expect(onSubmit).toHaveBeenCalledWith('ac', { cardId: 'e1', marketCardId: undefined, targetId: undefined, discardForBonus: false });
+  });
 });

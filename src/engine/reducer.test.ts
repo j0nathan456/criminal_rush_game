@@ -3,6 +3,17 @@ import type { GameState, Player, RoleIdentity } from '../types/game.js';
 import type { ActionCard, EvidenceCategory, MarketCard, Team } from '../types/cards.js';
 import { gameReducer, emptyGameState } from './reducer.js';
 
+/** Deterministic PRNG (mulberry32) so random-steal assertions are reproducible. */
+function seeded(seed: number): () => number {
+  return () => {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 function role(id: string, team: Team, powerlevel = 3): RoleIdentity {
   return { id, name: id, team, powerlevel, abilityName: '', abilityDescription: '' };
 }
@@ -855,6 +866,20 @@ describe('gameReducer — USE_ROLE_ABILITY (Criminals)', () => {
     expect(next.players[1].money).toBe(2);
   });
 
+  it('Robber steals a genuinely random card from a Civilian with 3+ cards, not always the first', () => {
+    const hand: ActionCard[] = ['c0', 'c1', 'c2', 'c3'].map((id) => ({ id, name: `card-${id}`, description: '', type: 'MONEY', value: 1 }));
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('robber', 'CRIMINAL') }),
+      mkPlayer({ id: 'p1', role: role('mayor', 'CIVILIAN'), hand }),
+    ]);
+    // seed(1) and seed(7) land on different indices into the 4-card hand —
+    // proving the steal varies with rng rather than always taking hand[0].
+    const first = gameReducer(s, { type: 'USE_ROLE_ABILITY', payload: { targetId: 'p1', mode: 'CARD' } }, seeded(1));
+    const second = gameReducer(s, { type: 'USE_ROLE_ABILITY', payload: { targetId: 'p1', mode: 'CARD' } }, seeded(7));
+    expect(first.players[0].hand.map((c) => c.id)).toEqual(['c2']); // seed(1) selects index 2
+    expect(second.players[0].hand.map((c) => c.id)).toEqual(['c0']); // seed(7) selects index 0
+  });
+
   it('Arsonist threatens an opponent, who then chooses how they lose out', () => {
     const s = stateWith([
       mkPlayer({ id: 'p0', role: role('arsonist', 'CRIMINAL') }),
@@ -1171,6 +1196,19 @@ describe('gameReducer — Event cards', () => {
     const next = gameReducer(s, { type: 'PLAY_CARD', cardId: 'e', targetId: 'p1' });
     expect(next.players[0].hand.map((c) => c.id)).toContain('x');
     expect(next.players[1].hand).toHaveLength(0);
+  });
+
+  it('Gain Influence takes a genuinely random card, not always the first', () => {
+    const evt: ActionCard = { id: 'e', name: 'Gain Influence', description: '', type: 'EVENT' };
+    const victimHand: ActionCard[] = ['c0', 'c1', 'c2', 'c3'].map((id) => ({ id, name: `card-${id}`, description: '', type: 'MONEY', value: 1 }));
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), hand: [evt] }),
+      mkPlayer({ id: 'p1', role: role('hitman', 'CRIMINAL'), hand: victimHand }),
+    ]);
+    const first = gameReducer(s, { type: 'PLAY_CARD', cardId: 'e', targetId: 'p1' }, seeded(1));
+    const second = gameReducer(s, { type: 'PLAY_CARD', cardId: 'e', targetId: 'p1' }, seeded(7));
+    expect(first.players[0].hand.map((c) => c.id)).toEqual(['c2']); // seed(1) selects index 2
+    expect(second.players[0].hand.map((c) => c.id)).toEqual(['c0']); // seed(7) selects index 0
   });
 
   it('Gain Influence refuses to target a teammate', () => {
@@ -1964,6 +2002,19 @@ describe('gameReducer — USE_PERK', () => {
     expect(next.players[0].hand.some((c) => c.id === 'v')).toBe(true);
     expect(next.players[1].hand).toHaveLength(0);
   });
+
+  it('Hacked Passwords steals a genuinely random card, not always the first', () => {
+    const hp = perk('pk', 'Hacked Passwords', { source: 'BLACK_MARKET' });
+    const hand: ActionCard[] = ['c0', 'c1', 'c2', 'c3'].map((id) => ({ id, name: `card-${id}`, description: '', type: 'MONEY', value: 1 }));
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('hitman', 'CRIMINAL'), inventory: [hp] }),
+      mkPlayer({ id: 'p1', role: role('mayor', 'CIVILIAN'), hand }),
+    ]);
+    const first = gameReducer(s, { type: 'USE_PERK', perkId: 'pk', payload: { targetId: 'p1' } }, seeded(1));
+    const second = gameReducer(s, { type: 'USE_PERK', perkId: 'pk', payload: { targetId: 'p1' } }, seeded(7));
+    expect(first.players[0].hand.map((c) => c.id)).toEqual(['c2']); // seed(1) selects index 2
+    expect(second.players[0].hand.map((c) => c.id)).toEqual(['c0']); // seed(7) selects index 0
+  });
 });
 
 describe('gameReducer — perk start-of-turn & Disguise', () => {
@@ -2348,6 +2399,47 @@ describe('gameReducer — remaining perks & events', () => {
     expect(next.players[0].money).toBe(1);
     expect(next.players[3].money).toBe(4);
     expect(next.players[1].hand).toHaveLength(0); // Ally Support itself was spent
+  });
+
+  it("Alarm Clock playing Market Exchange carries the event's own options through — including giving away Alarm Clock itself", () => {
+    const clock = perk('ac', 'Alarm Clock');
+    const evt: ActionCard = { id: 'e', name: 'Market Exchange', description: '', type: 'EVENT' };
+    // Two filler cards: Market Exchange's own draw, then Alarm Clock's own
+    // draw reward, both need something to pull that isn't the Market
+    // Exchange card itself reshuffling straight back out of the discard.
+    const filler = (id: string): ActionCard => ({ id, name: 'Profit', description: '', type: 'MONEY', value: 1 });
+    const s = stateWith(
+      [
+        mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), hand: [evt], inventory: [clock] }),
+        mkPlayer({ id: 'p1', role: role('attorney', 'CIVILIAN') }), // teammate
+      ],
+      { drawPile: [filler('f1'), filler('f2')] },
+    );
+    const next = gameReducer(s, {
+      type: 'USE_PERK', perkId: 'ac',
+      payload: { cardId: 'e', targetId: 'p1', eventOptions: { inventoryCardId: 'ac', takePerk: false } },
+    });
+    // Alarm Clock itself moved to the teammate — a legal choice, not
+    // protected from being given away mid-resolution the way Shady Press is.
+    expect(next.players[0].inventory).toHaveLength(0);
+    expect(next.players[1].inventory.map((c) => c.id)).toEqual(['ac']);
+    // Market Exchange itself was spent (discarded), not left sitting in hand.
+    expect(next.discardPile.some((c) => c.id === 'e')).toBe(true);
+    expect(next.players[0].hand.some((c) => c.id === 'e')).toBe(false);
+  });
+
+  it("Alarm Clock playing Business Opportunity carries the event's own options through — including selling Alarm Clock itself", () => {
+    const clock = perk('ac', 'Alarm Clock', { cost: 2 });
+    const evt: ActionCard = { id: 'e', name: 'Business Opportunity', description: '', type: 'EVENT' };
+    const s = stateWith([
+      mkPlayer({ id: 'p0', role: role('mayor', 'CIVILIAN'), hand: [evt], inventory: [clock], money: 0 }),
+    ]);
+    const next = gameReducer(s, {
+      type: 'USE_PERK', perkId: 'ac',
+      payload: { cardId: 'e', eventOptions: { inventoryCardId: 'ac' } },
+    });
+    expect(next.players[0].inventory).toHaveLength(0); // Alarm Clock sold off
+    expect(next.players[0].money).toBe(4); // $2 cost + $1 sell bonus, +$1 Alarm Clock's own reward
   });
 });
 

@@ -80,12 +80,17 @@ export type GameAction =
  *                   or the opponent being pressed (Shady Press — which of their Event
  *                   cards to force-play is a separate step; see pendingShadyPress).
  *  - discardForBonus — Credit Card: discard the card for a $2 discount instead of $1.
+ *  - eventOptions — Alarm Clock only: the played Event's own target/options
+ *                    (marketCardId, inventoryCardId, ...), gathered the same
+ *                    way a normal Event play or Shady Press's forced play
+ *                    would — see PerkActionPanel's Alarm Clock routing.
  */
 export interface PerkPayload {
   cardId?: string;
   marketCardId?: string;
   targetId?: string;
   discardForBonus?: boolean;
+  eventOptions?: EventOptions;
 }
 
 /**
@@ -360,7 +365,7 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
     case 'DRAW_CARD':
       return drawCard(state, idx, player);
     case 'PLAY_CARD':
-      return playCard(state, idx, player, action.cardId, action.category, action.targetId, action.options);
+      return playCard(state, idx, player, action.cardId, action.category, action.targetId, action.options, rng);
     case 'PLAY_EVIDENCE':
       return playEvidence(state, idx, player, action.cardId, action.category);
     case 'CASH_IN_EVIDENCE':
@@ -374,7 +379,7 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
     case 'EXPOSE':
       return expose(state, idx, player, action.targetId, action.evidenceChoices);
     case 'ATTACK':
-      return attack(state, idx, player, action.targetId);
+      return attack(state, idx, player, action.targetId, rng);
     case 'PLAY_POWER':
       return playPower(state, action.cardId, action.side, action.byPlayerId, action.mirrorTargetCardId);
     case 'COMBAT_DISCARD_MONEY':
@@ -384,7 +389,7 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
     case 'PASS_COMBAT':
       return passCombat(state, action.side);
     case 'USE_ROLE_ABILITY':
-      return applyRoleAbility(state, idx, player, action.payload ?? {});
+      return applyRoleAbility(state, idx, player, action.payload ?? {}, rng);
     case 'INITIATE_TRADE':
       return initiateTrade(state, idx, player, action.targetId, action.give);
     case 'RESOLVE_TRADE_RETURN':
@@ -392,7 +397,7 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
     case 'RESOLVE_EXPRESS_SHIPPING':
       return resolveExpressShipping(state, action.mode);
     case 'USE_PERK':
-      return applyPerk(state, idx, player, action.perkId, action.payload ?? {});
+      return applyPerk(state, idx, player, action.perkId, action.payload ?? {}, rng);
     case 'CLEAR_TRAFFIC':
       return clearTraffic(state, idx, player);
     case 'USE_MARKET_DISCOUNT':
@@ -404,13 +409,13 @@ function gameReducerCore(state: GameState, action: GameAction, rng: Rng): GameSt
     case 'RESOLVE_SHERIFF':
       return resolveSheriff(state, action.cardId, action.category);
     case 'RESOLVE_SHADY_PRESS':
-      return resolveShadyPress(state, action.cardId, action.eventTargetId, action.eventOptions);
+      return resolveShadyPress(state, action.cardId, action.eventTargetId, action.eventOptions, rng);
     case 'RESOLVE_MANIPULATE':
       return resolveManipulate(state, action.cardId);
     case 'RESOLVE_BODYGUARD_SETUP':
       return resolveBodyguardSetup(state, action.targetId);
     case 'RESOLVE_JOURNAL':
-      return resolveJournal(state, action.use, action.targetId, action.options);
+      return resolveJournal(state, action.use, rng, action.targetId, action.options);
     case 'RESOLVE_EVIDENCE_BURN':
       return resolveEvidenceBurn(state, action.use);
     case 'RESOLVE_EVIDENCE_PLAY':
@@ -475,6 +480,7 @@ function playCard(
   category: EvidenceCategory | undefined,
   targetId: string | undefined,
   options: EventOptions | undefined,
+  rng: Rng,
 ): GameState {
   const card = player.hand.find((c) => c.id === cardId);
   if (!card) return log(state, 'That card is not in your hand.');
@@ -504,7 +510,7 @@ function playCard(
         actionsRemaining: p.actionsRemaining - 1,
       }));
       s = { ...s, discardPile: [...s.discardPile, card] };
-      s = resolveEvent(s, idx, card.name, targetId, options ?? {});
+      s = resolveEvent(s, idx, card.name, targetId, options ?? {}, rng);
       s = log(s, `${player.name} played ${card.name}.`);
       return offerJournalRepeat(s, idx, card);
     }
@@ -521,7 +527,7 @@ function playCard(
  * including Ally Support, whose `options.allyPerkId`/`allyPayload` describe
  * which teammate Action to copy and with what inputs.
  */
-function resolveEvent(state: GameState, idx: number, name: string, targetId: string | undefined, options: EventOptions): GameState {
+function resolveEvent(state: GameState, idx: number, name: string, targetId: string | undefined, options: EventOptions, rng: Rng): GameState {
   const actor = state.players[idx];
   switch (name) {
     case 'Receive Package': {
@@ -556,15 +562,14 @@ function resolveEvent(state: GameState, idx: number, name: string, targetId: str
       return s;
     }
     case 'Gain Influence': {
-      // Randomly take a card from a chosen opponent (we take the first as "random").
+      // Randomly take a card from a chosen opponent.
       const victimIndex = targetId ? playerIndexById(state, targetId) : -1;
       const victim = state.players[victimIndex];
       if (!victim || victim.team === actor.team) return log(state, 'Choose an opponent to influence.');
       if (victim.hand.length === 0) return log(state, `${victim.name} has no cards to take.`);
-      const taken = victim.hand[0];
-      let s = updatePlayer(state, victimIndex, (p) => ({ ...p, hand: p.hand.slice(1) }));
-      s = updatePlayer(s, idx, (p) => ({ ...p, hand: [...p.hand, taken] }));
-      s = log(s, `${actor.name} takes a card from ${victim.name}.`);
+      const result = takeRandomCard(state, victim.id, actor.id, rng)!;
+      const taken = result.card;
+      let s = log(result.state, `${actor.name} takes a card from ${victim.name}.`);
       // "If Evidence, you may play it (or burn it as a Criminal)" — offered
       // as a free (no action cost) follow-up, same as the Journal's repeat
       // offer. Civilians get the play-it-immediately option (into the grid,
@@ -663,10 +668,10 @@ function resolveEvent(state: GameState, idx: number, name: string, targetId: str
       if (options.allyPerkId) {
         const perk = mate.inventory.find((c) => c.id === options.allyPerkId && c.type !== 'WEAPON');
         if (!perk) return log(state, `${mate.name} has no such perk to copy.`);
-        const s = applyPerk(state, idx, actor, perk.id, options.allyPayload ?? {}, { perk, free: true });
+        const s = applyPerk(state, idx, actor, perk.id, options.allyPayload ?? {}, rng, { perk, free: true });
         return log(s, `${actor.name} uses Ally Support to copy ${mate.name}'s ${perk.name}.`);
       }
-      const s = applyRoleAbility(state, idx, actor, options.allyPayload ?? {}, { roleId: mate.role.id, free: true });
+      const s = applyRoleAbility(state, idx, actor, options.allyPayload ?? {}, rng, { roleId: mate.role.id, free: true });
       return log(s, `${actor.name} uses Ally Support to copy ${mate.name}'s ${mate.role.abilityName}.`);
     }
     default:
@@ -1010,6 +1015,7 @@ function resolveShadyPress(
   cardId: string,
   eventTargetId: string | undefined,
   eventOptions: EventOptions | undefined,
+  rng: Rng,
 ): GameState {
   const pending = state.pendingShadyPress;
   if (!pending) return state;
@@ -1024,7 +1030,7 @@ function resolveShadyPress(
 
   let s = updatePlayer(state, targetIndex, (p) => ({ ...p, hand: p.hand.filter((c) => c.id !== card.id) }));
   s = { ...s, discardPile: [...s.discardPile, card], pendingShadyPress: null };
-  s = resolveEvent(s, pressIndex, card.name, eventTargetId, eventOptions ?? {});
+  s = resolveEvent(s, pressIndex, card.name, eventTargetId, eventOptions ?? {}, rng);
   return log(s, `${presser.name}'s Shady Press plays ${target.name}'s ${card.name}.`);
 }
 
@@ -1117,7 +1123,7 @@ function offerJournalRepeat(state: GameState, idx: number, card: ActionCard): Ga
  * Event's effect with whatever target/options were freshly gathered for the
  * repeat, which may differ from the original play.
  */
-function resolveJournal(state: GameState, use: boolean, targetId?: string, options?: EventOptions): GameState {
+function resolveJournal(state: GameState, use: boolean, rng: Rng, targetId?: string, options?: EventOptions): GameState {
   const pending = state.pendingJournal;
   if (!pending) return state;
   const idx = playerIndexById(state, pending.playerId);
@@ -1129,7 +1135,7 @@ function resolveJournal(state: GameState, use: boolean, targetId?: string, optio
   }
 
   let s = updatePlayer(state, idx, (p) => ({ ...p, inventory: p.inventory.filter((c) => c.name !== 'Journal') }));
-  s = resolveEvent(s, idx, pending.card.name, targetId, options ?? {});
+  s = resolveEvent(s, idx, pending.card.name, targetId, options ?? {}, rng);
   s = { ...s, pendingJournal: null };
   return log(s, `${player.name} discards their Journal to repeat ${pending.card.name}.`);
 }
@@ -1501,7 +1507,7 @@ function expose(
  * by PLAY_POWER / COMBAT_DISCARD_MONEY / PASS_COMBAT and resolved by
  * resolveCombat() once both sides pass.
  */
-function attack(state: GameState, idx: number, player: Player, targetId: string): GameState {
+function attack(state: GameState, idx: number, player: Player, targetId: string, rng: Rng): GameState {
   if (state.combat) return log(state, 'A combat is already in progress.');
   if (player.hasAttacked) return log(state, `${player.name} already attacked this turn.`);
 
@@ -1527,7 +1533,7 @@ function attack(state: GameState, idx: number, player: Player, targetId: string)
   // (draw/discard/steal), then any interactive choice (Portal/Drones/
   // Mutants/Pistol) — resolves in full before the defender's so much as
   // starts (see CombatState.awaitingDefenderPreCombat / enterDefenderPreCombat).
-  s = resolveAttackerPreCombat(s, player.id, target.id);
+  s = resolveAttackerPreCombat(s, player.id, target.id, rng);
   const atk = s.players[playerIndexById(s, player.id)];
   const def = s.players[playerIndexById(s, target.id)];
   const playerCount = s.players.length;
@@ -1551,7 +1557,7 @@ function attack(state: GameState, idx: number, player: Player, targetId: string)
 
   // The attacker had no before-combat effect to wait on — start the
   // defender's block immediately instead of leaving it deferred.
-  s = resolveDefenderPreCombat(s, atk.id, def.id);
+  s = resolveDefenderPreCombat(s, atk.id, def.id, rng);
   const defenderPending = sidePendingChoices(s, def.id, atk.id, 'DEFENDER');
   combat = { ...combat, pending: defenderPending, awaitingDefenderPreCombat: false };
   s = { ...s, combat };
@@ -1714,6 +1720,22 @@ function passCombat(state: GameState, side: CombatSide): GameState {
 }
 
 /**
+ * Move a genuinely random card from `fromId`'s hand into `toId`'s hand (e.g.
+ * Pickpocket, Hacked Passwords, Gain Influence). Returns null if the source
+ * hand is empty — callers are expected to have already checked that.
+ */
+function takeRandomCard(state: GameState, fromId: string, toId: string, rng: Rng): { state: GameState; card: ActionCard } | null {
+  const fromIdx = playerIndexById(state, fromId);
+  const from = state.players[fromIdx];
+  if (!from || from.hand.length === 0) return null;
+  const i = Math.floor(rng() * from.hand.length);
+  const card = from.hand[i];
+  let s = updatePlayer(state, fromIdx, (p) => ({ ...p, hand: p.hand.filter((c) => c.id !== card.id) }));
+  s = updatePlayer(s, playerIndexById(s, toId), (p) => ({ ...p, hand: [...p.hand, card] }));
+  return { state: s, card };
+}
+
+/**
  * Resolve the current player's role Action (rulebook p.17). Every ability costs
  * 1 action, may be used once per turn, and is unavailable to injured/captured
  * players. Passive roles (Mayor, Attorney, Vigilante, Hitman, Spy, Nurse) have
@@ -1727,6 +1749,7 @@ function applyRoleAbility(
   idx: number,
   player: Player,
   payload: RoleAbilityPayload,
+  rng: Rng,
   opts: { roleId?: string; free?: boolean } = {},
 ): GameState {
   // `free` (Ally Support) runs another role's action for the actor without the
@@ -1838,10 +1861,8 @@ function applyRoleAbility(
       if (!target || target.team !== 'CIVILIAN') return log(state, 'Robber must target a Civilian.');
       if (mode === 'CARD') {
         if (target.hand.length < 3) return log(state, 'That Civilian does not have 3+ cards.');
-        const stolen = target.hand[0];
-        let s = updatePlayer(state, targetIndex, (p) => ({ ...p, hand: p.hand.slice(1) }));
-        s = updatePlayer(s, idx, (p) => ({ ...p, hand: [...p.hand, stolen] }));
-        return log(spend(s), `${player.name} (Robber) steals a card from ${target.name}.`);
+        const result = takeRandomCard(state, target.id, player.id, rng)!;
+        return log(spend(result.state), `${player.name} (Robber) steals a card from ${target.name}.`);
       }
       if (target.money < 3) return log(state, 'That Civilian does not have $3+.');
       let s = updatePlayer(state, targetIndex, (p) => ({ ...p, money: p.money - 1 }));
@@ -2070,6 +2091,7 @@ function applyPerk(
   player: Player,
   perkId: string,
   payload: PerkPayload,
+  rng: Rng,
   opts: { perk?: MarketCard; free?: boolean } = {},
 ): GameState {
   // `opts.perk` (Ally Support) runs a teammate's perk action for the actor;
@@ -2156,17 +2178,15 @@ function applyPerk(
       const victim = state.players[ti];
       if (!victim || ti === idx) return log(state, 'Choose another player to hack.');
       if (victim.hand.length === 0) return log(state, `${victim.name} has no cards to steal.`);
-      const stolen = victim.hand[0];
-      let s = updatePlayer(state, ti, (p) => ({ ...p, hand: p.hand.slice(1) }));
-      s = updatePlayer(s, idx, (p) => ({ ...p, hand: [...p.hand, stolen] }));
-      return log(spend(s), `${player.name}'s Hacked Passwords steals a card from ${victim.name}.`);
+      const result = takeRandomCard(state, victim.id, player.id, rng)!;
+      return log(spend(result.state), `${player.name}'s Hacked Passwords steals a card from ${victim.name}.`);
     }
     case 'Alarm Clock': {
       const evt = player.hand.find((c) => c.id === payload.cardId && c.type === 'EVENT');
       if (!evt) return log(state, 'Alarm Clock needs an Event card from your hand.');
       let s = updatePlayer(state, idx, (p) => ({ ...p, hand: p.hand.filter((c) => c.id !== evt.id) }));
       s = { ...s, discardPile: [...s.discardPile, evt] };
-      s = resolveEvent(s, idx, evt.name, payload.targetId, {});
+      s = resolveEvent(s, idx, evt.name, payload.targetId, payload.eventOptions ?? {}, rng);
       s = gameReducerDraw(s);
       s = updatePlayer(s, idx, (p) => ({ ...p, money: p.money + 1 }));
       return log(spend(s), `${player.name}'s Alarm Clock plays ${evt.name}, then draws and gains $1.`);

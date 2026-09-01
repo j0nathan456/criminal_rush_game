@@ -268,12 +268,14 @@ function drawForPlayer(state: GameState, playerId: string): GameState {
   return { ...s, drawPile: rest };
 }
 
-/** Discard a player's first hand card (deterministic stand-in for "random"). */
-function discardFirstCard(state: GameState, playerId: string, why: string): GameState {
+/** Discard a genuinely random card from a player's hand (e.g. Mosquitos). */
+function discardRandomCard(state: GameState, playerId: string, why: string, rng: Rng): GameState {
   const idx = playerIndexById(state, playerId);
   const player = state.players[idx];
   if (!player || player.hand.length === 0) return state;
-  const [card, ...rest] = player.hand;
+  const i = Math.floor(rng() * player.hand.length);
+  const card = player.hand[i];
+  const rest = player.hand.filter((c) => c.id !== card.id);
   const s = updatePlayer(state, idx, (p) => ({ ...p, hand: rest }));
   return log({ ...s, discardPile: [...s.discardPile, card] }, `${player.name} discards ${card.name} (${why}).`);
 }
@@ -290,7 +292,9 @@ function discardFirstCard(state: GameState, playerId: string, why: string): Game
  * and applyMutants (a copied weapon's effect fires too, not just its power —
  * against this fight's actual opponent, whoever the weapon was copied from).
  */
-function applyPreCombatWeaponEffect(state: GameState, weapon: MarketCard, selfId: string, oppId: string, isAttacker: boolean): GameState {
+function applyPreCombatWeaponEffect(
+  state: GameState, weapon: MarketCard, selfId: string, oppId: string, isAttacker: boolean, rng: Rng,
+): GameState {
   const self = state.players[playerIndexById(state, selfId)];
   switch (weapon.name) {
     case 'Hammer': {
@@ -298,7 +302,7 @@ function applyPreCombatWeaponEffect(state: GameState, weapon: MarketCard, selfId
       return drawForPlayer(s, selfId);
     }
     case 'Mosquitos':
-      return discardFirstCard(state, oppId, 'Mosquitos');
+      return discardRandomCard(state, oppId, 'Mosquitos', rng);
     case 'Brass Knuckles': {
       if (!isAttacker) return state;
       const oppIdx = playerIndexById(state, oppId);
@@ -314,11 +318,11 @@ function applyPreCombatWeaponEffect(state: GameState, weapon: MarketCard, selfId
 }
 
 /** Apply one player's before-combat weapon effects against their opponent. */
-function preCombatFor(state: GameState, selfId: string, oppId: string, isAttacker: boolean): GameState {
+function preCombatFor(state: GameState, selfId: string, oppId: string, isAttacker: boolean, rng: Rng): GameState {
   const self = state.players[playerIndexById(state, selfId)];
   let s = state;
   for (const weapon of weaponsOf(self)) {
-    s = applyPreCombatWeaponEffect(s, weapon, selfId, oppId, isAttacker);
+    s = applyPreCombatWeaponEffect(s, weapon, selfId, oppId, isAttacker, rng);
   }
   return s;
 }
@@ -331,13 +335,13 @@ function preCombatFor(state: GameState, selfId: string, oppId: string, isAttacke
  * starts, rather than every deterministic effect (both sides) firing as one
  * batch ahead of any interactive one (see attack()'s ordering below).
  */
-export function resolveAttackerPreCombat(state: GameState, attackerId: string, defenderId: string): GameState {
-  return preCombatFor(state, attackerId, defenderId, true);
+export function resolveAttackerPreCombat(state: GameState, attackerId: string, defenderId: string, rng: Rng = Math.random): GameState {
+  return preCombatFor(state, attackerId, defenderId, true, rng);
 }
 
 /** Defender counterpart of resolveAttackerPreCombat — see its docs. */
-export function resolveDefenderPreCombat(state: GameState, attackerId: string, defenderId: string): GameState {
-  return preCombatFor(state, defenderId, attackerId, false);
+export function resolveDefenderPreCombat(state: GameState, attackerId: string, defenderId: string, rng: Rng = Math.random): GameState {
+  return preCombatFor(state, defenderId, attackerId, false, rng);
 }
 
 // --- Interactive pre-combat choices (Portal / Drones / Mutants / Pistol / Barbed Wire) ----
@@ -436,7 +440,7 @@ export function enterPowerPhase(state: GameState): GameState {
  * holder). Manages its own `combat.pending` rather than the generic pop-tail
  * for the same reason MUTANTS/DRONES do.
  */
-function applyPortal(state: GameState, head: Extract<CombatChoice, { kind: 'PORTAL' }>, input: CombatChoiceInput): GameState {
+function applyPortal(state: GameState, head: Extract<CombatChoice, { kind: 'PORTAL' }>, input: CombatChoiceInput, rng: Rng = Math.random): GameState {
   const combat = state.combat!;
   const hi = playerIndexById(state, head.playerId);
   const holder = state.players[hi];
@@ -455,20 +459,20 @@ function applyPortal(state: GameState, head: Extract<CombatChoice, { kind: 'PORT
       const oppId = head.side === 'ATTACKER' ? combat.defender.playerId : combat.attacker.playerId;
       if (twpn.name === 'Barbed Wire') {
         const opp = s.players[playerIndexById(s, oppId)];
-        if (opp.hand.length === 0) return advancePendingQueue(s);
+        if (opp.hand.length === 0) return advancePendingQueue(s, rng);
         const rest = combat.pending.slice(1);
         const barbedChoice: CombatChoice = { kind: 'BARBED_WIRE', playerId: oppId, weaponId: twpn.id, side: head.side };
         return { ...s, combat: { ...combat, pending: [barbedChoice, ...rest] } };
       }
-      s = applyPreCombatWeaponEffect(s, twpn, holder.id, oppId, head.side === 'ATTACKER');
-      return advancePendingQueue(s);
+      s = applyPreCombatWeaponEffect(s, twpn, holder.id, oppId, head.side === 'ATTACKER', rng);
+      return advancePendingQueue(s, rng);
     }
   }
   // Default / DRAW: draw 2 cards.
   let s = drawForPlayer(state, head.playerId);
   s = drawForPlayer(s, head.playerId);
   s = log(s, `${holder.name}'s Portal draws 2 cards.`);
-  return advancePendingQueue(s);
+  return advancePendingQueue(s, rng);
 }
 
 /**
@@ -480,16 +484,16 @@ function applyPortal(state: GameState, head: Extract<CombatChoice, { kind: 'PORT
  * than just popping itself off, so it manages `combat.pending` (via
  * advancePendingQueue) and returns directly.
  */
-function applyDrones(state: GameState, head: Extract<CombatChoice, { kind: 'DRONES' }>, input: CombatChoiceInput): GameState {
+function applyDrones(state: GameState, head: Extract<CombatChoice, { kind: 'DRONES' }>, input: CombatChoiceInput, rng: Rng = Math.random): GameState {
   const combat = state.combat!;
   const holder = state.players[playerIndexById(state, head.playerId)];
   if (input.kind !== 'DRONES' || input.mode !== 'EXCHANGE') {
-    return advancePendingQueue(log(state, `${holder.name} skips the Drones exchange.`));
+    return advancePendingQueue(log(state, `${holder.name} skips the Drones exchange.`), rng);
   }
   const teammate = state.players[playerIndexById(state, input.teammateId)];
   const mine = holder.hand.find((c) => c.id === input.cardId);
   if (!teammate || teammate.id === holder.id || teammate.team !== holder.team || !mine || teammate.hand.length === 0) {
-    return advancePendingQueue(log(state, 'Invalid Drones exchange.'));
+    return advancePendingQueue(log(state, 'Invalid Drones exchange.'), rng);
   }
   const rest = combat.pending.slice(1);
   const returnChoice: CombatChoice = {
@@ -536,7 +540,7 @@ function applyDronesReturn(state: GameState, head: Extract<CombatChoice, { kind:
  * Catapult/Machine Gun (see mutantsReachIsBinding), that promise is binding
  * — "copy nothing" and copying anything else are refused, forcing a retry.
  */
-function applyMutants(state: GameState, head: Extract<CombatChoice, { kind: 'MUTANTS' }>, input: CombatChoiceInput): GameState {
+function applyMutants(state: GameState, head: Extract<CombatChoice, { kind: 'MUTANTS' }>, input: CombatChoiceInput, rng: Rng = Math.random): GameState {
   const combat = state.combat!;
   const holder = state.players[playerIndexById(state, head.playerId)];
   const oppId = head.side === 'ATTACKER' ? combat.defender.playerId : combat.attacker.playerId;
@@ -553,10 +557,10 @@ function applyMutants(state: GameState, head: Extract<CombatChoice, { kind: 'MUT
   }
 
   if (input.kind !== 'MUTANTS' || input.mode !== 'COPY') {
-    return advancePendingQueue(log(state, `${holder.name}'s Mutants copy nothing.`));
+    return advancePendingQueue(log(state, `${holder.name}'s Mutants copy nothing.`), rng);
   }
   const weapon = opp.inventory.find((c) => c.id === input.opponentWeaponId && c.type === 'WEAPON');
-  if (!weapon) return advancePendingQueue(log(state, 'No such opponent weapon to copy.'));
+  if (!weapon) return advancePendingQueue(log(state, 'No such opponent weapon to copy.'), rng);
   const copied = weaponCopyPower(weapon, holder, opp, areNeighbors);
   const part = head.side === 'ATTACKER' ? combat.attacker : combat.defender;
   const newPart = { ...part, copiedWeaponPower: (part.copiedWeaponPower ?? 0) + copied, copiedWeaponName: weapon.name };
@@ -565,20 +569,20 @@ function applyMutants(state: GameState, head: Extract<CombatChoice, { kind: 'MUT
   const s = log({ ...state, combat: newCombat }, `${holder.name}'s Mutants copy ${weapon.name}'s effect${powerNote}.`);
 
   if (weapon.name === 'Barbed Wire') {
-    if (opp.hand.length === 0) return advancePendingQueue(s);
+    if (opp.hand.length === 0) return advancePendingQueue(s, rng);
     const rest = newCombat.pending.slice(1);
     const barbedChoice: CombatChoice = { kind: 'BARBED_WIRE', playerId: opp.id, weaponId: weapon.id, side: head.side };
     return { ...s, combat: { ...newCombat, pending: [barbedChoice, ...rest] } };
   }
 
   if (weapon.name === 'Pistol') {
-    if (holder.hand.length === 0) return advancePendingQueue(s);
+    if (holder.hand.length === 0) return advancePendingQueue(s, rng);
     const rest = newCombat.pending.slice(1);
     const pistolChoice: CombatChoice = { kind: 'PISTOL', playerId: holder.id, weaponId: weapon.id, side: head.side };
     return { ...s, combat: { ...newCombat, pending: [pistolChoice, ...rest] } };
   }
 
-  return advancePendingQueue(applyPreCombatWeaponEffect(s, weapon, holder.id, opp.id, head.side === 'ATTACKER'));
+  return advancePendingQueue(applyPreCombatWeaponEffect(s, weapon, holder.id, opp.id, head.side === 'ATTACKER', rng), rng);
 }
 
 /** Pistol: the holder chooses which of their own cards to discard before combat. */
@@ -676,7 +680,7 @@ function isDeadPendingChoice(state: GameState, choice: CombatChoice): boolean {
   return false;
 }
 
-function advancePendingQueue(state: GameState): GameState {
+function advancePendingQueue(state: GameState, rng: Rng = Math.random): GameState {
   const combat = state.combat;
   if (!combat) return state;
   let rest = combat.pending.slice(1);
@@ -693,7 +697,7 @@ function advancePendingQueue(state: GameState): GameState {
       // finished — only now does the defender's block start, so their
       // before-combat effects never jump ahead of the attacker's (see
       // attack()'s matching ordering comment).
-      s = enterDefenderPreCombat(s);
+      s = enterDefenderPreCombat(s, rng);
     } else if (combat.phase === 'PRE') {
       s = enterPowerPhase(s);
     } else if (combat.phase === 'AFTER') {
@@ -708,11 +712,11 @@ function advancePendingQueue(state: GameState): GameState {
  * interactive choices, now that the attacker's own PRE block is done. Enters
  * the Power phase directly if the defender has nothing pending.
  */
-function enterDefenderPreCombat(state: GameState): GameState {
+function enterDefenderPreCombat(state: GameState, rng: Rng = Math.random): GameState {
   const combat = state.combat!;
   const attackerId = combat.attacker.playerId;
   const defenderId = combat.defender.playerId;
-  let s = resolveDefenderPreCombat(state, attackerId, defenderId);
+  let s = resolveDefenderPreCombat(state, attackerId, defenderId, rng);
   const pending = sidePendingChoices(s, defenderId, attackerId, 'DEFENDER');
   s = { ...s, combat: { ...s.combat!, pending, awaitingDefenderPreCombat: false } };
   return pending.length > 0 ? s : enterPowerPhase(s);
@@ -736,9 +740,9 @@ export function applyCombatChoice(state: GameState, input: CombatChoiceInput, rn
   // discard choice — instead of just popping the queue), so they return
   // directly rather than falling into the generic pop-tail below.
   if (head.kind === 'NURSE_HEAL') return applyNurseHeal(state, head, input);
-  if (head.kind === 'DRONES') return applyDrones(state, head, input);
-  if (head.kind === 'MUTANTS') return applyMutants(state, head, input);
-  if (head.kind === 'PORTAL') return applyPortal(state, head, input);
+  if (head.kind === 'DRONES') return applyDrones(state, head, input, rng);
+  if (head.kind === 'MUTANTS') return applyMutants(state, head, input, rng);
+  if (head.kind === 'PORTAL') return applyPortal(state, head, input, rng);
 
   let s = state;
   switch (head.kind) {
@@ -749,7 +753,7 @@ export function applyCombatChoice(state: GameState, input: CombatChoiceInput, rn
     case 'DESTROY_PERK': s = applyDestroyPerk(s, head, input); break;
   }
 
-  return advancePendingQueue(s);
+  return advancePendingQueue(s, rng);
 }
 
 // --- Power phase -------------------------------------------------------------
