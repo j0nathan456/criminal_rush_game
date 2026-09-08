@@ -38,7 +38,7 @@ export const ROLES: RoleIdentity[] = [
   {
     id: 'nurse', name: 'Nurse', team: 'CIVILIAN', powerlevel: 3,
     abilityName: 'Triage',
-    abilityDescription: 'Whenever a teammate is injured, you may discard 1 card to immediately heal them.',
+    abilityDescription: 'Whenever a teammate is injured, you may discard 1 card to immediately heal them and gain $1.',
   },
   {
     id: 'bodyguard', name: 'Bodyguard', team: 'CIVILIAN', powerlevel: 3,

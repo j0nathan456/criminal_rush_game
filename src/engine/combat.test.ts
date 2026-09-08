@@ -1358,6 +1358,7 @@ describe("interactive combat — Nurse's Triage (AFTER phase)", () => {
     expect(next.players[2].hand).toHaveLength(0); // the Nurse's card was spent
     expect(next.discardPile.map((c) => c.id)).toContain('bandage');
     expect(next.players[2].actionsRemaining).toBe(3); // free — no action spent
+    expect(next.players[2].money).toBe(6); // Triage pays $1 for the heal
   });
 
   it('injures the teammate as normal when the Nurse skips', () => {
@@ -1373,6 +1374,7 @@ describe("interactive combat — Nurse's Triage (AFTER phase)", () => {
     expect(next.combat).toBeNull();
     expect(next.players[1].isInjured).toBe(true);
     expect(next.players[2].hand).toHaveLength(1); // untouched
+    expect(next.players[2].money).toBe(5); // no heal, no payout
   });
 
   it('chains into Leaving Evidence when the Nurse skips and Evidence is in the discard', () => {

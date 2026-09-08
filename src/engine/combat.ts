@@ -626,9 +626,9 @@ function applyNurseHeal(state: GameState, head: Extract<CombatChoice, { kind: 'N
   if (input.kind === 'NURSE_HEAL' && input.mode === 'HEAL') {
     const card = nurse.hand.find((c) => c.id === input.cardId);
     if (card) {
-      let s = updatePlayer(state, nurseIdx, (p) => ({ ...p, hand: p.hand.filter((c) => c.id !== card.id) }));
+      let s = updatePlayer(state, nurseIdx, (p) => ({ ...p, hand: p.hand.filter((c) => c.id !== card.id), money: p.money + 1 }));
       s = { ...s, discardPile: [...s.discardPile, card] };
-      s = log(s, `${nurse.name} discards ${card.name} — Triage keeps ${defender.name} from being injured.`);
+      s = log(s, `${nurse.name} discards ${card.name} — Triage keeps ${defender.name} from being injured and earns $1.`);
       return { ...s, combat: null };
     }
   }

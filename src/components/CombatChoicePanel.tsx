@@ -236,7 +236,7 @@ export function CombatChoicePanel({ state, viewerIndex, onCombatChoice }: Combat
     const injured = byId(head.injuredId);
     body = (
       <>
-        <p className="cr-role__sub">Use healing ability? Discard a card to keep {injured.name} from being injured:</p>
+        <p className="cr-role__sub">Use healing ability? Discard a card to keep {injured.name} from being injured and gain $1:</p>
         <div className="cr-role__chips">
           {holder.hand.length === 0 && <span className="cr-role__empty">Your hand is empty.</span>}
           {holder.hand.map((c) => chip(c.name, myCardId === c.id, () => setMyCardId(c.id), c.id))}
