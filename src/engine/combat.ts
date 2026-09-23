@@ -611,11 +611,12 @@ function applyBarbedWire(state: GameState, head: Extract<CombatChoice, { kind: '
 
 /**
  * Nurse's Triage: heal (HEAL) discards the chosen card and prevents the
- * injury outright; declining or skipping (SKIP, or an invalid/missing card)
- * falls through to the normal injury — and, from there, Leaving Evidence.
- * Unlike the other PRE/AFTER choices this doesn't just pop off the queue: it
- * may replace it with a fresh LEAVING_EVIDENCE pending item, so the caller
- * returns its result directly rather than running the generic pop-tail.
+ * injury outright, but the defender still lost the combat — so Leaving
+ * Evidence still applies. Declining or skipping (SKIP, or an invalid/missing
+ * card) falls through to the normal injury, then Leaving Evidence. Unlike the
+ * other PRE/AFTER choices this doesn't just pop off the queue: it may replace
+ * it with a fresh LEAVING_EVIDENCE pending item, so the caller returns its
+ * result directly rather than running the generic pop-tail.
  */
 function applyNurseHeal(state: GameState, head: Extract<CombatChoice, { kind: 'NURSE_HEAL' }>, input: CombatChoiceInput): GameState {
   const combat = state.combat!;
@@ -629,7 +630,7 @@ function applyNurseHeal(state: GameState, head: Extract<CombatChoice, { kind: 'N
       let s = updatePlayer(state, nurseIdx, (p) => ({ ...p, hand: p.hand.filter((c) => c.id !== card.id), money: p.money + 1 }));
       s = { ...s, discardPile: [...s.discardPile, card] };
       s = log(s, `${nurse.name} discards ${card.name} — Triage keeps ${defender.name} from being injured and earns $1.`);
-      return { ...s, combat: null };
+      return maybeLeaveEvidence(s, combat, defender);
     }
   }
   const skipped = log(state, `${nurse.name} does not use Triage — ${defender.name} is injured.`);
@@ -931,24 +932,33 @@ function findAvailableNurse(state: GameState, injured: Player): Player | undefin
 }
 
 /**
- * Injure the defender (Nurse declined or wasn't available) and, if there's
- * discarded Evidence to reclaim, hand off to the Leaving Evidence AFTER-phase
- * choice; otherwise close the fight.
+ * If there's discarded Evidence to reclaim, hand off to the Leaving Evidence
+ * AFTER-phase choice; otherwise close the fight. This fires whenever the
+ * defender lost the combat, regardless of whether Triage went on to prevent
+ * the injury — Leaving Evidence is about having been attacked and beaten, not
+ * about the injury status itself.
  */
-function injureAndMaybeLeaveEvidence(state: GameState, combat: CombatState, defender: Player): GameState {
-  const defIdx = playerIndexById(state, defender.id);
-  let s = updatePlayer(state, defIdx, (p) => ({ ...p, isInjured: true }));
-  s = log(s, `${defender.name} is injured until the end of their next turn.`);
-
-  const leavingEvidence = s.discardPile.some((c) => c.type === 'EVIDENCE');
+function maybeLeaveEvidence(state: GameState, combat: CombatState, defender: Player): GameState {
+  const leavingEvidence = state.discardPile.some((c) => c.type === 'EVIDENCE');
   if (leavingEvidence) {
-    s = log(s, `Leaving Evidence: ${defender.name} may shuffle up to 2 discarded Evidence cards into the deck.`);
+    const s = log(state, `Leaving Evidence: ${defender.name} may shuffle up to 2 discarded Evidence cards into the deck.`);
     return {
       ...s,
       combat: { ...combat, phase: 'AFTER', pending: [{ kind: 'LEAVING_EVIDENCE', playerId: defender.id, side: 'DEFENDER' }] },
     };
   }
-  return { ...s, combat: null };
+  return { ...state, combat: null };
+}
+
+/**
+ * Injure the defender (Nurse declined or wasn't available), then hand off to
+ * maybeLeaveEvidence.
+ */
+function injureAndMaybeLeaveEvidence(state: GameState, combat: CombatState, defender: Player): GameState {
+  const defIdx = playerIndexById(state, defender.id);
+  let s = updatePlayer(state, defIdx, (p) => ({ ...p, isInjured: true }));
+  s = log(s, `${defender.name} is injured until the end of their next turn.`);
+  return maybeLeaveEvidence(s, combat, defender);
 }
 
 /**

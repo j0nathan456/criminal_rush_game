@@ -1361,6 +1361,23 @@ describe("interactive combat — Nurse's Triage (AFTER phase)", () => {
     expect(next.players[2].money).toBe(6); // Triage pays $1 for the heal
   });
 
+  it('still offers Leaving Evidence after a successful heal when Evidence is in the discard', () => {
+    const ev1: ActionCard = { id: 't1', name: 'Time Evidence', description: '', type: 'EVIDENCE', evidenceCategories: ['TIME'] };
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('axe', 'Axe', 'MELEE', 5)] });
+    const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2) });
+    const nurse = mkPlayer({ id: 'n', role: role('nurse', 'CIVILIAN', 3), hand: [junk('bandage')] });
+    const s = stateWith([atk, def, nurse], { currentPlayerIndex: 0, discardPile: [ev1] });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'ATTACKER' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'DEFENDER' });
+    next = gameReducer(next, { type: 'COMBAT_CHOICE', input: { kind: 'NURSE_HEAL', mode: 'HEAL', cardId: 'bandage' } });
+    expect(next.combat!.phase).toBe('AFTER');
+    expect(next.combat!.pending[0]).toEqual({ kind: 'LEAVING_EVIDENCE', playerId: 'd', side: 'DEFENDER' });
+    expect(next.players[1].isInjured).toBe(false); // Triage still prevented the injury
+    expect(next.players[2].money).toBe(6); // Triage still pays $1 for the heal
+  });
+
   it('injures the teammate as normal when the Nurse skips', () => {
     const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('axe', 'Axe', 'MELEE', 5)] });
     const def = mkPlayer({ id: 'd', role: role('mayor', 'CIVILIAN', 2) });
