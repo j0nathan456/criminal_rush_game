@@ -54,6 +54,7 @@ export const STATUS_META = {
   isInjured: { label: 'Injured', color: '#f59e0b', icon: '🤕' },
   isExposed: { label: 'Exposed', color: '#dc2626', icon: '🚨' },
   isCaptured: { label: 'Captured', color: '#6b7280', icon: '🔒' },
+  hasBodyguardToken: { label: 'Protected', color: '#2563eb', icon: '🛡️' },
 } as const;
 
 /**
