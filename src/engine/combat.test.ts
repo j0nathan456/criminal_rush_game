@@ -1450,6 +1450,35 @@ describe("interactive combat — Nurse's Triage (AFTER phase)", () => {
   });
 });
 
+describe('interactive combat — Vigilante immunity still allows Leaving Evidence', () => {
+  it('closes combat with no injury when the discard has no Evidence', () => {
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('axe', 'Axe', 'MELEE', 5)] });
+    const def = mkPlayer({ id: 'd', role: role('vigilante', 'CIVILIAN', 2) });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0 });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'ATTACKER' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'DEFENDER' });
+    expect(next.combat).toBeNull();
+    expect(next.players[1].isInjured).toBe(false); // Vigilantes can't be injured
+    expect(next.teamScores.CRIMINAL).toBe(1); // the attacker still won the fight
+  });
+
+  it('still offers Leaving Evidence when the Vigilante loses but Evidence is in the discard', () => {
+    const ev1: ActionCard = { id: 't1', name: 'Time Evidence', description: '', type: 'EVIDENCE', evidenceCategories: ['TIME'] };
+    const atk = mkPlayer({ id: 'a', role: role('hitman', 'CRIMINAL', 3), inventory: [wpn('axe', 'Axe', 'MELEE', 5)] });
+    const def = mkPlayer({ id: 'd', role: role('vigilante', 'CIVILIAN', 2) });
+    const s = stateWith([atk, def], { currentPlayerIndex: 0, discardPile: [ev1] });
+
+    let next = gameReducer(s, { type: 'ATTACK', targetId: 'd' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'ATTACKER' });
+    next = gameReducer(next, { type: 'PASS_COMBAT', side: 'DEFENDER' });
+    expect(next.combat!.phase).toBe('AFTER');
+    expect(next.combat!.pending[0]).toEqual({ kind: 'LEAVING_EVIDENCE', playerId: 'd', side: 'DEFENDER' });
+    expect(next.players[1].isInjured).toBe(false); // still immune to injury
+  });
+});
+
 describe('interactive combat — Leaving Evidence (AFTER phase)', () => {
   it('lets the beaten Civilian shuffle discarded Evidence back into the deck', () => {
     const ev1: ActionCard = { id: 't1', name: 'Time Evidence', description: '', type: 'EVIDENCE', evidenceCategories: ['TIME'] };

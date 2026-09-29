@@ -1023,8 +1023,8 @@ export function resolveCombat(state: GameState): GameState {
   const destroyChoices = [...queueMissileChoice(combat, attacker, defender, 'ATTACKER'), ...molotovChoices];
 
   if (defender.role.id === 'vigilante') {
-    const closed = { ...log(s, `${defender.name} is a Vigilante and cannot be injured.`), combat: null };
-    return withPendingPrefix(combat, destroyChoices, closed);
+    const logged = log(s, `${defender.name} is a Vigilante and cannot be injured.`);
+    return withPendingPrefix(combat, destroyChoices, maybeLeaveEvidence(logged, combat, defender));
   }
 
   const nurse = findAvailableNurse(s, defender);
