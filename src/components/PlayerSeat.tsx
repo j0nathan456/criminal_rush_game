@@ -102,7 +102,12 @@ export function PlayerSeat({ player, active, isSelf, isNeighbor, targetable, onC
               </span>
             )}
           </span>
-          <span className="block truncate text-[12px] text-fog">{player.role.name}</span>
+          <span
+            className="block cursor-help truncate text-[12px] text-fog underline decoration-dotted decoration-fog/50 underline-offset-2"
+            title={`${player.role.abilityName} — ${player.role.abilityDescription}`}
+          >
+            {player.role.name}
+          </span>
         </span>
         {statuses.length > 0 && (
           <span className="flex shrink-0 gap-0.5 text-[13px]" aria-hidden="true">
@@ -158,7 +163,15 @@ export function PlayerSeat({ player, active, isSelf, isNeighbor, targetable, onC
                   <TeamIcon team={player.team} className="h-4 w-4 shrink-0 rounded-full object-cover" /> {meta.label}
                 </span>
               </div>
-              <div className="text-[12px] text-fog">{player.role.name} · Base PL {player.role.powerlevel}</div>
+              <div className="text-[12px] text-fog">
+                <span
+                  className="cursor-help underline decoration-dotted decoration-fog/50 underline-offset-2"
+                  title={`${player.role.abilityName} — ${player.role.abilityDescription}`}
+                >
+                  {player.role.name}
+                </span>{' '}
+                · Base PL {player.role.powerlevel}
+              </div>
 
               <div className="mt-2 flex gap-3 text-sm tabular-nums">
                 <span title="Money">💵 {player.money}</span>
