@@ -102,7 +102,7 @@ export const MARKET_PERKS: CardDef<MarketCard>[] = [
   { name: 'Bank', description: 'Action: play a Money card for +$1 value and draw a card.', cost: 3, source: 'PUBLIC', type: 'PERK', copies: 2 },
   { name: 'Coffee Machine', description: 'Give a Coffee token; Action: replenish/move it. Coffee: +1 action & draw at start of turn.', cost: 3, source: 'PUBLIC', type: 'PERK', copies: 2 },
   { name: 'Vitamin', description: 'Start of turn: advance the vitamin tracker (draw / $1 / +1 PL / +1 PL).', cost: 3, source: 'PUBLIC', type: 'PERK', isPassive: true, copies: 2 },
-  { name: 'Trash Can', description: 'Start of turn: bin a Market card. Action: buy from the trash can at $1 off.', cost: 2, source: 'PUBLIC', type: 'PERK', copies: 1 },
+  { name: 'Trash Can', description: 'Start of turn: bin a Market card. Action: buy from the trash can at $1 off.', cost: 2, source: 'PUBLIC', type: 'PERK', copies: 2 },
 ];
 
 export const MARKET_WEAPONS: CardDef<MarketCard>[] = [
